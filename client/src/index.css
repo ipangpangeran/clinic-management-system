@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-primary: #7d5141;
+    --color-background: #fff8f0;
+    --color-surface: #fff8f0;
+    --color-surface-container-low: #faf3e8;
+    --color-surface-container: #f4ede3;
+    --color-surface-container-high: #eee7dd;
+    --color-surface-container-highest: #e9e2d7;
+    --color-on-surface: #1e1b15;
+    --color-on-surface-variant: #514440;
+    --color-outline: #83746f;
+    --color-outline-variant: #d6c2bd;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
+  }
+
+  h1, h2, h3, h4, .font-serif, .font-serif-title {
+    font-family: 'Cormorant Garamond', serif;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* Custom scrollbars and utilities */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #faf3e8;
+}
+::-webkit-scrollbar-thumb {
+  background: #d6c2bd;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7d5141;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt, #printable-receipt * {
+    visibility: visible;
+  }
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+}

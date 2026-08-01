@@ -1,0 +1,820 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const axios = require('axios');
+const cron = require('node-cron');
+const { runQuery, getQuery, allQuery } = require('./db');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'deflow_secret_jwt_key_2026';
+
+app.use(cors());
+app.use(express.json());
+
+// Serve static logo assets
+app.use('/logo', express.static(path.join(__dirname, '../stitch_deflow_aesthetic_clinic_dashboard/logo')));
+app.use('/logo', express.static(path.join(__dirname, '../client/public/logo')));
+
+// Serve compiled React frontend
+app.use(express.static(path.join(__dirname, '../client/dist')));
+
+// --- AUTHENTICATION MIDDLEWARE ---
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'Akses ditolak: Token tidak ditemukan' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Token tidak valid' });
+    req.user = user;
+    next();
+  });
+}
+
+// --- AUTH ROUTES ---
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ message: 'Username dan Password wajib diisi' });
+    }
+
+    const user = await getQuery('SELECT * FROM users WHERE username = ?', [username]);
+    if (!user) {
+      return res.status(400).json({ message: 'Username atau password salah' });
+    }
+
+    const validPass = bcrypt.compareSync(password, user.password);
+    if (!validPass) {
+      return res.status(400).json({ message: 'Username atau password salah' });
+    }
+
+    const permissions = await allQuery('SELECT module_key, can_create, can_read, can_update, can_delete FROM role_permissions WHERE role = ?', [user.role]);
+
+    const tokenPayload = {
+      id: user.id,
+      username: user.username,
+      full_name: user.full_name,
+      role: user.role
+    };
+
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+        role: user.role,
+        phone: user.phone
+      },
+      permissions
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Internal Server Error', error: err.message });
+  }
+});
+
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await getQuery('SELECT id, username, full_name, role, phone FROM users WHERE id = ?', [req.user.id]);
+    if (!user) return res.status(404).json({ message: 'User tidak ditemukan' });
+    const permissions = await allQuery('SELECT module_key, can_create, can_read, can_update, can_delete FROM role_permissions WHERE role = ?', [user.role]);
+    res.json({ user, permissions });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching user profile', error: err.message });
+  }
+});
+
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await allQuery('SELECT id, username, full_name, role, phone FROM users');
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching users', error: err.message });
+  }
+});
+
+// --- CLINIC PROFILE ROUTES (INCLUDES WA API URL POINTING) ---
+app.get('/api/clinic-profile', async (req, res) => {
+  try {
+    const profile = await getQuery('SELECT * FROM clinic_profile WHERE id = 1');
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching clinic profile', error: err.message });
+  }
+});
+
+app.put('/api/clinic-profile', authenticateToken, async (req, res) => {
+  try {
+    const { clinic_name, tagline, address, map_latitude, map_longitude, phone, whatsapp, email, logo_url, tax_rate_percent, wa_api_url, idle_timeout_minutes } = req.body;
+    
+    await runQuery(`
+      UPDATE clinic_profile
+      SET clinic_name = ?, tagline = ?, address = ?, map_latitude = ?, map_longitude = ?,
+          phone = ?, whatsapp = ?, email = ?, logo_url = ?, tax_rate_percent = ?, wa_api_url = ?,
+          idle_timeout_minutes = ?
+      WHERE id = 1
+    `, [clinic_name, tagline, address, map_latitude, map_longitude, phone, whatsapp, email, logo_url, tax_rate_percent, wa_api_url, idle_timeout_minutes || 15]);
+
+    const updated = await getQuery('SELECT * FROM clinic_profile WHERE id = 1');
+    res.json({ message: 'Profil klinik & Pengaturan Sesi berhasil diperbarui', profile: updated });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating clinic profile', error: err.message });
+  }
+});
+
+
+// --- DYNAMIC ACL ROUTES ---
+app.get('/api/acl', authenticateToken, async (req, res) => {
+  try {
+    const aclList = await allQuery('SELECT * FROM role_permissions');
+    res.json(aclList);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching ACL', error: err.message });
+  }
+});
+
+app.put('/api/acl', authenticateToken, async (req, res) => {
+  try {
+    const { permissions } = req.body;
+    if (!Array.isArray(permissions)) return res.status(400).json({ message: 'Data permissions tidak valid' });
+
+    for (const item of permissions) {
+      await runQuery(`
+        INSERT INTO role_permissions (role, module_key, can_create, can_read, can_update, can_delete)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(role, module_key) DO UPDATE SET
+          can_create = excluded.can_create,
+          can_read = excluded.can_read,
+          can_update = excluded.can_update,
+          can_delete = excluded.can_delete
+      `, [item.role, item.module_key, item.can_create, item.can_read, item.can_update, item.can_delete]);
+    }
+
+    res.json({ message: 'Dynamic ACL matriks berhasil diperbarui' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating ACL', error: err.message });
+  }
+});
+
+// --- PATIENT MANAGEMENT & INTAKE ROUTES ---
+app.get('/api/pasien', authenticateToken, async (req, res) => {
+  try {
+    const pasienList = await allQuery('SELECT * FROM pasien ORDER BY created_at DESC');
+    res.json(pasienList);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching patients', error: err.message });
+  }
+});
+
+app.post('/api/pasien', authenticateToken, async (req, res) => {
+  try {
+    const { no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter } = req.body;
+
+    if (!no_hp || !nama_lengkap || !tipe_pasien) {
+      return res.status(400).json({ message: 'Nama Lengkap, No. HP, dan Tipe Pasien wajib diisi' });
+    }
+
+    if (no_ktp) {
+      const existingKtp = await getQuery('SELECT id FROM pasien WHERE no_ktp = ?', [no_ktp]);
+      if (existingKtp) {
+        return res.status(400).json({ message: 'data sudah terdaftar (No. KTP sudah digunakan)' });
+      }
+    }
+
+    const existingHp = await getQuery('SELECT id FROM pasien WHERE no_hp = ?', [no_hp]);
+    if (existingHp) {
+      return res.status(400).json({ message: 'data sudah terdaftar (No. Handphone sudah digunakan)' });
+    }
+
+    const id = 'pasien-' + Date.now();
+    await runQuery(`
+      INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, no_ktp || null, no_hp, nama_lengkap, tipe_pasien, alamat || null, tgl_lahir || null, riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null]);
+
+    const newPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
+    res.status(201).json({ message: 'Pasien berhasil didaftarkan', pasien: newPatient });
+  } catch (err) {
+    res.status(500).json({ message: 'Error registering patient', error: err.message });
+  }
+});
+
+app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter } = req.body;
+
+    if (no_ktp) {
+      const existingKtp = await getQuery('SELECT id FROM pasien WHERE no_ktp = ? AND id != ?', [no_ktp, id]);
+      if (existingKtp) return res.status(400).json({ message: 'data sudah terdaftar (No. KTP sudah digunakan oleh pasien lain)' });
+    }
+    if (no_hp) {
+      const existingHp = await getQuery('SELECT id FROM pasien WHERE no_hp = ? AND id != ?', [no_hp, id]);
+      if (existingHp) return res.status(400).json({ message: 'data sudah terdaftar (No. HP sudah digunakan oleh pasien lain)' });
+    }
+
+    await runQuery(`
+      UPDATE pasien
+      SET no_ktp = ?, no_hp = ?, nama_lengkap = ?, tipe_pasien = ?, alamat = ?, tgl_lahir = ?, riwayat_alergi = ?, jenis_kulit = ?, rekomendasi_dokter = ?
+      WHERE id = ?
+    `, [no_ktp || null, no_hp, nama_lengkap, tipe_pasien, alamat || null, tgl_lahir || null, riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, id]);
+
+    const updated = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
+    res.json({ message: 'Data pasien berhasil diperbarui', pasien: updated });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating patient', error: err.message });
+  }
+});
+
+// --- PATIENT PACKAGES & REMINDERS ---
+app.get('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const paketList = await allQuery('SELECT * FROM pasien_paket WHERE pasien_id = ?', [id]);
+    res.json(paketList);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching patient packages', error: err.message });
+  }
+});
+
+app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama_paket, total_kuota, harga_paket } = req.body;
+
+    const paketId = 'pkg-' + Date.now();
+    await runQuery(`
+      INSERT INTO pasien_paket (id, pasien_id, nama_paket, sisa_kuota, total_kuota, harga_paket)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [paketId, id, nama_paket, total_kuota, total_kuota, harga_paket || 0]);
+
+    res.status(201).json({ message: 'Paket treatment berhasil ditambahkan ke pasien' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error adding package', error: err.message });
+  }
+});
+
+app.post('/api/pasien/paket/:paketId/use', authenticateToken, async (req, res) => {
+  try {
+    const { paketId } = req.params;
+    const { notes } = req.body;
+
+    const pkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ?', [paketId]);
+    if (!pkg) return res.status(404).json({ message: 'Paket tidak ditemukan' });
+    if (pkg.sisa_kuota <= 0) return res.status(400).json({ message: 'Kuota paket sudah habis' });
+
+    await runQuery('UPDATE pasien_paket SET sisa_kuota = sisa_kuota - 1 WHERE id = ?', [paketId]);
+    
+    const usageId = 'usg-' + Date.now();
+    await runQuery('INSERT INTO pasien_paket_usage (id, pasien_paket_id, used_by_user_id, notes) VALUES (?, ?, ?, ?)', [usageId, paketId, req.user.id, notes || 'Penggunaan paket treatment']);
+
+    res.json({ message: 'Penggunaan paket berhasil dicatat. Sisa kuota: ' + (pkg.sisa_kuota - 1) });
+  } catch (err) {
+    res.status(500).json({ message: 'Error using package', error: err.message });
+  }
+});
+
+app.get('/api/reminders', authenticateToken, async (req, res) => {
+  try {
+    const reminders = await allQuery(`
+      SELECT pr.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien
+      FROM pasien_reminder pr
+      JOIN pasien p ON pr.pasien_id = p.id
+      ORDER BY pr.tgl_kembali ASC
+    `);
+    res.json(reminders);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching reminders', error: err.message });
+  }
+});
+
+app.post('/api/reminders', authenticateToken, async (req, res) => {
+  try {
+    const { pasien_id, tgl_kembali, message_text } = req.body;
+    if (!pasien_id || !tgl_kembali) return res.status(400).json({ message: 'Pasien dan tanggal kembali wajib diisi' });
+
+    const pasien = await getQuery('SELECT * FROM pasien WHERE id = ?', [pasien_id]);
+    if (!pasien) return res.status(404).json({ message: 'Pasien tidak ditemukan' });
+
+    const clinic = await getQuery('SELECT clinic_name, tagline FROM clinic_profile WHERE id = 1');
+
+    const msg = message_text || `Halo Kak ${pasien.nama_lengkap}, kami dari ${clinic.clinic_name} ${clinic.tagline}. Menandai kalender Anda, besok tanggal ${tgl_kembali} ada jadwal perawatan kembali untuk Anda. Konfirmasi kedatangan dengan membalas pesan ini ya Kak. Sampai jumpa!`;
+
+    const remId = 'rem-' + Date.now();
+    await runQuery(`
+      INSERT INTO pasien_reminder (id, pasien_id, tgl_kembali, status, message_text)
+      VALUES (?, ?, ?, 'PENDING', ?)
+    `, [remId, pasien_id, tgl_kembali, msg]);
+
+    res.status(201).json({ message: 'Reminder jadwal kembali berhasil dibuat' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error creating reminder', error: err.message });
+  }
+});
+
+// DELETE REMINDER ANTREAN
+app.delete('/api/reminders/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await runQuery('DELETE FROM pasien_reminder WHERE id = ?', [id]);
+    res.json({ message: 'Reminder jadwal kontrol berhasil dihapus' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting reminder', error: err.message });
+  }
+});
+
+// --- INVENTORY & LOW STOCK NOTIFICATION ROUTE (< 3) ---
+app.get('/api/stok/low-stock', async (req, res) => {
+  try {
+    const lowStockItems = await allQuery('SELECT * FROM stok_produk WHERE sisa_stok < 3 ORDER BY sisa_stok ASC');
+    res.json(lowStockItems);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching low stock notifications', error: err.message });
+  }
+});
+
+
+app.get('/api/stok', authenticateToken, async (req, res) => {
+  try {
+    const stokList = await allQuery('SELECT * FROM stok_produk ORDER BY nama_produk ASC');
+    res.json(stokList);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching inventory', error: err.message });
+  }
+});
+
+app.post('/api/stok', authenticateToken, async (req, res) => {
+  try {
+    const { nama_produk, kode_sku, tipe_stok, harga_jual, sisa_stok, minimum_stok, satuan } = req.body;
+    if (!nama_produk || !tipe_stok) return res.status(400).json({ message: 'Nama produk dan tipe stok wajib diisi' });
+
+    const id = 'prod-' + Date.now();
+    await runQuery(`
+      INSERT INTO stok_produk (id, nama_produk, kode_sku, tipe_stok, harga_jual, sisa_stok, minimum_stok, satuan, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, nama_produk, kode_sku || ('SKU-' + Date.now()), tipe_stok, harga_jual || 0, sisa_stok || 0, minimum_stok || 10, satuan || 'pcs', req.user.id]);
+
+    res.status(201).json({ message: 'Produk berhasil ditambahkan' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error creating product', error: err.message });
+  }
+});
+
+app.put('/api/stok/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama_produk, kode_sku, tipe_stok, harga_jual, sisa_stok, minimum_stok, satuan } = req.body;
+
+    await runQuery(`
+      UPDATE stok_produk
+      SET nama_produk = ?, kode_sku = ?, tipe_stok = ?, harga_jual = ?, sisa_stok = ?, minimum_stok = ?, satuan = ?, updated_by = ?
+      WHERE id = ?
+    `, [nama_produk, kode_sku, tipe_stok, harga_jual, sisa_stok, minimum_stok, satuan, req.user.id, id]);
+
+    res.json({ message: 'Stok produk berhasil diperbarui' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating product', error: err.message });
+  }
+});
+
+app.get('/api/stok/mutasi', authenticateToken, async (req, res) => {
+  try {
+    const mutasi = await allQuery(`
+      SELECT sm.*, sp.nama_produk, sp.satuan, u1.full_name as requester_name, u2.full_name as approver_name
+      FROM stok_mutasi sm
+      JOIN stok_produk sp ON sm.produk_id = sp.id
+      LEFT JOIN users u1 ON sm.requester_user_id = u1.id
+      LEFT JOIN users u2 ON sm.approver_user_id = u2.id
+      ORDER BY sm.created_at DESC
+    `);
+    res.json(mutasi);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching stock mutations', error: err.message });
+  }
+});
+
+app.post('/api/stok/mutasi', authenticateToken, async (req, res) => {
+  try {
+    const { produk_id, tipe, jumlah, notes } = req.body;
+    if (!produk_id || !tipe || !jumlah) return res.status(400).json({ message: 'Produk, tipe mutasi, dan jumlah wajib diisi' });
+
+    const mutId = 'mut-' + Date.now();
+    const autoApprove = (req.user.role === 'Assistant Manager (ASM)' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik');
+    const status = autoApprove ? 'APPROVED' : 'PENDING';
+
+    await runQuery(`
+      INSERT INTO stok_mutasi (id, produk_id, tipe, jumlah, requester_user_id, approver_user_id, status, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [mutId, produk_id, tipe, jumlah, req.user.id, autoApprove ? req.user.id : null, status, notes || '']);
+
+    if (autoApprove) {
+      if (tipe === 'IN') {
+        await runQuery('UPDATE stok_produk SET sisa_stok = sisa_stok + ? WHERE id = ?', [jumlah, produk_id]);
+      } else if (tipe === 'OUT' || tipe === 'USAGE') {
+        await runQuery('UPDATE stok_produk SET sisa_stok = sisa_stok - ? WHERE id = ?', [jumlah, produk_id]);
+      }
+    }
+
+    res.status(201).json({ message: autoApprove ? 'Mutasi stok berhasil dan diperbarui' : 'Pengajuan mutasi stok berhasil dikirim' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error submitting stock mutation', error: err.message });
+  }
+});
+
+app.put('/api/stok/mutasi/:id/approval', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const mutasi = await getQuery('SELECT * FROM stok_mutasi WHERE id = ?', [id]);
+    if (!mutasi) return res.status(404).json({ message: 'Mutasi tidak ditemukan' });
+
+    await runQuery('UPDATE stok_mutasi SET status = ?, approver_user_id = ? WHERE id = ?', [status, req.user.id, id]);
+
+    if (status === 'APPROVED') {
+      if (mutasi.tipe === 'IN') {
+        await runQuery('UPDATE stok_produk SET sisa_stok = sisa_stok + ? WHERE id = ?', [mutasi.jumlah, mutasi.produk_id]);
+      } else if (mutasi.tipe === 'OUT' || mutasi.tipe === 'REQUEST' || mutasi.tipe === 'USAGE') {
+        await runQuery('UPDATE stok_produk SET sisa_stok = sisa_stok - ? WHERE id = ?', [mutasi.jumlah, mutasi.produk_id]);
+      }
+    }
+
+    res.json({ message: `Mutasi stok berhasil di-${status.toLowerCase()}` });
+  } catch (err) {
+    res.status(500).json({ message: 'Error approving mutation', error: err.message });
+  }
+});
+
+// --- PRICING & MEDICAL SERVICES CATALOG ---
+app.get('/api/tindakan', authenticateToken, async (req, res) => {
+  try {
+    const list = await allQuery('SELECT * FROM tindakan_medis ORDER BY nama_tindakan ASC');
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching treatments', error: err.message });
+  }
+});
+
+app.post('/api/tindakan', authenticateToken, async (req, res) => {
+  try {
+    const { nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan } = req.body;
+    
+    const id = 'tnd-' + Date.now();
+    await runQuery(`
+      INSERT INTO tindakan_medis (id, nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, nama_tindakan, tarif_konsul_dokter || 0, tarif_tindakan_medis || 0, komisi_fix_therapist || 0, percent_btc_bonus || 0, percent_jasa_medis_dokter || 0, nominal_nurse_tindakan || 0]);
+
+    res.status(201).json({ message: 'Tindakan medis berhasil ditambahkan' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error adding treatment', error: err.message });
+  }
+});
+
+app.put('/api/tindakan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan } = req.body;
+
+    await runQuery(`
+      UPDATE tindakan_medis
+      SET nama_tindakan = ?, tarif_konsul_dokter = ?, tarif_tindakan_medis = ?, komisi_fix_therapist = ?, percent_btc_bonus = ?, percent_jasa_medis_dokter = ?, nominal_nurse_tindakan = ?
+      WHERE id = ?
+    `, [nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan, id]);
+
+    res.json({ message: 'Tindakan medis berhasil diperbarui' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating treatment', error: err.message });
+  }
+});
+
+// --- POS & BILLING TRANSACTIONS ---
+app.post('/api/transaksi', authenticateToken, async (req, res) => {
+  try {
+    const { pasien_id, items, discount_amount, payment_amount, therapist_id, doctor_id, nurse_id, marketing_id } = req.body;
+
+    if (!pasien_id || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'Pasien dan item belanja wajib diisi' });
+    }
+
+    const pasien = await getQuery('SELECT * FROM pasien WHERE id = ?', [pasien_id]);
+    if (!pasien) return res.status(404).json({ message: 'Pasien tidak ditemukan' });
+
+    const profile = await getQuery('SELECT tax_rate_percent FROM clinic_profile WHERE id = 1');
+    const taxRate = (profile && profile.tax_rate_percent) ? profile.tax_rate_percent / 100 : 0.11;
+
+    let subtotal = 0;
+    items.forEach(item => {
+      subtotal += (item.harga_satuan * item.jumlah);
+    });
+
+    const discount = Number(discount_amount) || 0;
+    const taxableAmount = Math.max(0, subtotal - discount);
+    const taxAmount = Math.round(taxableAmount * taxRate);
+    const grandTotal = taxableAmount + taxAmount;
+    const payment = Number(payment_amount) || grandTotal;
+    const changeAmount = Math.max(0, payment - grandTotal);
+
+    const earnedPoints = Math.floor(grandTotal / 50000);
+
+    const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
+    const randNum = Math.floor(1000 + Math.random() * 9000);
+    const noNota = `INV/${dateStr}/${randNum}`;
+
+    const trxId = 'trx-' + Date.now();
+
+    await runQuery(`
+      INSERT INTO transaksi (id, no_nota, pasien_id, kasir_id, subtotal, discount, tax_amount, grand_total, payment_amount, change_amount, earned_points, therapist_id, doctor_id, nurse_id, marketing_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [trxId, noNota, pasien_id, req.user.id, subtotal, discount, taxAmount, grandTotal, payment, changeAmount, earnedPoints, therapist_id || null, doctor_id || null, nurse_id || null, marketing_id || null]);
+
+    for (const item of items) {
+      const detailId = 'dtl-' + Math.random().toString(36).substring(2, 9);
+      await runQuery(`
+        INSERT INTO transaksi_detail (id, transaksi_id, produk_id, tindakan_id, jenis_item, nama_item, jumlah, harga_satuan, subtotal_item, therapist_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [detailId, trxId, item.produk_id || null, item.tindakan_id || null, item.jenis_item, item.nama_item, item.jumlah, item.harga_satuan, item.harga_satuan * item.jumlah, item.therapist_id || therapist_id || null]);
+
+      if (item.jenis_item === 'RETAIL' && item.produk_id) {
+        await runQuery('UPDATE stok_produk SET sisa_stok = sisa_stok - ? WHERE id = ?', [item.jumlah, item.produk_id]);
+      }
+    }
+
+    await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [earnedPoints, pasien_id]);
+
+    res.status(201).json({
+      message: 'Transaksi berhasil disimpan',
+      transaksi_id: trxId,
+      no_nota: noNota,
+      grand_total: grandTotal,
+      earned_points: earnedPoints
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error processing transaction', error: err.message });
+  }
+});
+
+app.get('/api/transaksi/:id/receipt', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const trx = await getQuery(`
+      SELECT t.*, p.nama_lengkap as pasien_nama, p.tipe_pasien, p.total_poin, u.full_name as kasir_nama,
+             therapist.full_name as therapist_nama, doctor.full_name as doctor_nama
+      FROM transaksi t
+      JOIN pasien p ON t.pasien_id = p.id
+      JOIN users u ON t.kasir_id = u.id
+      LEFT JOIN users therapist ON t.therapist_id = therapist.id
+      LEFT JOIN users doctor ON t.doctor_id = doctor.id
+      WHERE t.id = ?
+    `, [id]);
+
+    if (!trx) return res.status(404).json({ message: 'Transaksi tidak ditemukan' });
+
+    const details = await allQuery('SELECT * FROM transaksi_detail WHERE transaksi_id = ?', [id]);
+    const clinic = await getQuery('SELECT * FROM clinic_profile WHERE id = 1');
+
+    const nextReminder = await getQuery('SELECT tgl_kembali FROM pasien_reminder WHERE pasien_id = ? ORDER BY tgl_kembali ASC LIMIT 1', [trx.pasien_id]);
+
+    res.json({
+      clinic,
+      transaction: trx,
+      details,
+      next_control_date: nextReminder ? nextReminder.tgl_kembali : '-'
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching receipt', error: err.message });
+  }
+});
+
+// --- PAYROLL & 5-LINE COMMISSION MATRIX ROUTE ---
+app.get('/api/payroll/summary', authenticateToken, async (req, res) => {
+  try {
+    const { bulan, tahun } = req.query;
+    const currentMonth = bulan ? parseInt(bulan) : new Date().getMonth() + 1;
+    const currentYear = tahun ? parseInt(tahun) : new Date().getFullYear();
+
+    const users = await allQuery('SELECT id, username, full_name, role FROM users');
+
+    const monthStart = `${currentYear}-${String(currentMonth).padStart(2,'0')}-01 00:00:00`;
+    const monthEnd = `${currentYear}-${String(currentMonth).padStart(2,'0')}-31 23:59:59`;
+
+    const trxs = await allQuery(`
+      SELECT t.*, p.tipe_pasien
+      FROM transaksi t
+      JOIN pasien p ON t.pasien_id = p.id
+      WHERE t.created_at >= ? AND t.created_at <= ?
+    `, [monthStart, monthEnd]);
+
+    const trxDetails = await allQuery(`
+      SELECT td.*, tm.tarif_konsul_dokter, tm.tarif_tindakan_medis, tm.komisi_fix_therapist, tm.percent_btc_bonus, tm.percent_jasa_medis_dokter, tm.nominal_nurse_tindakan
+      FROM transaksi_detail td
+      LEFT JOIN tindakan_medis tm ON td.tindakan_id = tm.id
+      JOIN transaksi t ON td.transaksi_id = t.id
+      WHERE t.created_at >= ? AND t.created_at <= ?
+    `, [monthStart, monthEnd]);
+
+    const payrollResult = [];
+
+    for (const u of users) {
+      let gajiPokok = 0;
+      let komisiProduk = 0;
+      let komisiTindakan = 0;
+      let bonusLain = 0;
+
+      if (u.role === 'Admin System' || u.role === 'Admin Klinik') gajiPokok = 6000000;
+      else if (u.role === 'Manager') gajiPokok = 8000000;
+      else if (u.role === 'Assistant Manager (ASM)') gajiPokok = 5500000;
+      else if (u.role === 'Dokter') gajiPokok = 10000000;
+      else if (u.role === 'Resepsionis / Cashier') gajiPokok = 4000000;
+      else if (u.role === 'Therapist / BTC') gajiPokok = 3500000;
+      else if (u.role === 'Nurse') gajiPokok = 3800000;
+      else if (u.role === 'Marketing') gajiPokok = 4200000;
+
+      if (u.role === 'Therapist / BTC') {
+        trxDetails.forEach(d => {
+          if (d.therapist_id === u.id || d.therapist_id === null) {
+            const fixInc = d.komisi_fix_therapist || 15000;
+            const pct = (d.percent_btc_bonus || 5) / 100;
+            komisiTindakan += (fixInc * d.jumlah) + (d.subtotal_item * pct);
+          }
+        });
+      }
+
+      if (u.role === 'Marketing') {
+        trxs.forEach(t => {
+          if (t.marketing_id === u.id) {
+            komisiTindakan += 50000 + (t.grand_total * 0.03);
+          }
+        });
+      }
+
+      if (u.role === 'Dokter') {
+        trxs.forEach(t => {
+          if (t.doctor_id === u.id) {
+            komisiTindakan += 150000;
+          }
+        });
+        trxDetails.forEach(d => {
+          if (d.jenis_item === 'TINDAKAN') {
+            const pct = (d.percent_jasa_medis_dokter || 20) / 100;
+            komisiTindakan += d.subtotal_item * pct;
+          }
+        });
+      }
+
+      if (u.role === 'Nurse') {
+        trxDetails.forEach(d => {
+          if (d.jenis_item === 'TINDAKAN') {
+            const nurseFee = d.nominal_nurse_tindakan || 15000;
+            komisiTindakan += nurseFee * d.jumlah;
+          }
+        });
+      }
+
+      if (u.role === 'Resepsionis / Cashier') {
+        let totalTurnover = 0;
+        trxs.forEach(t => {
+          if (t.kasir_id === u.id) totalTurnover += t.grand_total;
+        });
+        komisiProduk = totalTurnover * 0.015;
+      }
+
+      const existing = await getQuery('SELECT * FROM riwayat_gaji WHERE user_id = ? AND bulan = ? AND tahun = ?', [u.id, currentMonth, currentYear]);
+      const statusPembayaran = existing ? existing.status_pembayaran : 'PENDING';
+
+      const grandTotal = gajiPokok + komisiProduk + komisiTindakan + bonusLain;
+
+      payrollResult.push({
+        user_id: u.id,
+        username: u.username,
+        full_name: u.full_name,
+        role: u.role,
+        bulan: currentMonth,
+        tahun: currentYear,
+        gaji_pokok: gajiPokok,
+        total_komisi_produk: Math.round(komisiProduk),
+        total_komisi_tindakan: Math.round(komisiTindakan),
+        bonus_lain: bonusLain,
+        grand_total: Math.round(grandTotal),
+        status_pembayaran: statusPembayaran
+      });
+    }
+
+    res.json({ bulan: currentMonth, tahun: currentYear, payroll: payrollResult });
+  } catch (err) {
+    res.status(500).json({ message: 'Error calculating payroll', error: err.message });
+  }
+});
+
+app.post('/api/payroll/pay', authenticateToken, async (req, res) => {
+  try {
+    const { user_id, bulan, tahun, status } = req.body;
+    if (!user_id || !bulan || !tahun) return res.status(400).json({ message: 'User ID, Bulan, dan Tahun wajib diisi' });
+
+    const paidAt = status === 'PAID' ? new Date().toISOString() : null;
+
+    await runQuery(`
+      INSERT INTO riwayat_gaji (id, user_id, bulan, tahun, gaji_pokok, total_komisi_produk, total_komisi_tindakan, grand_total, status_pembayaran, paid_at)
+      VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?, ?)
+      ON CONFLICT(user_id, bulan, tahun) DO UPDATE SET
+        status_pembayaran = excluded.status_pembayaran,
+        paid_at = excluded.paid_at
+    `, ['gaji-' + Date.now(), user_id, bulan, tahun, status, paidAt]);
+
+    res.json({ message: `Status gaji berhasil diubah menjadi ${status}` });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating payroll status', error: err.message });
+  }
+});
+
+// --- WHATSAPP GATEWAY & SCHEDULER ---
+async function triggerWaReminders() {
+  const tomorrowDate = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+  const pendingReminders = await allQuery(`
+    SELECT pr.*, p.nama_lengkap, p.no_hp
+    FROM pasien_reminder pr
+    JOIN pasien p ON pr.pasien_id = p.id
+    WHERE pr.tgl_kembali = ? AND pr.status = 'PENDING'
+  `, [tomorrowDate]);
+
+  const clinic = await getQuery('SELECT wa_api_url FROM clinic_profile WHERE id = 1');
+  const targetWaUrl = (clinic && clinic.wa_api_url) ? clinic.wa_api_url : 'https://api-wa.ipangpangeran.com/send?api_key=ipang-super-secret-key-123456';
+
+  const results = [];
+
+  for (const rem of pendingReminders) {
+    try {
+      let hp = rem.no_hp.replace(/[^0-9]/g, '');
+      if (hp.startsWith('0')) hp = '62' + hp.slice(1);
+
+      const response = await axios.post(targetWaUrl, {
+        number: hp,
+        message: rem.message_text
+      }, { headers: { 'Content-Type': 'application/json' } });
+
+      await runQuery('UPDATE pasien_reminder SET status = "SENT", sent_at = CURRENT_TIMESTAMP WHERE id = ?', [rem.id]);
+
+      await runQuery('INSERT INTO wa_logs (id, recipient_number, message, status, response_data) VALUES (?, ?, ?, ?, ?)', [
+        'log-' + Date.now() + '-' + Math.random().toString(36).substr(2,4),
+        hp,
+        rem.message_text,
+        'SUCCESS',
+        JSON.stringify(response.data)
+      ]);
+
+      results.push({ id: rem.id, hp, status: 'SUCCESS' });
+    } catch (err) {
+      console.error('WA Send Error:', err.message);
+      await runQuery('INSERT INTO wa_logs (id, recipient_number, message, status, response_data) VALUES (?, ?, ?, ?, ?)', [
+        'log-' + Date.now() + '-' + Math.random().toString(36).substr(2,4),
+        rem.no_hp,
+        rem.message_text,
+        'FAILED',
+        JSON.stringify({ error: err.message })
+      ]);
+      results.push({ id: rem.id, hp: rem.no_hp, status: 'FAILED', error: err.message });
+    }
+  }
+
+  return results;
+}
+
+app.post('/api/wa/send-reminders', authenticateToken, async (req, res) => {
+  try {
+    const results = await triggerWaReminders();
+    res.json({ message: 'Proses pengiriman pengingat WhatsApp selesai', results });
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal mengirim pesan WA', error: err.message });
+  }
+});
+
+app.get('/api/wa/logs', authenticateToken, async (req, res) => {
+  try {
+    const logs = await allQuery('SELECT * FROM wa_logs ORDER BY sent_at DESC LIMIT 50');
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching WA logs', error: err.message });
+  }
+});
+
+// Daily Cron Job at 08:00 AM
+cron.schedule('0 8 * * *', async () => {
+  console.log('[Cron Job] Executing daily WhatsApp reminder dispatch at 08:00 AM...');
+  await triggerWaReminders();
+});
+
+// SPA Fallback
+app.get(/^(?!\/api).*/, (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`[DEFLOW Backend] Running on http://localhost:${PORT}`);
+});

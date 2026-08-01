@@ -1,0 +1,17 @@
+# Node dependencies
+node_modules/
+client/node_modules/
+
+# SQLite Database local files
+server/*.db
+server/*.db-journal
+
+# Environment & Temp logs
+.env
+*.log
+.tempmediaStorage/
+.gemini/
+
+# OS metadata
+.DS_Store
+Thumbs.db

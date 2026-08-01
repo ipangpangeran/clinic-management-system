@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DEFLOW | POS & Billing</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Playfair+Display:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed": "#1b1c1c",
+                        "surface-container-highest": "#e9e2d7",
+                        "on-secondary": "#ffffff",
+                        "surface-variant": "#e9e2d7",
+                        "surface": "#fff8f0",
+                        "secondary-container": "#e1dfdc",
+                        "on-secondary-fixed-variant": "#474744",
+                        "secondary-fixed": "#e4e2de",
+                        "on-tertiary": "#ffffff",
+                        "surface-bright": "#fff8f0",
+                        "primary-container": "#996958",
+                        "surface-container-high": "#eee7dd",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#c8c6c6",
+                        "tertiary": "#5c5c5c",
+                        "surface-container": "#f4ede3",
+                        "inverse-surface": "#333029",
+                        "secondary": "#5e5e5c",
+                        "on-primary-fixed": "#311307",
+                        "on-surface": "#1e1b15",
+                        "on-error": "#ffffff",
+                        "secondary-fixed-dim": "#c8c6c3",
+                        "on-tertiary-container": "#fffcfb",
+                        "surface-dim": "#e0d9cf",
+                        "inverse-primary": "#f3baa6",
+                        "on-primary-fixed-variant": "#653d2e",
+                        "tertiary-container": "#757474",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#f3baa6",
+                        "error": "#ba1a1a",
+                        "surface-container-low": "#faf3e8",
+                        "tertiary-fixed": "#e4e2e1",
+                        "primary": "#7d5141",
+                        "on-secondary-container": "#636360",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#fffbff",
+                        "primary-fixed": "#ffdbcf",
+                        "background": "#fff8f0",
+                        "on-surface-variant": "#514440",
+                        "outline-variant": "#d6c2bd",
+                        "error-container": "#ffdad6",
+                        "inverse-on-surface": "#f7f0e5",
+                        "on-secondary-fixed": "#1b1c1a",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "outline": "#83746f",
+                        "on-background": "#1e1b15",
+                        "surface-tint": "#805444"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "section-gap": "48px",
+                        "card-padding": "24px",
+                        "container-padding": "32px",
+                        "unit": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Playfair Display"],
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Playfair Display"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Playfair Display"],
+                        "body-sm": ["Inter"],
+                        "headline-lg-mobile": ["Playfair Display"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "500"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "label-md": ["12px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #fff8f0; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .glass-panel { backdrop-filter: blur(12px); background-color: rgba(255, 255, 255, 0.85); }
+        .receipt-thermal { font-family: 'Courier New', Courier, monospace; letter-spacing: -0.01em; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e5ded4; border-radius: 10px; }
+        .rose-gold-gradient { background: linear-gradient(135deg, #b78472 0%, #d4a391 100%); }
+        .table-row-hover:hover { background-color: rgba(183, 132, 114, 0.05); }
+    </style>
+</head>
+<body class="bg-background text-on-surface overflow-hidden h-screen flex">
+<!-- Sidebar Navigation -->
+<aside class="fixed left-0 top-0 h-full w-[280px] border-r border-outline-variant/20 bg-surface-container flex flex-col p-6 gap-y-4 z-50">
+<div class="flex flex-col gap-2 mb-8 px-2">
+<h1 class="font-headline-md text-headline-md font-semibold text-secondary tracking-wide uppercase">DEFLOW</h1>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Aesthetic Excellence</p>
+</div>
+<nav class="flex flex-col gap-2 flex-grow">
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-secondary-container/50 rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-secondary-container/50 rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-md text-label-md">Patients</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 bg-primary-container text-on-primary-container rounded-lg font-semibold shadow-sm" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-label-md">Billing & POS</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-secondary-container/50 rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-md text-label-md">Commissions</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-secondary-container/50 rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-label-md text-label-md">Inventory</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant/30 pt-4 flex flex-col gap-2">
+<div class="flex items-center gap-3 px-4 py-2 text-xs font-medium text-primary">
+<span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                System Status: Online
+            </div>
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-secondary-container/50 rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-on-surface-variant hover:bg-secondary-container/50 rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-md text-label-md">Log Out</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-[280px] flex-grow h-full flex flex-col overflow-hidden">
+<!-- Top Navbar -->
+<header class="h-20 w-full px-gutter bg-surface/80 backdrop-blur-xl border-b border-outline-variant/30 flex justify-between items-center z-40 sticky top-0">
+<div class="flex items-center gap-4">
+<span class="font-headline-md text-headline-md font-bold text-secondary tracking-wide">POS TERMINAL</span>
+<div class="h-8 w-[1px] bg-outline-variant/30"></div>
+<div class="flex items-center gap-2 bg-surface-container-low rounded-full px-4 py-1.5 border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-sm">location_on</span>
+<span class="text-body-sm font-medium">Beverly Hills Clinic</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant">notifications</span>
+<span class="material-symbols-outlined text-on-surface-variant">settings</span>
+</div>
+<button class="bg-primary text-white px-6 py-2 rounded-lg font-label-md text-label-md hover:shadow-lg transition-all duration-300">
+                    New Registration
+                </button>
+<div class="flex items-center gap-3 border-l border-outline-variant/30 pl-6">
+<div class="text-right">
+<p class="text-body-sm font-semibold">Sarah Jenkins</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Senior Consultant</p>
+</div>
+<div class="w-10 h-10 rounded-full bg-secondary-fixed flex items-center justify-center overflow-hidden border border-outline-variant/50">
+<img alt="Doctor profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPlz4rOs9gLNfi1ofIA_O6jYdD052AFY4egGjUVt14VmkBk6XDS1BpgdjuJlUAEsomNtCLsMBdQLS7vtGdvY6H6jvWdX4YhvD7n8z-h9UKOgQc59_ReqctQ5ztIfgmGY_EMmmR4DQAxsFZm3iN9i7rN6bD7fW_lYbzBosV1SUjtiDibNtPSEojlYs_UFom_Tic48b-n6aXU4lfnk2TwWN8-I349c8hG2mjs1YXMLCt4Qx0Vvp5Xeo"/>
+</div>
+</div>
+</div>
+</header>
+<!-- POS Canvas -->
+<div class="flex-grow flex p-gutter overflow-hidden gap-gutter">
+<!-- Left: Transaction Entry -->
+<div class="flex-grow flex flex-col gap-4 overflow-hidden">
+<div class="flex justify-between items-end mb-2">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Patient Billing</h2>
+<p class="text-on-surface-variant font-body-sm">Active Session: #DF-998273</p>
+</div>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">search</span>
+<input class="pl-10 pr-4 py-2.5 w-80 bg-white border border-outline-variant rounded-xl text-body-sm focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="Search treatment or product..." type="text"/>
+</div>
+</div>
+<div class="bg-white rounded-2xl border border-outline-variant/50 flex-grow overflow-hidden flex flex-col shadow-sm">
+<div class="overflow-y-auto flex-grow">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-surface-container-low z-10">
+<tr>
+<th class="px-6 py-4 font-label-md text-label-md text-secondary border-b border-outline-variant/20">Treatment / Item</th>
+<th class="px-4 py-4 font-label-md text-label-md text-secondary border-b border-outline-variant/20">Qty</th>
+<th class="px-6 py-4 font-label-md text-label-md text-secondary border-b border-outline-variant/20 text-right">Unit Price</th>
+<th class="px-6 py-4 font-label-md text-label-md text-secondary border-b border-outline-variant/20">Staff Attribution</th>
+<th class="px-4 py-4 font-label-md text-label-md text-secondary border-b border-outline-variant/20">Discount</th>
+<th class="px-6 py-4 font-label-md text-label-md text-secondary border-b border-outline-variant/20 text-right">Subtotal</th>
+<th class="px-4 py-4 border-b border-outline-variant/20"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<tr class="table-row-hover transition-colors">
+<td class="px-6 py-5">
+<div class="font-body-md font-semibold text-primary">HydraFacial™ Signature</div>
+<div class="text-[10px] text-on-surface-variant uppercase tracking-wider">Service Code: HF-01</div>
+</td>
+<td class="px-4 py-5">
+<input class="w-16 border-none bg-surface-container-low rounded p-1 text-center font-body-sm outline-none" type="number" value="1"/>
+</td>
+<td class="px-6 py-5 text-right font-body-sm font-medium">$250.00</td>
+<td class="px-6 py-5">
+<div class="flex flex-col gap-1">
+<select class="text-[11px] border-none bg-surface-container-low rounded py-1 px-2 outline-none font-medium">
+<option>Dr. Julian Voss</option>
+<option>Dr. Elena Costa</option>
+</select>
+<select class="text-[11px] border-none bg-surface-container-lowest border border-outline-variant/10 rounded py-1 px-2 outline-none">
+<option>Therapist: Maria G.</option>
+<option>Therapist: Sarah L.</option>
+</select>
+</div>
+</td>
+<td class="px-4 py-5">
+<input class="w-16 border-none bg-surface-container-low rounded p-1 text-center font-body-sm outline-none" type="text" value="0%"/>
+</td>
+<td class="px-6 py-5 text-right font-body-sm font-bold text-on-surface">$250.00</td>
+<td class="px-4 py-5 text-right">
+<button class="text-on-surface-variant/40 hover:text-error transition-colors"><span class="material-symbols-outlined text-lg">close</span></button>
+</td>
+</tr>
+<tr class="table-row-hover transition-colors">
+<td class="px-6 py-5">
+<div class="font-body-md font-semibold text-primary">Botox - Forehead (20 units)</div>
+<div class="text-[10px] text-on-surface-variant uppercase tracking-wider">Service Code: BX-20</div>
+</td>
+<td class="px-4 py-5">
+<input class="w-16 border-none bg-surface-container-low rounded p-1 text-center font-body-sm outline-none" type="number" value="1"/>
+</td>
+<td class="px-6 py-5 text-right font-body-sm font-medium">$320.00</td>
+<td class="px-6 py-5">
+<div class="flex flex-col gap-1">
+<select class="text-[11px] border-none bg-surface-container-low rounded py-1 px-2 outline-none font-medium">
+<option>Dr. Elena Costa</option>
+<option>Dr. Julian Voss</option>
+</select>
+<select class="text-[11px] border-none bg-surface-container-lowest border border-outline-variant/10 rounded py-1 px-2 outline-none">
+<option>Therapist: N/A</option>
+</select>
+</div>
+</td>
+<td class="px-4 py-5">
+<input class="w-16 border-none bg-secondary-container/30 rounded p-1 text-center font-body-sm outline-none text-primary" type="text" value="10%"/>
+</td>
+<td class="px-6 py-5 text-right font-body-sm font-bold text-on-surface">$288.00</td>
+<td class="px-4 py-5 text-right">
+<button class="text-on-surface-variant/40 hover:text-error transition-colors"><span class="material-symbols-outlined text-lg">close</span></button>
+</td>
+</tr>
+<tr class="table-row-hover transition-colors">
+<td class="px-6 py-5">
+<div class="font-body-md font-semibold text-primary">SkinCeuticals C E Ferulic (30ml)</div>
+<div class="text-[10px] text-on-surface-variant uppercase tracking-wider">SKU: SC-9921</div>
+</td>
+<td class="px-4 py-5">
+<input class="w-16 border-none bg-surface-container-low rounded p-1 text-center font-body-sm outline-none" type="number" value="1"/>
+</td>
+<td class="px-6 py-5 text-right font-body-sm font-medium">$182.00</td>
+<td class="px-6 py-5">
+<div class="flex flex-col gap-1">
+<select class="text-[11px] border-none bg-surface-container-low rounded py-1 px-2 outline-none font-medium">
+<option>Retail: Desk</option>
+</select>
+</div>
+</td>
+<td class="px-4 py-5">
+<input class="w-16 border-none bg-surface-container-low rounded p-1 text-center font-body-sm outline-none" type="text" value="0%"/>
+</td>
+<td class="px-6 py-5 text-right font-body-sm font-bold text-on-surface">$182.00</td>
+<td class="px-4 py-5 text-right">
+<button class="text-on-surface-variant/40 hover:text-error transition-colors"><span class="material-symbols-outlined text-lg">close</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="bg-surface-container-lowest p-4 flex justify-between items-center border-t border-outline-variant/20">
+<div class="flex gap-4">
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-outline-variant text-body-sm font-medium hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-sm">add</span> Add Custom Item
+                            </button>
+<button class="flex items-center gap-2 px-4 py-2 rounded-lg border border-outline-variant text-body-sm font-medium hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-sm">percent</span> Global Discount
+                            </button>
+</div>
+<div class="text-on-surface-variant text-body-sm italic">
+                            All treatments recorded under clinical protocols.
+                        </div>
+</div>
+</div>
+</div>
+<!-- Right: Checkout Summary -->
+<div class="w-[380px] h-full flex flex-col gap-4">
+<div class="bg-white border border-outline-variant rounded-2xl flex-grow flex flex-col overflow-hidden shadow-sm">
+<div class="p-6 border-b border-outline-variant/20 bg-surface-container-lowest">
+<div class="flex items-center gap-4 mb-4">
+<div class="w-12 h-12 rounded-full bg-secondary-fixed/50 flex items-center justify-center overflow-hidden">
+<img alt="Patient" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDNxKHNerWvIUpPhDLDzBcqsgGs0tniQ4QZkqi_Fdl6CTnsAMwcjQyACP3kjiW6BGNJ9ad_9AaNhhL_15Pl619Qz3MUOFwdXjQlBZxyBejXb2Pw24kDF6la6uMRHUO3s-yAA6gGBNSXWA2AkEZ5CqTpQVijo1Z1dD6Cfu2F2OnEtx8qcad0esIoE2xj6igGVo62kivzyfaZIKkbFgtQhZtOcYThNIo_401BFGHiHoy-xGJlhifRFU4"/>
+</div>
+<div>
+<h3 class="font-semibold text-on-surface">Catherine Bell</h3>
+<p class="text-xs text-on-surface-variant">Membership: Platinum Elite</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 text-center">
+<div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/10">
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Available Points</p>
+<p class="font-headline-md text-primary leading-tight">4,280</p>
+</div>
+<div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/10">
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Credit Balance</p>
+<p class="font-headline-md text-primary leading-tight">$150</p>
+</div>
+</div>
+</div>
+<div class="p-6 flex-grow flex flex-col gap-4 overflow-y-auto">
+<h4 class="font-label-md text-label-md text-secondary uppercase tracking-widest border-b border-outline-variant/10 pb-2">Order Summary</h4>
+<div class="space-y-3">
+<div class="flex justify-between text-body-sm">
+<span class="text-on-surface-variant">Subtotal</span>
+<span class="font-medium">$752.00</span>
+</div>
+<div class="flex justify-between text-body-sm text-primary">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">local_offer</span> Loyalty Discount</span>
+<span class="font-medium">-$32.00</span>
+</div>
+<div class="flex justify-between text-body-sm">
+<span class="text-on-surface-variant">VAT (11%)</span>
+<span class="font-medium">$79.20</span>
+</div>
+<div class="h-[1px] bg-outline-variant/20 my-2"></div>
+<div class="flex justify-between items-end">
+<span class="font-headline-md text-on-surface">Total</span>
+<span class="font-headline-lg text-primary">$799.20</span>
+</div>
+</div>
+<div class="mt-4 flex flex-col gap-2">
+<label class="text-label-md text-on-surface-variant">Payment Method</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-primary bg-primary-container/10 text-primary font-semibold text-sm transition-all">
+<span class="material-symbols-outlined">credit_card</span> Card
+                                </button>
+<button class="flex items-center justify-center gap-2 py-3 rounded-xl border border-outline-variant text-on-surface-variant font-medium text-sm hover:border-primary transition-all">
+<span class="material-symbols-outlined">payments</span> Cash
+                                </button>
+</div>
+</div>
+</div>
+<div class="p-6 border-t border-outline-variant/20 flex flex-col gap-3">
+<button class="rose-gold-gradient w-full py-4 rounded-xl text-white font-headline-md shadow-lg shadow-primary-container/20 hover:scale-[1.02] active:scale-[0.98] transition-all" onclick="openReceipt()">
+                            Generate Invoice
+                        </button>
+<button class="w-full py-2.5 rounded-xl border border-outline-variant text-on-surface-variant font-body-sm hover:bg-surface-container transition-all">
+                            Save as Draft
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Receipt Preview Modal (Hidden by default) -->
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300" id="receiptModal">
+<div class="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform scale-95 transition-transform duration-300" id="receiptContent">
+<div class="p-4 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low">
+<span class="font-label-md text-label-md font-bold text-secondary uppercase tracking-widest">Transaction Success</span>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors" onclick="closeReceipt()">close</button>
+</div>
+<div class="p-8 flex flex-col items-center">
+<!-- Thermal Receipt Container -->
+<div class="receipt-thermal bg-white w-full shadow-[0_4px_15px_rgba(0,0,0,0.05)] border border-dashed border-gray-300 p-8 text-sm text-gray-800 rounded-sm">
+<div class="flex flex-col items-center mb-6">
+<img alt="DEFLOW Logo" class="h-16 w-auto mb-4 grayscale opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAECzohahz7m787Ecu4fYbv679BAIqTveZsG6xdK0B3PSXYK-YUOpPjBERktZ0DklnzeGxY16yc7rnvf9M8NLWRxYM2JJfeXAcW0ysxxyQccKxVqowreDk8JB9iiMjw75FthuyPXYPuhPWb_-0NIxqZ_3VFS0XT2o2ebRvlfMs0dwDMUrSuU0WEuFZKY792rFp-7Ww0DY0mdr1uuBhFFEThbkAClR2b6eSV0aGhzcZDPBa86bGntDg"/>
+<h5 class="font-bold text-lg">DEFLOW CLINIC</h5>
+<p class="text-[10px] text-center">9255 SUNSET BLVD, WEST HOLLYWOOD<br/>LOS ANGELES, CA 90069<br/>TEL: +1 (310) 888-2991</p>
+</div>
+<div class="border-b border-gray-300 border-dashed mb-4 pb-2 text-[11px]">
+<div class="flex justify-between"><span>DATE:</span><span>NOV 22, 2023</span></div>
+<div class="flex justify-between"><span>TIME:</span><span>14:45 PM</span></div>
+<div class="flex justify-between"><span>INVOICE:</span><span>#INV-DF-2023-8821</span></div>
+<div class="flex justify-between"><span>CASHIER:</span><span>SARAH J.</span></div>
+</div>
+<div class="space-y-1 text-[11px] mb-4">
+<div class="flex justify-between font-bold border-b border-gray-200 pb-1 mb-1">
+<span>ITEM</span>
+<span>QTY</span>
+<span>TOTAL</span>
+</div>
+<div class="flex justify-between"><span>HydraFacial Signature</span><span>1</span><span>250.00</span></div>
+<div class="flex justify-between"><span>Botox Forehead (20u)</span><span>1</span><span>288.00</span></div>
+<div class="flex justify-between"><span>SkinCeuticals CE</span><span>1</span><span>182.00</span></div>
+</div>
+<div class="border-t border-gray-300 border-dashed pt-2 space-y-1 text-[12px]">
+<div class="flex justify-between"><span>SUBTOTAL:</span><span>720.00</span></div>
+<div class="flex justify-between"><span>DISCOUNT:</span><span>-32.00</span></div>
+<div class="flex justify-between"><span>VAT (11%):</span><span>79.20</span></div>
+<div class="flex justify-between font-bold text-base mt-2 pt-2 border-t border-gray-300">
+<span>TOTAL DUE:</span>
+<span>$799.20</span>
+</div>
+</div>
+<div class="mt-8 flex flex-col items-center text-center gap-1">
+<div class="bg-gray-100 h-12 w-48 mb-2 flex items-center justify-center">
+<span class="tracking-[0.5em] font-bold text-xs">|||||| || |||| |||| |||</span>
+</div>
+<p class="text-[9px] uppercase tracking-widest">Thank you for choosing Deflow</p>
+<p class="text-[8px] italic">Aesthetic Excellence is a Journey</p>
+</div>
+</div>
+<div class="flex gap-4 mt-8 w-full">
+<button class="flex-grow flex items-center justify-center gap-2 py-3 bg-secondary text-white rounded-xl font-medium text-sm">
+<span class="material-symbols-outlined text-base">print</span> Print Receipt
+                    </button>
+<button class="flex-grow flex items-center justify-center gap-2 py-3 border border-outline-variant text-on-surface-variant rounded-xl font-medium text-sm">
+<span class="material-symbols-outlined text-base">mail</span> Email PDF
+                    </button>
+</div>
+</div>
+</div>
+</div>
+<script>
+        function openReceipt() {
+            const modal = document.getElementById('receiptModal');
+            const content = document.getElementById('receiptContent');
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100');
+            content.classList.remove('scale-95');
+            content.classList.add('scale-100');
+        }
+
+        function closeReceipt() {
+            const modal = document.getElementById('receiptModal');
+            const content = document.getElementById('receiptContent');
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+        }
+
+        // Add some interaction for table rows
+        document.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if(e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'BUTTON') {
+                   // Highlight or select logic could go here
+                }
+            });
+        });
+    </script>
+</body></html>
