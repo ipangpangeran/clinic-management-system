@@ -226,29 +226,34 @@ app.post('/api/doingan', authenticateToken, async (req, res) => {
     let komisi = 0;
     let finalNamaTindakan = nama_tindakan || 'Tindakan Klinik';
 
+    let nurseNominal = 15000;
     if (tindakan_id) {
       const tm = await getQuery('SELECT nama_tindakan, nominal_nurse_tindakan FROM tindakan_medis WHERE id = ?', [tindakan_id]);
       if (tm) {
         finalNamaTindakan = tm.nama_tindakan;
-        if (role === 'Nurse') komisi = tm.nominal_nurse_tindakan || 15000;
+        nurseNominal = tm.nominal_nurse_tindakan || 15000;
       }
     }
 
-    if (role === 'Beautician') {
+    if (role === 'Beautician' || status_doingan === 'Mbr' || status_doingan === 'Member') {
       if (status_doingan === 'Mbr' || status_doingan === 'Member') {
         komisi = 17000;
       } else if (status_doingan === 'Trial') {
         komisi = 13000;
       }
-    } else if (role === 'Marketing') {
+    }
+
+    if (role === 'Marketing' || status_doingan === 'Membership' || status_doingan === 'DP Membership') {
       if (status_doingan === 'Trial') {
         komisi = 10000;
       } else if (status_doingan === 'Membership' || status_doingan === 'DP Membership') {
         const baseAmount = Number(nominal_membership) || Number(nominal_dp) || 0;
         komisi = Math.max(50000, Math.round(baseAmount * 0.05));
       }
-    } else if (role === 'Nurse' && komisi === 0) {
-      komisi = 15000;
+    }
+
+    if (komisi === 0) {
+      komisi = nurseNominal;
     }
 
     const id = 'doi-' + Date.now();

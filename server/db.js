@@ -310,6 +310,10 @@ async function initDb() {
     // Migration: Fix any negative sisa_stok in stok_produk
     try {
       await runQuery(`UPDATE stok_produk SET sisa_stok = 1 WHERE sisa_stok < 0 OR id = 'prod-5'`);
+      await runQuery(`UPDATE doingan SET komisi = 17000 WHERE (komisi IS NULL OR komisi = 0) AND (status_doingan = 'Mbr' OR status_doingan = 'Member')`);
+      await runQuery(`UPDATE doingan SET komisi = 13000 WHERE (komisi IS NULL OR komisi = 0) AND status_doingan = 'Trial' AND role_petugas != 'Marketing'`);
+      await runQuery(`UPDATE doingan SET komisi = 10000 WHERE (komisi IS NULL OR komisi = 0) AND status_doingan = 'Trial' AND role_petugas = 'Marketing'`);
+      await runQuery(`UPDATE doingan SET komisi = 15000 WHERE (komisi IS NULL OR komisi = 0)`);
     } catch (e) {
       // ignore
     }
