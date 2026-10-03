@@ -37,20 +37,22 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
     <div className="flex flex-col justify-between h-full">
       <div>
         {/* Brand Logo Header */}
-        <div className="px-6 py-5 border-b border-[#e5ded4] flex items-center justify-between bg-[#2a241e]">
-          <img 
-            src="/logo/DEFLOW_LOGO_TAGLINE.png" 
-            alt="DEFLOW Aesthetic Clinic" 
-            className="h-12 sm:h-14 w-auto object-contain transition-all hover:scale-105"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = '/logo/DEFLOW_LOGO_ONLY.png';
-            }}
-          />
+        <div className="px-6 py-5 border-b border-[#e5ded4] relative flex items-center justify-center bg-[#2a241e]">
+          <div className="flex items-center justify-center w-full">
+            <img 
+              src="/logo/DEFLOW_LOGO_TAGLINE.png" 
+              alt="DEFLOW Aesthetic Clinic" 
+              className="h-12 sm:h-14 max-w-[85%] object-contain transition-all hover:scale-105 mx-auto"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = '/logo/DEFLOW_LOGO_ONLY.png';
+              }}
+            />
+          </div>
           {setIsMobileMenuOpen && (
             <button 
               onClick={() => setIsMobileMenuOpen(false)}
-              className="lg:hidden p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-all cursor-pointer"
+              className="lg:hidden absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-all cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
