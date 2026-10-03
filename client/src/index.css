@@ -47,15 +47,18 @@
   body * {
     visibility: hidden;
   }
-  #printable-receipt, #printable-receipt * {
+  #printable-receipt, #printable-receipt *,
+  #printable-slip, #printable-slip * {
     visibility: visible;
   }
-  #printable-receipt {
+  #printable-receipt, #printable-slip {
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
     margin: 0;
-    padding: 0;
+    padding: 16px;
+    background: white !important;
+    color: black !important;
   }
 }

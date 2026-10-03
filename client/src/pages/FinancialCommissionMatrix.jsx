@@ -264,32 +264,65 @@ export default function FinancialCommissionMatrix() {
               <button onClick={() => setShowSlipModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">×</button>
             </div>
 
-            <div className="space-y-3 font-mono text-xs text-[#1e1b15] bg-[#faf3e8] p-4 rounded-xl border border-[#d6c2bd]">
-              <div className="text-center font-serif font-bold text-sm text-[#7d5141]">
+            <div id="printable-slip" className="space-y-4 font-mono text-xs text-[#1e1b15] bg-[#faf3e8] p-5 rounded-xl border border-[#d6c2bd]">
+              <div className="text-center font-serif text-base font-bold text-[#7d5141] border-b border-gray-300 pb-2">
                 DEFLOW AESTHETIC CLINIC
-                <div className="text-[10px] font-sans text-gray-500">SLIP GAJI & INSENTIF BULAN {selectedSlip.bulan}/{selectedSlip.tahun}</div>
+                <div className="text-xs font-sans text-gray-600 tracking-wider uppercase mt-0.5">
+                  SLIP GAJI & INSENTIF - BULAN {selectedSlip.bulan}/{selectedSlip.tahun}
+                </div>
               </div>
-              <div className="border-t border-b border-gray-300 py-2 space-y-1">
-                <div>Nama  : <strong>{selectedSlip.full_name}</strong></div>
-                <div>Role  : <strong>{selectedSlip.role}</strong></div>
-                <div>Status: <span className="font-bold text-emerald-700">{selectedSlip.status_pembayaran}</span></div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs border-b border-gray-300 pb-3">
+                <div>
+                  <span className="text-gray-500">Nama Karyawan:</span><br/>
+                  <strong className="text-sm font-serif text-[#1e1b15]">{selectedSlip.full_name}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Posisi / Role:</span><br/>
+                  <strong className="text-[#7d5141]">{selectedSlip.role}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500">Status Bayar:</span><br/>
+                  <span className="font-bold text-emerald-700 uppercase">{selectedSlip.status_pembayaran}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Tanggal Cetak:</span><br/>
+                  <span>{new Date().toLocaleDateString('id-ID')}</span>
+                </div>
               </div>
-              <div className="space-y-1">
-                <div className="flex justify-between">
-                  <span>Gaji Pokok:</span>
-                  <span>Rp {selectedSlip.gaji_pokok.toLocaleString('id-ID')}</span>
+
+              <div className="space-y-2">
+                <div className="font-bold font-serif text-xs uppercase text-[#7d5141]">Rincian Pendapatan (Take Home Pay)</div>
+                <div className="bg-white p-3 rounded-lg border border-[#e5ded4] space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span>Gaji Pokok Nominal</span>
+                    <span className="font-semibold">Rp {selectedSlip.gaji_pokok.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Komisi Penjualan / Omset Produk</span>
+                    <span className="font-semibold">Rp {selectedSlip.total_komisi_produk.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Komisi Doingan / Tindakan Treatment</span>
+                    <span className="font-semibold">Rp {selectedSlip.total_komisi_tindakan.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="border-t border-gray-400 pt-2 flex justify-between items-center font-bold text-sm text-[#7d5141]">
+                    <span>TOTAL TAKE HOME PAY (THP)</span>
+                    <span className="text-base text-emerald-800 font-serif">Rp {selectedSlip.grand_total.toLocaleString('id-ID')}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span>Komisi Transaksi/Omset:</span>
-                  <span>Rp {selectedSlip.total_komisi_produk.toLocaleString('id-ID')}</span>
+              </div>
+
+              <div className="pt-3 border-t border-dashed border-gray-400 flex justify-between text-[11px] text-center text-gray-600">
+                <div>
+                  <div>Penerima,</div>
+                  <div className="h-10"></div>
+                  <div className="font-bold underline">{selectedSlip.full_name}</div>
                 </div>
-                <div className="flex justify-between">
-                  <span>Komisi Doingan/Tindakan:</span>
-                  <span>Rp {selectedSlip.total_komisi_tindakan.toLocaleString('id-ID')}</span>
-                </div>
-                <div className="border-t border-gray-400 pt-1 flex justify-between font-bold text-sm text-[#7d5141]">
-                  <span>GRAND TOTAL THP:</span>
-                  <span>Rp {selectedSlip.grand_total.toLocaleString('id-ID')}</span>
+                <div>
+                  <div>Finance / Klinik,</div>
+                  <div className="h-10"></div>
+                  <div className="font-bold underline">DEFLOW Management</div>
                 </div>
               </div>
             </div>
@@ -298,7 +331,7 @@ export default function FinancialCommissionMatrix() {
               onClick={() => window.print()}
               className="w-full py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Printer className="w-4 h-4" /> Cetak Slip Gaji
+              <Printer className="w-4 h-4" /> Cetak / Download PDF Slip Gaji
             </button>
           </div>
         </div>
