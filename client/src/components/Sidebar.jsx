@@ -2,10 +2,10 @@ import React, { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { 
   LayoutDashboard, UserPlus, ShoppingBag, PackageCheck, 
-  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles
+  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles, X
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab }) {
+export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, setIsMobileMenuOpen }) {
   const { user, logout, hasPermission } = useContext(AuthContext);
 
   const navItems = [
@@ -26,20 +26,35 @@ export default function Sidebar({ activeTab, setActiveTab }) {
     return name.slice(0, 2).toUpperCase();
   };
 
-  return (
-    <aside className="w-76 bg-white border-r border-[#e5ded4] flex flex-col justify-between h-screen sticky top-0 z-30 shadow-xs">
+  const handleNavClick = (tabId) => {
+    setActiveTab(tabId);
+    if (setIsMobileMenuOpen) {
+      setIsMobileMenuOpen(false);
+    }
+  };
+
+  const sidebarContent = (
+    <div className="flex flex-col justify-between h-full">
       <div>
         {/* Brand Logo Header */}
-        <div className="px-6 py-5 border-b border-[#e5ded4] flex items-center justify-center bg-[#2a241e]">
+        <div className="px-6 py-5 border-b border-[#e5ded4] flex items-center justify-between bg-[#2a241e]">
           <img 
             src="/logo/DEFLOW_LOGO_TAGLINE.png" 
             alt="DEFLOW Aesthetic Clinic" 
-            className="h-14 w-auto object-contain transition-all hover:scale-105"
+            className="h-12 sm:h-14 w-auto object-contain transition-all hover:scale-105"
             onError={(e) => {
               e.target.onerror = null;
               e.target.src = '/logo/DEFLOW_LOGO_ONLY.png';
             }}
           />
+          {setIsMobileMenuOpen && (
+            <button 
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="lg:hidden p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* User Card */}
@@ -57,7 +72,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         </div>
 
         {/* Nav Links */}
-        <nav className="px-3 space-y-1">
+        <nav className="px-3 space-y-1 overflow-y-auto max-h-[calc(100vh-220px)]">
           {navItems.map((item) => {
             if (item.module && !hasPermission(item.module, 'can_read')) return null;
             const Icon = item.icon;
@@ -66,7 +81,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleNavClick(item.id)}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all cursor-pointer ${
                   isActive 
                     ? 'bg-[#7d5141] text-white shadow-md font-bold' 
@@ -94,6 +109,30 @@ export default function Sidebar({ activeTab, setActiveTab }) {
           <span>Keluar Sistem</span>
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Permanent Sidebar */}
+      <aside className="hidden lg:flex w-72 bg-white border-r border-[#e5ded4] flex-col justify-between h-screen sticky top-0 z-30 shadow-xs shrink-0">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer Overlay & Slide-Over */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+          {/* Drawer Panel */}
+          <aside className="fixed inset-y-0 left-0 w-72 bg-white z-50 shadow-2xl flex flex-col justify-between h-full transition-transform transform translate-x-0">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

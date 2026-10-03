@@ -231,11 +231,11 @@ export default function ClinicSettingsAcl() {
       )}
 
       {/* Main Tabs Container */}
-      <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
-        <div className="flex gap-2 border-b border-[#e5ded4] pb-3 text-xs">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
+        <div className="flex overflow-x-auto gap-2 border-b border-[#e5ded4] pb-3 text-xs whitespace-nowrap">
           <button
             onClick={() => setActiveTab('PROFILE')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'PROFILE' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'PROFILE' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
           >
             <Building2 className="w-3.5 h-3.5 inline mr-1" />
             Pengaturan Profil Utama Klinik
@@ -243,7 +243,7 @@ export default function ClinicSettingsAcl() {
 
           <button
             onClick={() => setActiveTab('USERS')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'USERS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'USERS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
           >
             <Users className="w-3.5 h-3.5 inline mr-1" />
             Manajemen User Pengguna ({userList.length})
@@ -251,7 +251,7 @@ export default function ClinicSettingsAcl() {
 
           <button
             onClick={() => setActiveTab('ACL')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'ACL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'ACL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
           >
             <ShieldCheck className="w-3.5 h-3.5 inline mr-1" />
             Matriks Dynamic ACL (Hak Akses Roles)
@@ -261,7 +261,7 @@ export default function ClinicSettingsAcl() {
         {/* TAB 1: PROFIL KLINIK FORM */}
         {activeTab === 'PROFILE' && (
           <form onSubmit={handleSaveProfile} className="space-y-4 max-w-2xl">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Utama Klinik *</label>
                 <input

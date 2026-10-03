@@ -71,26 +71,26 @@ export default function FinancialCommissionMatrix() {
       </div>
 
       {/* Tabs */}
-      <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
-        <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
-          <div className="flex gap-2 text-xs">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-[#e5ded4] pb-3">
+          <div className="flex overflow-x-auto gap-2 text-xs whitespace-nowrap w-full md:w-auto pb-1">
             <button
               onClick={() => setActiveTab('PAYROLL')}
-              className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'PAYROLL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+              className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'PAYROLL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
             >
               <FileText className="w-3.5 h-3.5 inline mr-1" />
               Laporan Payroll Gaji & Komisi
             </button>
             <button
               onClick={() => setActiveTab('FORMULAS')}
-              className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'FORMULAS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+              className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'FORMULAS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
             >
               <Calculator className="w-3.5 h-3.5 inline mr-1" />
-              Skema Rumus Komisi Per Role (Revisi)
+              Skema Rumus Komisi Per Role
             </button>
             <button
               onClick={() => setActiveTab('PRICING')}
-              className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'PRICING' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+              className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'PRICING' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
             >
               <DollarSign className="w-3.5 h-3.5 inline mr-1" />
               Katalog 15 Tindakan & Pricing
@@ -98,11 +98,11 @@ export default function FinancialCommissionMatrix() {
           </div>
 
           {activeTab === 'PAYROLL' && (
-            <div className="flex gap-2 text-xs">
+            <div className="flex gap-2 text-xs w-full sm:w-auto">
               <select
                 value={selectedBulan}
                 onChange={(e) => setSelectedBulan(Number(e.target.value))}
-                className="py-1.5 px-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
+                className="py-1.5 px-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15] flex-1 sm:flex-initial"
               >
                 {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
                   <option key={m} value={m}>Bulan {m}</option>

@@ -195,29 +195,29 @@ export default function LogisticsInventory() {
       )}
 
       {/* Tabs */}
-      <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
-        <div className="flex gap-2 border-b border-[#e5ded4] pb-3 text-xs overflow-x-auto">
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
+        <div className="flex overflow-x-auto gap-2 border-b border-[#e5ded4] pb-3 text-xs whitespace-nowrap">
           <button
             onClick={() => setActiveTab('RETAIL')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'RETAIL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'RETAIL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
           >
             Produk Retail Skin Care ({products.filter(p => p.tipe_stok === 'RETAIL').length})
           </button>
           <button
             onClick={() => setActiveTab('THERAPIST_BTC')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'THERAPIST_BTC' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'THERAPIST_BTC' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
           >
             Consumable / BTC Terapis ({products.filter(p => p.tipe_stok === 'THERAPIST_BTC').length})
           </button>
           <button
             onClick={() => setActiveTab('KLINIK_NON_MEDIS')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'KLINIK_NON_MEDIS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'KLINIK_NON_MEDIS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
           >
             Operasional Non-Medis ({products.filter(p => p.tipe_stok === 'KLINIK_NON_MEDIS').length})
           </button>
           <button
             onClick={() => setActiveTab('PRODUCT_APPROVALS')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'PRODUCT_APPROVALS' ? 'bg-indigo-800 text-white shadow-xs' : 'bg-indigo-50 text-indigo-900 border border-indigo-200 hover:bg-indigo-100'}`}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'PRODUCT_APPROVALS' ? 'bg-indigo-800 text-white shadow-xs' : 'bg-indigo-50 text-indigo-900 border border-indigo-200 hover:bg-indigo-100'}`}
           >
             <span>Perubahan & Approval (Nama, Harga & Stok)</span>
             {pendingProductApprovalsCount > 0 && (
@@ -228,7 +228,7 @@ export default function LogisticsInventory() {
           </button>
           <button
             onClick={() => setActiveTab('MUTASI')}
-            className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'MUTASI' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'}`}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'MUTASI' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'}`}
           >
             Riwayat Mutasi & Approval Stok ({mutations.length})
           </button>

@@ -15,6 +15,7 @@ import WhatsAppGateway from './pages/WhatsAppGateway';
 function MainApp() {
   const { user, loading, hasPermission } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('overview');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -40,7 +41,7 @@ function MainApp() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fff8f0] flex items-center justify-center">
+      <div className="min-h-screen bg-[#fff8f0] flex items-center justify-center p-4">
         <div className="text-center space-y-3">
           <div className="w-12 h-12 border-4 border-[#7d5141] border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="font-serif font-bold text-sm text-[#7d5141]">Memuat DEFLOW Aesthetic Clinic System...</p>
@@ -79,13 +80,21 @@ function MainApp() {
 
   return (
     <div className="min-h-screen flex bg-[#fff8f0]">
-      {/* Sidebar Navigation */}
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Sidebar Navigation (Desktop Permanent & Mobile Off-canvas Drawer) */}
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        isMobileMenuOpen={isMobileMenuOpen}
+        setIsMobileMenuOpen={setIsMobileMenuOpen}
+      />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <Header setActiveTab={setActiveTab} />
-        <main className="p-8 max-w-7xl w-full mx-auto flex-1">
+        <Header 
+          setActiveTab={setActiveTab} 
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+        />
+        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto flex-1 min-w-0">
           {renderTabContent()}
         </main>
       </div>
