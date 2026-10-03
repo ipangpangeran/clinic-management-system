@@ -324,12 +324,14 @@ async function seedDefaultData() {
   ];
 
   for (const u of defaultUsers) {
-    const existing = await getQuery('SELECT id FROM users WHERE id = ? OR username = ?', [u.id, u.username]);
+    const existing = await getQuery('SELECT id FROM users WHERE username = ?', [u.username]);
     if (!existing) {
+      await runQuery('DELETE FROM users WHERE id = ?', [u.id]);
       await runQuery('INSERT INTO users (id, username, password, full_name, role, phone) VALUES (?, ?, ?, ?, ?, ?)',
         [u.id, u.username, u.password, u.full_name, u.role, u.phone]);
     } else {
-      await runQuery('UPDATE users SET role = ?, full_name = ? WHERE id = ? OR username = ?', [u.role, u.full_name, u.id, u.username]);
+      await runQuery('UPDATE users SET password = ?, role = ?, full_name = ?, phone = ? WHERE username = ?',
+        [u.password, u.role, u.full_name, u.phone, u.username]);
     }
   }
 
