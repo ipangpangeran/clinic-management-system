@@ -543,17 +543,99 @@ app.post('/api/stok', authenticateToken, async (req, res) => {
 app.put('/api/stok/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nama_produk, kode_sku, tipe_stok, harga_jual, sisa_stok, minimum_stok, satuan } = req.body;
+    const { nama_produk, kode_sku, tipe_stok, harga_jual, sisa_stok, minimum_stok, satuan, notes } = req.body;
 
-    await runQuery(`
-      UPDATE stok_produk
-      SET nama_produk = ?, kode_sku = ?, tipe_stok = ?, harga_jual = ?, sisa_stok = ?, minimum_stok = ?, satuan = ?, updated_by = ?
-      WHERE id = ?
-    `, [nama_produk, kode_sku, tipe_stok, harga_jual, sisa_stok, minimum_stok, satuan, req.user.id, id]);
+    const existing = await getQuery('SELECT * FROM stok_produk WHERE id = ?', [id]);
+    if (!existing) return res.status(404).json({ message: 'Produk tidak ditemukan' });
 
-    res.json({ message: 'Stok produk berhasil diperbarui' });
+    const isDirectUpdateRole = (req.user.role === 'Super Admin' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik');
+
+    if (isDirectUpdateRole) {
+      await runQuery(`
+        UPDATE stok_produk
+        SET nama_produk = ?, kode_sku = ?, tipe_stok = ?, harga_jual = ?, sisa_stok = ?, minimum_stok = ?, satuan = ?, updated_by = ?
+        WHERE id = ?
+      `, [
+        nama_produk || existing.nama_produk,
+        kode_sku || existing.kode_sku,
+        tipe_stok || existing.tipe_stok,
+        harga_jual !== undefined ? Number(harga_jual) : existing.harga_jual,
+        sisa_stok !== undefined ? Number(sisa_stok) : existing.sisa_stok,
+        minimum_stok !== undefined ? Number(minimum_stok) : existing.minimum_stok,
+        satuan || existing.satuan,
+        req.user.id,
+        id
+      ]);
+
+      return res.json({ message: 'Data & stok produk berhasil diperbarui secara langsung', autoApproved: true });
+    } else {
+      // Admin FO or other non-superadmin user requires approval
+      const reqId = 'req-' + Date.now();
+      await runQuery(`
+        INSERT INTO produk_approval_requests (
+          id, produk_id, old_nama_produk, new_nama_produk, old_harga_jual, new_harga_jual, old_sisa_stok, new_sisa_stok, requester_user_id, status, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+      `, [
+        reqId, id,
+        existing.nama_produk, nama_produk || existing.nama_produk,
+        existing.harga_jual, harga_jual !== undefined ? Number(harga_jual) : existing.harga_jual,
+        existing.sisa_stok, sisa_stok !== undefined ? Number(sisa_stok) : existing.sisa_stok,
+        req.user.id, notes || 'Pengajuan perubahan nama/harga/stok oleh Admin FO'
+      ]);
+
+      return res.json({ message: 'Pengajuan perubahan produk & stok berhasil dikirim. Menunggu approval Super Admin / Admin Klinik', autoApproved: false, pending: true });
+    }
   } catch (err) {
     res.status(500).json({ message: 'Error updating product', error: err.message });
+  }
+});
+
+// --- PRODUCT DETAILS & STOCK APPROVAL ROUTES ---
+app.get('/api/stok/product-approvals', authenticateToken, async (req, res) => {
+  try {
+    const list = await allQuery(`
+      SELECT par.*, sp.kode_sku, sp.satuan, u1.full_name as requester_name, u2.full_name as approver_name
+      FROM produk_approval_requests par
+      JOIN stok_produk sp ON par.produk_id = sp.id
+      LEFT JOIN users u1 ON par.requester_user_id = u1.id
+      LEFT JOIN users u2 ON par.approver_user_id = u2.id
+      ORDER BY par.created_at DESC
+    `);
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching product approval requests', error: err.message });
+  }
+});
+
+app.put('/api/stok/product-approvals/:id/review', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // 'APPROVED' or 'REJECTED'
+
+    const reqItem = await getQuery('SELECT * FROM produk_approval_requests WHERE id = ?', [id]);
+    if (!reqItem) return res.status(404).json({ message: 'Pengajuan approval tidak ditemukan' });
+
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik') {
+      return res.status(403).json({ message: 'Hanya Super Admin atau Admin Klinik yang berhak menyetujui/menolak pengajuan ini' });
+    }
+
+    await runQuery(`
+      UPDATE produk_approval_requests
+      SET status = ?, approver_user_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [status, req.user.id, id]);
+
+    if (status === 'APPROVED') {
+      await runQuery(`
+        UPDATE stok_produk
+        SET nama_produk = ?, harga_jual = ?, sisa_stok = ?, updated_by = ?
+        WHERE id = ?
+      `, [reqItem.new_nama_produk, reqItem.new_harga_jual, reqItem.new_sisa_stok, req.user.id, reqItem.produk_id]);
+    }
+
+    res.json({ message: `Pengajuan perubahan produk berhasil di-${status.toLowerCase()}` });
+  } catch (err) {
+    res.status(500).json({ message: 'Error reviewing product approval', error: err.message });
   }
 });
 
@@ -579,7 +661,7 @@ app.post('/api/stok/mutasi', authenticateToken, async (req, res) => {
     if (!produk_id || !tipe || !jumlah) return res.status(400).json({ message: 'Produk, tipe mutasi, dan jumlah wajib diisi' });
 
     const mutId = 'mut-' + Date.now();
-    const autoApprove = (req.user.role === 'Assistant Manager (ASM)' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik');
+    const autoApprove = (req.user.role === 'Super Admin' || req.user.role === 'Assistant Manager (ASM)' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik');
     const status = autoApprove ? 'APPROVED' : 'PENDING';
 
     await runQuery(`
@@ -605,6 +687,10 @@ app.put('/api/stok/mutasi/:id/approval', authenticateToken, async (req, res) => 
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik' && req.user.role !== 'Assistant Manager (ASM)') {
+      return res.status(403).json({ message: 'Hanya Super Admin, Admin Klinik, atau ASM yang berhak menyetujui mutasi stok' });
+    }
 
     const mutasi = await getQuery('SELECT * FROM stok_mutasi WHERE id = ?', [id]);
     if (!mutasi) return res.status(404).json({ message: 'Mutasi tidak ditemukan' });

@@ -181,6 +181,27 @@ async function initDb() {
       )
     `);
 
+    // 9b. Product Name, Price & Stock Approval Requests (Admin FO Approval Flow)
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS produk_approval_requests (
+        id TEXT PRIMARY KEY,
+        produk_id TEXT NOT NULL,
+        old_nama_produk TEXT,
+        new_nama_produk TEXT,
+        old_harga_jual REAL,
+        new_harga_jual REAL,
+        old_sisa_stok INTEGER,
+        new_sisa_stok INTEGER,
+        requester_user_id TEXT NOT NULL,
+        approver_user_id TEXT,
+        status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'APPROVED', 'REJECTED')),
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(produk_id) REFERENCES stok_produk(id) ON DELETE CASCADE
+      )
+    `);
+
     // 10. Medical Treatments & Services Catalog
     await runQuery(`
       CREATE TABLE IF NOT EXISTS tindakan_medis (
