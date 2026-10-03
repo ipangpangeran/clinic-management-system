@@ -115,6 +115,41 @@ async function initDb() {
       )
     `);
 
+    // Automatic Migration: Upgrade existing pasien table CHECK constraint in SQLite
+    try {
+      const pasienTableSql = await getQuery("SELECT sql FROM sqlite_master WHERE type='table' AND name='pasien'");
+      if (pasienTableSql && pasienTableSql.sql && !pasienTableSql.sql.includes("'MEMBER'")) {
+        console.log('[DB Migration] Upgrading pasien table CHECK constraint to include MEMBER...');
+        await runQuery('PRAGMA foreign_keys = OFF');
+        await runQuery(`
+          CREATE TABLE pasien_new (
+            id TEXT PRIMARY KEY,
+            no_ktp TEXT UNIQUE,
+            no_hp TEXT UNIQUE NOT NULL,
+            nama_lengkap TEXT NOT NULL,
+            tipe_pasien TEXT NOT NULL CHECK(tipe_pasien IN ('TRIAL', 'NON-TRIAL', 'MEMBER')),
+            alamat TEXT,
+            tgl_lahir DATE,
+            riwayat_alergi TEXT,
+            jenis_kulit TEXT,
+            rekomendasi_dokter TEXT,
+            total_poin INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await runQuery(`
+          INSERT INTO pasien_new (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter, total_poin, created_at)
+          SELECT id, no_ktp, no_hp, nama_lengkap, CASE WHEN tipe_pasien = 'NON-TRIAL' OR tipe_pasien = 'Reguler' THEN 'MEMBER' ELSE tipe_pasien END, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter, total_poin, created_at FROM pasien
+        `);
+        await runQuery('DROP TABLE pasien');
+        await runQuery('ALTER TABLE pasien_new RENAME TO pasien');
+        await runQuery('PRAGMA foreign_keys = ON');
+        console.log('[DB Migration] pasien table upgraded successfully!');
+      }
+    } catch (e) {
+      console.error('[DB Migration Error pasien]', e);
+    }
+
     // 5. Patient Packages
     await runQuery(`
       CREATE TABLE IF NOT EXISTS pasien_paket (

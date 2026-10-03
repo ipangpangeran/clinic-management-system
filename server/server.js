@@ -363,6 +363,8 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Nama Lengkap, No. HP, dan Tipe Pasien wajib diisi' });
     }
 
+    const normalizedTipe = (tipe_pasien === 'NON-TRIAL' || tipe_pasien === 'Reguler' || tipe_pasien === 'Member' || tipe_pasien === 'MEMBER') ? 'MEMBER' : tipe_pasien;
+
     if (no_ktp) {
       const existingKtp = await getQuery('SELECT id FROM pasien WHERE no_ktp = ?', [no_ktp]);
       if (existingKtp) {
@@ -379,7 +381,7 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
     await runQuery(`
       INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, no_ktp || null, no_hp, nama_lengkap, tipe_pasien, alamat || null, tgl_lahir || null, riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null]);
+    `, [id, no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null]);
 
     const newPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
     res.status(201).json({ message: 'Pasien berhasil didaftarkan', pasien: newPatient });
@@ -401,6 +403,8 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
       }
     }
 
+    const normalizedTipe = (tipe_pasien === 'NON-TRIAL' || tipe_pasien === 'Reguler' || tipe_pasien === 'Member' || tipe_pasien === 'MEMBER') ? 'MEMBER' : tipe_pasien;
+
     if (no_ktp) {
       const existingKtp = await getQuery('SELECT id FROM pasien WHERE no_ktp = ? AND id != ?', [no_ktp, id]);
       if (existingKtp) return res.status(400).json({ message: 'data sudah terdaftar (No. KTP sudah digunakan oleh pasien lain)' });
@@ -414,7 +418,7 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
       UPDATE pasien
       SET no_ktp = ?, no_hp = ?, nama_lengkap = ?, tipe_pasien = ?, alamat = ?, tgl_lahir = ?, riwayat_alergi = ?, jenis_kulit = ?, rekomendasi_dokter = ?
       WHERE id = ?
-    `, [no_ktp || null, no_hp, nama_lengkap, tipe_pasien, alamat || null, tgl_lahir || null, riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, id]);
+    `, [no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, id]);
 
     const updated = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
     res.json({ message: 'Data pasien berhasil diperbarui', pasien: updated });
