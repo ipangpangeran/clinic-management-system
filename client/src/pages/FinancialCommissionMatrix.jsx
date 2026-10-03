@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { DollarSign, FileText, CheckCircle, Calculator, Sparkles, User, Printer } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import { DollarSign, FileText, CheckCircle, Calculator, Sparkles, User, Printer, Plus, Edit, Trash2, Search } from 'lucide-react';
 
 export default function FinancialCommissionMatrix() {
+  const { user } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('PAYROLL'); // 'PAYROLL', 'FORMULAS', 'PRICING'
   const [payrollSummary, setPayrollSummary] = useState([]);
   const [treatments, setTreatments] = useState([]);
@@ -13,6 +15,22 @@ export default function FinancialCommissionMatrix() {
   // Slip Gaji Modal State
   const [selectedSlip, setSelectedSlip] = useState(null);
   const [showSlipModal, setShowSlipModal] = useState(false);
+
+  // Treatment CRUD Modal State
+  const [showTreatmentModal, setShowTreatmentModal] = useState(false);
+  const [editTreatmentMode, setEditTreatmentMode] = useState(false);
+  const [selectedTreatmentId, setSelectedTreatmentId] = useState(null);
+  const [namaTindakan, setNamaTindakan] = useState('');
+  const [tarifTindakanMedis, setTarifTindakanMedis] = useState(0);
+  const [tarifKonsulDokter, setTarifKonsulDokter] = useState(0);
+  const [komisiFixTherapist, setKomisiFixTherapist] = useState(17000);
+  const [nominalNurseTindakan, setNominalNurseTindakan] = useState(15000);
+  const [percentBtcBonus, setPercentBtcBonus] = useState(5);
+  const [percentJasaMedisDokter, setPercentJasaMedisDokter] = useState(20);
+  const [treatmentSearch, setTreatmentSearch] = useState('');
+  const [submittingTreatment, setSubmittingTreatment] = useState(false);
+
+  const canManageTreatments = user?.role === 'Super Admin' || user?.role === 'Admin System' || user?.role === 'Admin Klinik';
 
   useEffect(() => {
     fetchPayroll();
@@ -37,6 +55,74 @@ export default function FinancialCommissionMatrix() {
       setTreatments(res.data);
     } catch (err) {
       console.error('Error fetching treatments', err);
+    }
+  };
+
+  const openAddTreatmentModal = () => {
+    setEditTreatmentMode(false);
+    setSelectedTreatmentId(null);
+    setNamaTindakan('');
+    setTarifTindakanMedis(150000);
+    setTarifKonsulDokter(50000);
+    setKomisiFixTherapist(17000);
+    setNominalNurseTindakan(15000);
+    setPercentBtcBonus(5);
+    setPercentJasaMedisDokter(20);
+    setShowTreatmentModal(true);
+  };
+
+  const openEditTreatmentModal = (t) => {
+    setEditTreatmentMode(true);
+    setSelectedTreatmentId(t.id);
+    setNamaTindakan(t.nama_tindakan);
+    setTarifTindakanMedis(t.tarif_tindakan_medis || 0);
+    setTarifKonsulDokter(t.tarif_konsul_dokter || 0);
+    setKomisiFixTherapist(t.komisi_fix_therapist || 0);
+    setNominalNurseTindakan(t.nominal_nurse_tindakan || 0);
+    setPercentBtcBonus(t.percent_btc_bonus || 0);
+    setPercentJasaMedisDokter(t.percent_jasa_medis_dokter || 0);
+    setShowTreatmentModal(true);
+  };
+
+  const handleSaveTreatment = async (e) => {
+    e.preventDefault();
+    if (!namaTindakan.trim()) {
+      alert('Nama jenis tindakan wajib diisi');
+      return;
+    }
+    setSubmittingTreatment(true);
+    try {
+      const payload = {
+        nama_tindakan: namaTindakan,
+        tarif_tindakan_medis: Number(tarifTindakanMedis) || 0,
+        tarif_konsul_dokter: Number(tarifKonsulDokter) || 0,
+        komisi_fix_therapist: Number(komisiFixTherapist) || 0,
+        nominal_nurse_tindakan: Number(nominalNurseTindakan) || 0,
+        percent_btc_bonus: Number(percentBtcBonus) || 0,
+        percent_jasa_medis_dokter: Number(percentJasaMedisDokter) || 0
+      };
+
+      if (editTreatmentMode && selectedTreatmentId) {
+        await axios.put(`/api/tindakan/${selectedTreatmentId}`, payload);
+      } else {
+        await axios.post('/api/tindakan', payload);
+      }
+      fetchTreatments();
+      setShowTreatmentModal(false);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyimpan jenis tindakan');
+    } finally {
+      setSubmittingTreatment(false);
+    }
+  };
+
+  const handleDeleteTreatment = async (t) => {
+    if (!window.confirm(`Hapus jenis tindakan "${t.nama_tindakan}"?`)) return;
+    try {
+      await axios.delete(`/api/tindakan/${t.id}`);
+      fetchTreatments();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menghapus jenis tindakan');
     }
   };
 
@@ -224,7 +310,34 @@ export default function FinancialCommissionMatrix() {
         {/* PRICING & 15 TINDAKAN CATALOG */}
         {activeTab === 'PRICING' && (
           <div className="space-y-4">
-            <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Katalog 15 Jenis Tindakan / Treatment Resmi DEFLOW</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Katalog Jenis Tindakan / Treatment Resmi DEFLOW</h3>
+                <p className="text-xs text-[#514440]">Kelola jenis tindakan medis, penyesuaian tarif, serta skema komisi Beautician, Nurse, & Dokter.</p>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari jenis tindakan..."
+                    value={treatmentSearch}
+                    onChange={(e) => setTreatmentSearch(e.target.value)}
+                    className="pl-8 pr-3 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none"
+                  />
+                </div>
+                {canManageTreatments && (
+                  <button
+                    onClick={openAddTreatmentModal}
+                    className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" /> + Tambah Jenis Tindakan
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
                 <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
@@ -235,19 +348,40 @@ export default function FinancialCommissionMatrix() {
                     <th className="py-3 px-4">Tarif Tindakan Medis</th>
                     <th className="py-3 px-4">Komisi Beautician (Fix)</th>
                     <th className="py-3 px-4">Komisi Nurse (Fix)</th>
+                    {canManageTreatments && <th className="py-3 px-4 text-center">Aksi / Adjust</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
-                  {treatments.map((t, index) => (
-                    <tr key={t.id} className="hover:bg-[#fff8f0]">
-                      <td className="py-3 px-4 text-[#83746f] font-bold">{index + 1}</td>
-                      <td className="py-3 px-4 font-bold text-[#1e1b15] text-sm">{t.nama_tindakan}</td>
-                      <td className="py-3 px-4 text-[#514440]">Rp {t.tarif_konsul_dokter.toLocaleString('id-ID')}</td>
-                      <td className="py-3 px-4 font-bold text-[#7d5141]">Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}</td>
-                      <td className="py-3 px-4 text-emerald-700 font-semibold">Rp {t.komisi_fix_therapist.toLocaleString('id-ID')}</td>
-                      <td className="py-3 px-4 text-blue-700 font-semibold">Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}</td>
-                    </tr>
-                  ))}
+                  {treatments
+                    .filter(t => t.nama_tindakan.toLowerCase().includes(treatmentSearch.toLowerCase()))
+                    .map((t, index) => (
+                      <tr key={t.id} className="hover:bg-[#fff8f0]">
+                        <td className="py-3 px-4 text-[#83746f] font-bold">{index + 1}</td>
+                        <td className="py-3 px-4 font-bold text-[#1e1b15] text-sm">{t.nama_tindakan}</td>
+                        <td className="py-3 px-4 text-[#514440]">Rp {t.tarif_konsul_dokter.toLocaleString('id-ID')}</td>
+                        <td className="py-3 px-4 font-bold text-[#7d5141]">Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}</td>
+                        <td className="py-3 px-4 text-emerald-700 font-semibold">Rp {t.komisi_fix_therapist.toLocaleString('id-ID')}</td>
+                        <td className="py-3 px-4 text-blue-700 font-semibold">Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}</td>
+                        {canManageTreatments && (
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => openEditTreatmentModal(t)}
+                                className="p-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#7d5141] rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Edit className="w-3.5 h-3.5" /> Edit / Adjust
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTreatment(t)}
+                                className="p-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Hapus
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -333,6 +467,116 @@ export default function FinancialCommissionMatrix() {
             >
               <Printer className="w-4 h-4" /> Cetak / Download PDF Slip Gaji
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* TREATMENT CRUD MODAL */}
+      {showTreatmentModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#e5ded4] space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <h3 className="font-serif font-bold text-lg text-[#1e1b15]">
+                {editTreatmentMode ? 'Edit Jenis Tindakan & Adjust Tarif' : 'Form Tambah Jenis Tindakan Baru'}
+              </h3>
+              <button onClick={() => setShowTreatmentModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">×</button>
+            </div>
+
+            <form onSubmit={handleSaveTreatment} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-[#514440] mb-1">Nama Jenis Tindakan / Treatment *</label>
+                <input
+                  type="text"
+                  value={namaTindakan}
+                  onChange={(e) => setNamaTindakan(e.target.value)}
+                  required
+                  placeholder="misal: Laser Whitening & Glowing Face"
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-[#514440] mb-1">Tarif Tindakan Medis (Rp) *</label>
+                  <input
+                    type="number"
+                    value={tarifTindakanMedis}
+                    onChange={(e) => setTarifTindakanMedis(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#514440] mb-1">Tarif Konsul Dokter (Rp)</label>
+                  <input
+                    type="number"
+                    value={tarifKonsulDokter}
+                    onChange={(e) => setTarifKonsulDokter(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-3">
+                <div className="font-bold text-[#7d5141] uppercase tracking-wider text-[11px]">Skema Komisi & Insentif Staff (Per Action)</div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-[#514440] mb-1">Fix Komisi Beautician (Rp)</label>
+                    <input
+                      type="number"
+                      value={komisiFixTherapist}
+                      onChange={(e) => setKomisiFixTherapist(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-emerald-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-[#514440] mb-1">Fix Komisi Nurse (Rp)</label>
+                    <input
+                      type="number"
+                      value={nominalNurseTindakan}
+                      onChange={(e) => setNominalNurseTindakan(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-blue-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-[#514440] mb-1">% Bonus BTC</label>
+                    <input
+                      type="number"
+                      value={percentBtcBonus}
+                      onChange={(e) => setPercentBtcBonus(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-[#514440] mb-1">% Jasa Medis Dokter</label>
+                    <input
+                      type="number"
+                      value={percentJasaMedisDokter}
+                      onChange={(e) => setPercentJasaMedisDokter(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-[#e5ded4]">
+                <button
+                  type="button"
+                  onClick={() => setShowTreatmentModal(false)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingTreatment}
+                  className="px-5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold rounded-xl shadow-md cursor-pointer"
+                >
+                  {submittingTreatment ? 'Menyimpan...' : (editTreatmentMode ? 'Simpan Perubahan Tarif' : 'Tambah Jenis Tindakan')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

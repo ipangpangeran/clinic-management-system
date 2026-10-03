@@ -17,6 +17,50 @@ export default function DoinganActivity() {
   const [nominalDp, setNominalDp] = useState('');
   const [nominalMembership, setNominalMembership] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Quick Treatment Modal State for Super Admin & Admin Klinik
+  const [showTreatmentModal, setShowTreatmentModal] = useState(false);
+  const [namaTindakan, setNamaTindakan] = useState('');
+  const [tarifTindakanMedis, setTarifTindakanMedis] = useState(150000);
+  const [tarifKonsulDokter, setTarifKonsulDokter] = useState(50000);
+  const [komisiFixTherapist, setKomisiFixTherapist] = useState(17000);
+  const [nominalNurseTindakan, setNominalNurseTindakan] = useState(15000);
+  const [percentBtcBonus, setPercentBtcBonus] = useState(5);
+  const [percentJasaMedisDokter, setPercentJasaMedisDokter] = useState(20);
+  const [submittingTreatment, setSubmittingTreatment] = useState(false);
+
+  const canManageTreatments = user?.role === 'Super Admin' || user?.role === 'Admin System' || user?.role === 'Admin Klinik';
+
+  const handleSaveQuickTreatment = async (e) => {
+    e.preventDefault();
+    if (!namaTindakan.trim()) {
+      alert('Nama jenis tindakan wajib diisi');
+      return;
+    }
+    setSubmittingTreatment(true);
+    try {
+      const payload = {
+        nama_tindakan: namaTindakan,
+        tarif_tindakan_medis: Number(tarifTindakanMedis) || 0,
+        tarif_konsul_dokter: Number(tarifKonsulDokter) || 0,
+        komisi_fix_therapist: Number(komisiFixTherapist) || 0,
+        nominal_nurse_tindakan: Number(nominalNurseTindakan) || 0,
+        percent_btc_bonus: Number(percentBtcBonus) || 0,
+        percent_jasa_medis_dokter: Number(percentJasaMedisDokter) || 0
+      };
+      await axios.post('/api/tindakan', payload);
+      const tndRes = await axios.get('/api/tindakan');
+      setTreatments(tndRes.data);
+      const newlyAdded = tndRes.data.find(t => t.nama_tindakan.toLowerCase() === namaTindakan.trim().toLowerCase());
+      if (newlyAdded) setTindakanId(newlyAdded.id);
+      setShowTreatmentModal(false);
+      setNamaTindakan('');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyimpan jenis tindakan baru');
+    } finally {
+      setSubmittingTreatment(false);
+    }
+  };
   
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState('');
@@ -167,7 +211,18 @@ export default function DoinganActivity() {
             {/* Selecting Treatment / Tindakan */}
             {user?.role !== 'Marketing' && (
               <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Jenis Tindakan / Treatment *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-[#514440]">Jenis Tindakan / Treatment *</label>
+                  {canManageTreatments && (
+                    <button
+                      type="button"
+                      onClick={() => setShowTreatmentModal(true)}
+                      className="text-[11px] font-bold text-[#7d5141] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> + Tambah Jenis Tindakan Baru
+                    </button>
+                  )}
+                </div>
                 <select
                   value={tindakanId}
                   onChange={(e) => setTindakanId(e.target.value)}
@@ -345,6 +400,113 @@ export default function DoinganActivity() {
           </div>
         </div>
       </div>
+      {/* QUICK ADD TREATMENT MODAL FOR SUPER ADMIN & ADMIN KLINIK */}
+      {showTreatmentModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#e5ded4] space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Form Tambah Jenis Tindakan Baru</h3>
+              <button onClick={() => setShowTreatmentModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">×</button>
+            </div>
+
+            <form onSubmit={handleSaveQuickTreatment} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-[#514440] mb-1">Nama Jenis Tindakan / Treatment *</label>
+                <input
+                  type="text"
+                  value={namaTindakan}
+                  onChange={(e) => setNamaTindakan(e.target.value)}
+                  required
+                  placeholder="misal: HIFU Full Face Lift & Firming"
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-[#514440] mb-1">Tarif Tindakan Medis (Rp) *</label>
+                  <input
+                    type="number"
+                    value={tarifTindakanMedis}
+                    onChange={(e) => setTarifTindakanMedis(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141]"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-[#514440] mb-1">Tarif Konsul Dokter (Rp)</label>
+                  <input
+                    type="number"
+                    value={tarifKonsulDokter}
+                    onChange={(e) => setTarifKonsulDokter(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-3">
+                <div className="font-bold text-[#7d5141] uppercase tracking-wider text-[11px]">Skema Komisi & Insentif Staff (Per Action)</div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-[#514440] mb-1">Fix Komisi Beautician (Rp)</label>
+                    <input
+                      type="number"
+                      value={komisiFixTherapist}
+                      onChange={(e) => setKomisiFixTherapist(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-emerald-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-[#514440] mb-1">Fix Komisi Nurse (Rp)</label>
+                    <input
+                      type="number"
+                      value={nominalNurseTindakan}
+                      onChange={(e) => setNominalNurseTindakan(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-blue-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-[#514440] mb-1">% Bonus BTC</label>
+                    <input
+                      type="number"
+                      value={percentBtcBonus}
+                      onChange={(e) => setPercentBtcBonus(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-[#514440] mb-1">% Jasa Medis Dokter</label>
+                    <input
+                      type="number"
+                      value={percentJasaMedisDokter}
+                      onChange={(e) => setPercentJasaMedisDokter(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-[#e5ded4]">
+                <button
+                  type="button"
+                  onClick={() => setShowTreatmentModal(false)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingTreatment}
+                  className="px-5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold rounded-xl shadow-md cursor-pointer"
+                >
+                  {submittingTreatment ? 'Menyimpan...' : 'Tambah Jenis Tindakan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

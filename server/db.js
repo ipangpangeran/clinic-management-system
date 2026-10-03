@@ -390,7 +390,7 @@ async function seedDefaultData() {
   const modules = [
     'clinic_profile', 'acl', 'patient_intake', 'patient_management', 'doingan', 'patient_packages', 
     'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical', 
-    'pricing', 'commission_formulas', 'payroll'
+    'pricing', 'tindakan_crud', 'commission_formulas', 'payroll'
   ];
 
   for (const role of roles) {

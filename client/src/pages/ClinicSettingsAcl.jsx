@@ -57,6 +57,7 @@ export default function ClinicSettingsAcl() {
     { key: 'inventory_btc', name: 'Stok Consumable BTC Terapis' },
     { key: 'inventory_non_medical', name: 'Stok Operasional Non-Medis' },
     { key: 'pricing', name: 'Manajemen Harga & Catalog (15 Tindakan)' },
+    { key: 'tindakan_crud', name: 'CRUD Jenis Tindakan Medis & Penyesuaian Harga Tarif' },
     { key: 'commission_formulas', name: 'Rumus Komisi 5 Lini Profesi' },
     { key: 'payroll', name: 'Laporan Payroll & Slip Gaji' }
   ];

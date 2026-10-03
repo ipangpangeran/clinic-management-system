@@ -776,15 +776,22 @@ app.get('/api/tindakan', authenticateToken, async (req, res) => {
 
 app.post('/api/tindakan', authenticateToken, async (req, res) => {
   try {
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik') {
+      return res.status(403).json({ message: 'Akses ditolak: Hanya Super Admin & Admin Klinik yang dapat menambah jenis tindakan' });
+    }
+
     const { nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan } = req.body;
+    if (!nama_tindakan || nama_tindakan.trim() === '') {
+      return res.status(400).json({ message: 'Nama jenis tindakan wajib diisi' });
+    }
     
     const id = 'tnd-' + Date.now();
     await runQuery(`
       INSERT INTO tindakan_medis (id, nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, nama_tindakan, tarif_konsul_dokter || 0, tarif_tindakan_medis || 0, komisi_fix_therapist || 0, percent_btc_bonus || 0, percent_jasa_medis_dokter || 0, nominal_nurse_tindakan || 0]);
+    `, [id, nama_tindakan.trim(), parseFloat(tarif_konsul_dokter || 0), parseFloat(tarif_tindakan_medis || 0), parseFloat(komisi_fix_therapist || 0), parseFloat(percent_btc_bonus || 0), parseFloat(percent_jasa_medis_dokter || 0), parseFloat(nominal_nurse_tindakan || 0)]);
 
-    res.status(201).json({ message: 'Tindakan medis berhasil ditambahkan' });
+    res.status(201).json({ message: 'Jenis tindakan medis berhasil ditambahkan' });
   } catch (err) {
     res.status(500).json({ message: 'Error adding treatment', error: err.message });
   }
@@ -792,6 +799,10 @@ app.post('/api/tindakan', authenticateToken, async (req, res) => {
 
 app.put('/api/tindakan/:id', authenticateToken, async (req, res) => {
   try {
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik') {
+      return res.status(403).json({ message: 'Akses ditolak: Hanya Super Admin & Admin Klinik yang dapat mengedit jenis tindakan' });
+    }
+
     const { id } = req.params;
     const { nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan } = req.body;
 
@@ -799,11 +810,25 @@ app.put('/api/tindakan/:id', authenticateToken, async (req, res) => {
       UPDATE tindakan_medis
       SET nama_tindakan = ?, tarif_konsul_dokter = ?, tarif_tindakan_medis = ?, komisi_fix_therapist = ?, percent_btc_bonus = ?, percent_jasa_medis_dokter = ?, nominal_nurse_tindakan = ?
       WHERE id = ?
-    `, [nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan, id]);
+    `, [nama_tindakan.trim(), parseFloat(tarif_konsul_dokter || 0), parseFloat(tarif_tindakan_medis || 0), parseFloat(komisi_fix_therapist || 0), parseFloat(percent_btc_bonus || 0), parseFloat(percent_jasa_medis_dokter || 0), parseFloat(nominal_nurse_tindakan || 0), id]);
 
-    res.json({ message: 'Tindakan medis berhasil diperbarui' });
+    res.json({ message: 'Jenis tindakan medis berhasil diperbarui' });
   } catch (err) {
     res.status(500).json({ message: 'Error updating treatment', error: err.message });
+  }
+});
+
+app.delete('/api/tindakan/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik') {
+      return res.status(403).json({ message: 'Akses ditolak: Hanya Super Admin & Admin Klinik yang dapat menghapus jenis tindakan' });
+    }
+
+    const { id } = req.params;
+    await runQuery('DELETE FROM tindakan_medis WHERE id = ?', [id]);
+    res.json({ message: 'Jenis tindakan medis berhasil dihapus' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting treatment', error: err.message });
   }
 });
 
