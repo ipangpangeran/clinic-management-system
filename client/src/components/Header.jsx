@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { Phone, MapPin, Bell, AlertTriangle, ExternalLink } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import { Phone, MapPin, Bell, AlertTriangle, ExternalLink, ShieldCheck } from 'lucide-react';
 
 export default function Header({ setActiveTab }) {
+  const { user, hasPermission } = useContext(AuthContext);
   const [clinic, setClinic] = useState(null);
   const [lowStockItems, setLowStockItems] = useState([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -35,9 +37,14 @@ export default function Header({ setActiveTab }) {
     }
   };
 
+  // Only Super Admin, Admin Klinik, and Admin FO can manage/CRUD stock and jump to Inventory tab
+  const canManageStock = user?.role === 'Super Admin' || user?.role === 'Admin System' || user?.role === 'Admin Klinik' || user?.role === 'Admin FO';
+
   const handleGoToInventory = () => {
     setShowNotifDropdown(false);
-    if (setActiveTab) setActiveTab('inventory');
+    if (canManageStock && setActiveTab) {
+      setActiveTab('inventory');
+    }
   };
 
   return (
@@ -53,19 +60,19 @@ export default function Header({ setActiveTab }) {
           <div className="flex items-center gap-3 text-xs text-[#83746f] mt-1 font-medium">
             <span className="flex items-center gap-1">
               <MapPin className="w-3.5 h-3.5 text-[#7d5141]" />
-              {clinic?.address || 'Jakarta Selatan'}
+              {clinic?.address || 'Pekanbaru, Riau'}
             </span>
             <span>•</span>
             <span className="flex items-center gap-1">
               <Phone className="w-3.5 h-3.5 text-[#7d5141]" />
-              {clinic?.whatsapp || '085297532050'}
+              {clinic?.whatsapp || '085121301755'}
             </span>
           </div>
         </div>
       </div>
 
       <div className="flex items-center gap-4">
-        {/* Bell Notification Button */}
+        {/* Bell Notification Button - Visible to ALL users */}
         <div className="relative">
           <button
             onClick={() => setShowNotifDropdown(!showNotifDropdown)}
@@ -100,7 +107,11 @@ export default function Header({ setActiveTab }) {
                   </div>
                 ) : (
                   lowStockItems.map(item => (
-                    <div key={item.id} className="p-2.5 bg-red-50/70 border border-red-200 rounded-xl flex items-center justify-between text-xs">
+                    <div 
+                      key={item.id} 
+                      onClick={canManageStock ? handleGoToInventory : undefined}
+                      className={`p-2.5 bg-red-50/70 border border-red-200 rounded-xl flex items-center justify-between text-xs ${canManageStock ? 'cursor-pointer hover:border-red-400' : ''}`}
+                    >
                       <div>
                         <div className="font-bold text-[#1e1b15]">{item.nama_produk}</div>
                         <div className="text-[10px] text-gray-500 font-mono">SKU: {item.kode_sku}</div>
@@ -116,13 +127,19 @@ export default function Header({ setActiveTab }) {
               </div>
 
               {lowStockItems.length > 0 && (
-                <button
-                  onClick={handleGoToInventory}
-                  className="w-full py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1 transition-all"
-                >
-                  <span>Kelola Stok di Logistik (ASM)</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
+                canManageStock ? (
+                  <button
+                    onClick={handleGoToInventory}
+                    className="w-full py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1 transition-all"
+                  >
+                    <span>Buka Logistik & Kelola Stok</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <div className="text-center py-1 text-[11px] text-[#83746f] italic bg-[#faf3e8] rounded-xl border border-[#d6c2bd]">
+                    Info Stok Menipis (Akses Edit Stok: Super Admin, Admin Klinik, Admin FO)
+                  </div>
+                )
               )}
             </div>
           )}
