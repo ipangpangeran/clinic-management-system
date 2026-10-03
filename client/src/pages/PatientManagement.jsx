@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { AuthContext } from '../context/AuthContext';
 import { UserPlus, Search, Edit, Trash2, Download, Package, Calendar, AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet } from 'lucide-react';
 
@@ -123,45 +124,46 @@ export default function PatientManagement() {
       return;
     }
 
-    const headers = [
-      'ID Pasien',
-      'Nama Lengkap',
-      'NIK / No. KTP',
-      'No. Handphone',
-      'Tipe Pasien',
-      'Alamat',
-      'Tanggal Lahir',
-      'Riwayat Alergi',
-      'Jenis Kulit',
-      'Rekomendasi Dokter',
-      'Total Poin',
-      'Tanggal Terdaftar'
+    const exportData = filteredPatients.map((p, index) => ({
+      'No': index + 1,
+      'ID Pasien': p.id || '',
+      'Nama Lengkap': p.nama_lengkap || '',
+      'NIK / No. KTP': p.no_ktp || '-',
+      'No. Handphone': p.no_hp || '',
+      'Tipe Pasien': p.tipe_pasien || '',
+      'Alamat': p.alamat || '-',
+      'Tanggal Lahir': p.tgl_lahir || '-',
+      'Riwayat Alergi': p.riwayat_alergi || 'Tidak ada',
+      'Jenis Kulit': p.jenis_kulit || '-',
+      'Rekomendasi Dokter': p.rekomendasi_dokter || '-',
+      'Total Poin': p.total_poin || 0,
+      'Tanggal Terdaftar': p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    
+    // Set column widths for optimal display in Excel
+    worksheet['!cols'] = [
+      { wch: 5 },   // No
+      { wch: 15 },  // ID Pasien
+      { wch: 25 },  // Nama Lengkap
+      { wch: 20 },  // NIK
+      { wch: 16 },  // No HP
+      { wch: 14 },  // Tipe Pasien
+      { wch: 35 },  // Alamat
+      { wch: 15 },  // Tanggal Lahir
+      { wch: 20 },  // Riwayat Alergi
+      { wch: 20 },  // Jenis Kulit
+      { wch: 25 },  // Rekomendasi Dokter
+      { wch: 12 },  // Total Poin
+      { wch: 22 }   // Tanggal Terdaftar
     ];
 
-    const rows = filteredPatients.map(p => [
-      `"${p.id || ''}"`,
-      `"${(p.nama_lengkap || '').replace(/"/g, '""')}"`,
-      `"${p.no_ktp || ''}"`,
-      `"${p.no_hp || ''}"`,
-      `"${p.tipe_pasien || ''}"`,
-      `"${(p.alamat || '').replace(/"/g, '""')}"`,
-      `"${p.tgl_lahir || ''}"`,
-      `"${(p.riwayat_alergi || '').replace(/"/g, '""')}"`,
-      `"${(p.jenis_kulit || '').replace(/"/g, '""')}"`,
-      `"${(p.rekomendasi_dokter || '').replace(/"/g, '""')}"`,
-      p.total_poin || 0,
-      `"${p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : ''}"`
-    ]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Pasien');
 
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Data_Pasien_DEFLOW_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const fileName = `Data_Pasien_DEFLOW_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
   };
 
   const handleSavePatient = async (e) => {
