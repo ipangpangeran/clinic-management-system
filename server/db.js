@@ -358,7 +358,7 @@ async function seedDefaultData() {
 
   const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Nurse', 'Beautician', 'Marketing', 'Admin FO', 'Dokter'];
   const modules = [
-    'clinic_profile', 'acl', 'patient_intake', 'doingan', 'patient_packages', 
+    'clinic_profile', 'acl', 'patient_intake', 'patient_management', 'doingan', 'patient_packages', 
     'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical', 
     'pricing', 'commission_formulas', 'payroll'
   ];
@@ -370,6 +370,7 @@ async function seedDefaultData() {
         c=1; r=1; u=1; d=1;
       } else if (role === 'Admin FO') {
         if (['patient_intake', 'patient_packages', 'reminders'].includes(mod)) { c=1; r=1; u=1; d=1; }
+        else if (['patient_management'].includes(mod)) { c=1; r=1; u=0; d=0; }
         else if (['clinic_profile', 'doingan', 'pricing'].includes(mod)) { r=1; }
       } else if (role === 'Nurse' || role === 'Beautician' || role === 'Marketing') {
         if (['doingan', 'patient_intake'].includes(mod)) { c=1; r=1; u=1; d=0; }

@@ -48,6 +48,7 @@ export default function ClinicSettingsAcl() {
     { key: 'clinic_profile', name: 'Detail Profil Klinik' },
     { key: 'acl', name: 'Konfigurasi Dynamic ACL & Users' },
     { key: 'patient_intake', name: 'Pendaftaran Pasien (Admin FO)' },
+    { key: 'patient_management', name: 'Manajemen Data Pasien (Edit, Hapus, Export Excel)' },
     { key: 'doingan', name: 'Catatan Doingan & Komisi (Nurse, Beautician, Marketing)' },
     { key: 'patient_packages', name: 'Paket Treatment Pasien' },
     { key: 'reminders', name: 'Reminder Jadwal Kembali WA' },

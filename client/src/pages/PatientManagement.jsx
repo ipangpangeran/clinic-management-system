@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
-import { UserPlus, Search, Edit, Sparkles, Package, Calendar, AlertTriangle, CheckCircle, ShieldAlert } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import { UserPlus, Search, Edit, Trash2, Download, Package, Calendar, AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet } from 'lucide-react';
 
 export default function PatientManagement() {
+  const { user, hasPermission } = useContext(AuthContext);
   const [patients, setPatients] = useState([]);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('ALL');
@@ -10,6 +12,12 @@ export default function PatientManagement() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showPackageModal, setShowPackageModal] = useState(false);
   const [packages, setPackages] = useState([]);
+
+  // Permissions check (Super Admin & Admin Klinik have full edit/delete/export access, or explicit ACL)
+  const isSuperOrAdmin = user?.role === 'Super Admin' || user?.role === 'Admin System' || user?.role === 'Admin Klinik';
+  const canEditPatient = isSuperOrAdmin || hasPermission('patient_management', 'can_update') || hasPermission('patient_intake', 'can_update');
+  const canDeletePatient = isSuperOrAdmin || hasPermission('patient_management', 'can_delete');
+  const canExportExcel = isSuperOrAdmin || hasPermission('patient_management', 'can_read');
 
   // Form State
   const [formType, setFormType] = useState('TRIAL'); // 'TRIAL' or 'NON-TRIAL'
@@ -65,6 +73,10 @@ export default function PatientManagement() {
   };
 
   const openEditModal = (p) => {
+    if (!canEditPatient) {
+      alert('Akses Terbatas: Hanya Super Admin dan Admin Klinik yang berhak mengedit data pasien.');
+      return;
+    }
     setEditMode(true);
     setSelectedPatient(p);
     setFormType(p.tipe_pasien);
@@ -79,6 +91,77 @@ export default function PatientManagement() {
     setErrorMessage('');
     setSuccessMessage('');
     setShowModal(true);
+  };
+
+  const handleDeletePatient = async (patientId, patientName) => {
+    if (!canDeletePatient) {
+      alert('Akses Terbatas: Hanya Super Admin dan Admin Klinik yang berhak menghapus data pasien.');
+      return;
+    }
+
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus data pasien "${patientName}" secara permanen?\n\nSeluruh data riwayat transaksi, paket treatment, dan reminder terkait akan dibersihkan dari sistem.`)) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/api/pasien/${patientId}`);
+      alert(`Data pasien "${patientName}" berhasil dihapus dari sistem!`);
+      fetchPatients();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menghapus data pasien');
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!canExportExcel) {
+      alert('Akses Terbatas: Hanya Super Admin dan Admin Klinik yang berhak meng-export data pasien.');
+      return;
+    }
+
+    if (filteredPatients.length === 0) {
+      alert('Tidak ada data pasien untuk di-export.');
+      return;
+    }
+
+    const headers = [
+      'ID Pasien',
+      'Nama Lengkap',
+      'NIK / No. KTP',
+      'No. Handphone',
+      'Tipe Pasien',
+      'Alamat',
+      'Tanggal Lahir',
+      'Riwayat Alergi',
+      'Jenis Kulit',
+      'Rekomendasi Dokter',
+      'Total Poin',
+      'Tanggal Terdaftar'
+    ];
+
+    const rows = filteredPatients.map(p => [
+      `"${p.id || ''}"`,
+      `"${(p.nama_lengkap || '').replace(/"/g, '""')}"`,
+      `"${p.no_ktp || ''}"`,
+      `"${p.no_hp || ''}"`,
+      `"${p.tipe_pasien || ''}"`,
+      `"${(p.alamat || '').replace(/"/g, '""')}"`,
+      `"${p.tgl_lahir || ''}"`,
+      `"${(p.riwayat_alergi || '').replace(/"/g, '""')}"`,
+      `"${(p.jenis_kulit || '').replace(/"/g, '""')}"`,
+      `"${(p.rekomendasi_dokter || '').replace(/"/g, '""')}"`,
+      p.total_poin || 0,
+      `"${p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : ''}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Data_Pasien_DEFLOW_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleSavePatient = async (e) => {
@@ -199,15 +282,27 @@ export default function PatientManagement() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Pendaftaran & Manajemen Pasien</h1>
-          <p className="text-xs text-[#514440]">Kelola registrasi pasien baru (Trial vs Reguler), kuota paket treatment, dan pengingat kontrol.</p>
+          <p className="text-xs text-[#514440]">Kelola registrasi pasien baru, data medis, pencarian, export Excel, dan hapus data (Khusus Super Admin & Admin Klinik).</p>
         </div>
-        <button
-          onClick={openNewPatientModal}
-          className="px-4 py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>+ Tambah Pasien Baru</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {canExportExcel && (
+            <button
+              onClick={handleExportExcel}
+              className="px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              title="Export data pasien ke format Excel / CSV"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Export ke Excel</span>
+            </button>
+          )}
+          <button
+            onClick={openNewPatientModal}
+            className="px-4 py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>+ Tambah Pasien Baru</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter & Search Bar */}
@@ -302,14 +397,26 @@ export default function PatientManagement() {
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => openEditModal(p)}
-                          className="p-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#514440] rounded-lg font-medium text-[11px] flex items-center gap-1 cursor-pointer"
-                          title="Edit Profile / Upgrade Trial to Reguler"
-                        >
-                          <Edit className="w-3.5 h-3.5 text-[#7d5141]" />
-                          <span>Edit / Upgrade</span>
-                        </button>
+                        {canEditPatient && (
+                          <button
+                            onClick={() => openEditModal(p)}
+                            className="p-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#514440] rounded-lg font-medium text-[11px] flex items-center gap-1 cursor-pointer"
+                            title="Edit Profile / Upgrade Trial to Reguler"
+                          >
+                            <Edit className="w-3.5 h-3.5 text-[#7d5141]" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+                        {canDeletePatient && (
+                          <button
+                            onClick={() => handleDeletePatient(p.id, p.nama_lengkap)}
+                            className="p-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg font-medium text-[11px] flex items-center gap-1 cursor-pointer"
+                            title="Hapus Data Pasien (Khusus Super Admin & Admin Klinik)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                            <span>Hapus</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => openPackageModal(p)}
                           className="p-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-lg font-medium text-[11px] flex items-center gap-1 cursor-pointer"
@@ -349,216 +456,210 @@ export default function PatientManagement() {
 
             {/* Error Message Warning */}
             {errorMessage && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs flex items-center gap-2 font-medium">
-                <ShieldAlert className="w-4 h-4 shrink-0 text-red-600" />
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl flex items-center gap-2 animate-shake">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
+            {/* Success Message Notification */}
             {successMessage && (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs flex items-center gap-2 font-medium">
-                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-600" />
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{successMessage}</span>
               </div>
             )}
 
-            {/* Selector Tipe Pasien */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-[#514440] uppercase tracking-wider">
-                Tipe Pendaftaran Pasien
-              </label>
-              <div className="grid grid-cols-2 gap-2 p-1 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs">
-                <button
-                  type="button"
-                  onClick={() => setFormType('TRIAL')}
-                  className={`py-2 px-3 rounded-lg font-semibold transition-all ${formType === 'TRIAL' ? 'bg-amber-600 text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
-                >
-                  TRIAL (Form Minimalis)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormType('NON-TRIAL')}
-                  className={`py-2 px-3 rounded-lg font-semibold transition-all ${formType === 'NON-TRIAL' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
-                >
-                  NON-TRIAL / REGULER (Lengkap)
-                </button>
-              </div>
-            </div>
-
-            <form onSubmit={handleSavePatient} className="space-y-3">
+            <form onSubmit={handleSavePatient} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">
-                  Nama Lengkap Pasien *
-                </label>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Tipe Pasien</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormType('TRIAL')}
+                    className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                      formType === 'TRIAL' 
+                        ? 'bg-amber-100 border-amber-400 text-amber-900 shadow-xs' 
+                        : 'bg-[#faf3e8] border-[#d6c2bd] text-[#514440]'
+                    }`}
+                  >
+                    Pasien Trial (Free)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormType('NON-TRIAL')}
+                    className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                      formType === 'NON-TRIAL' 
+                        ? 'bg-emerald-100 border-emerald-400 text-emerald-900 shadow-xs' 
+                        : 'bg-[#faf3e8] border-[#d6c2bd] text-[#514440]'
+                    }`}
+                  >
+                    Pasien Reguler (Member/Lengkap)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Lengkap Pasien *</label>
                 <input
                   type="text"
                   value={namaLengkap}
                   onChange={(e) => setNamaLengkap(e.target.value)}
                   required
-                  placeholder="Contoh: Nia Ramadhani"
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                  placeholder="Misal: Maya Septha"
+                  className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#514440] mb-1">
-                    No. Handphone / WhatsApp *
-                  </label>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">No. Handphone (WA) *</label>
                   <input
                     type="text"
                     value={noHp}
                     onChange={(e) => setNoHp(e.target.value)}
                     required
                     placeholder="0812XXXXXXXX"
-                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                    className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-semibold text-[#514440] mb-1">
-                    No. KTP / NIK {formType === 'TRIAL' ? '*' : '(Opsional)'}
-                  </label>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">NIK / No. KTP (Opsional)</label>
                   <input
                     type="text"
                     value={noKtp}
                     onChange={(e) => setNoKtp(e.target.value)}
-                    required={formType === 'TRIAL'}
-                    placeholder="16 digit NIK"
-                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                    placeholder="3171XXXXXXXXXXXX"
+                    className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
                   />
                 </div>
               </div>
 
-              {/* Input Opsional untuk NON-TRIAL */}
               {formType === 'NON-TRIAL' && (
-                <div className="space-y-3 pt-2 border-t border-[#e5ded4]">
+                <div className="space-y-3 border-t border-[#e5ded4] pt-3">
                   <div>
-                    <label className="block text-xs font-semibold text-[#514440] mb-1">
-                      Alamat Lengkap (Opsional)
-                    </label>
+                    <label className="block text-xs font-semibold text-[#514440] mb-1">Alamat Lengkap</label>
                     <textarea
                       value={alamat}
                       onChange={(e) => setAlamat(e.target.value)}
+                      placeholder="Jl. Soekarno-Hatta No. 45, Pekanbaru"
+                      className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
                       rows="2"
-                      placeholder="Jl. Senopati No. 12, Jakarta"
-                      className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-[#514440] mb-1">
-                        Tanggal Lahir (Opsional)
-                      </label>
+                      <label className="block text-xs font-semibold text-[#514440] mb-1">Tanggal Lahir</label>
                       <input
                         type="date"
                         value={tglLahir}
                         onChange={(e) => setTglLahir(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                        className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
                       />
                     </div>
-
                     <div>
-                      <label className="block text-xs font-semibold text-[#514440] mb-1">
-                        Jenis Kulit (Opsional)
-                      </label>
-                      <input
-                        type="text"
+                      <label className="block text-xs font-semibold text-[#514440] mb-1">Jenis Kulit Pasien</label>
+                      <select
                         value={jenisKulit}
                         onChange={(e) => setJenisKulit(e.target.value)}
-                        placeholder="Normal, Berminyak, Sensitif"
-                        className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-                      />
+                        className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
+                      >
+                        <option value="">-- Pilih Jenis Kulit --</option>
+                        <option value="Normal">Normal</option>
+                        <option value="Berminyak">Berminyak (Oily)</option>
+                        <option value="Kering">Kering (Dry)</option>
+                        <option value="Kombinasi / Sensitif">Kombinasi / Sensitif</option>
+                        <option value="Acne Prone">Acne Prone (Berjerawat)</option>
+                      </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-[#514440] mb-1">
-                      Riwayat Alergi (Opsional)
-                    </label>
+                    <label className="block text-xs font-semibold text-[#514440] mb-1">Riwayat Alergi (Obat / Bahan Kosmetik)</label>
                     <input
                       type="text"
                       value={riwayatAlergi}
                       onChange={(e) => setRiwayatAlergi(e.target.value)}
-                      placeholder="Contoh: Alergi Seafood, Alergi Debu"
-                      className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                      placeholder="Misal: Alergi Seafood, Alergi Paraben, Alergi Cold"
+                      className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#514440] mb-1">Catatan / Rekomendasi Dokter</label>
+                    <input
+                      type="text"
+                      value={rekomendasiDokter}
+                      onChange={(e) => setRekomendasiDokter(e.target.value)}
+                      placeholder="Rekomendasi dokter penanggung jawab"
+                      className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
                     />
                   </div>
                 </div>
               )}
 
-              <div className="pt-3 flex justify-end gap-2 border-t border-[#e5ded4]">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs rounded-xl cursor-pointer"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-semibold text-xs rounded-xl shadow-md cursor-pointer"
-                >
-                  {editMode ? 'Simpan Perubahan' : 'Simpan Pasien Baru'}
-                </button>
-              </div>
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+              >
+                {editMode ? 'Simpan Perubahan Pasien' : 'Daftarkan Pasien Sekarang'}
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL KELOLA PAKET TREATMENT */}
+      {/* MODAL PAKET TREATMENT PASIEN */}
       {showPackageModal && selectedPatient && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#e5ded4] space-y-4">
             <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
               <div>
-                <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Paket Treatment Pasien</h3>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Paket Treatment Pasien</h3>
                 <p className="text-xs text-[#7d5141] font-semibold">{selectedPatient.nama_lengkap}</p>
               </div>
-              <button onClick={() => setShowPackageModal(false)} className="text-gray-400 font-bold text-lg">×</button>
+              <button onClick={() => setShowPackageModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">×</button>
             </div>
 
-            {/* List Existing Packages */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-[#514440] uppercase">Paket Aktif Tersisa</h4>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
               {packages.length === 0 ? (
-                <p className="text-xs text-gray-500 italic">Belum ada paket aktif untuk pasien ini.</p>
+                <div className="text-center py-4 text-xs text-gray-400 italic">Belum ada paket treatment aktif.</div>
               ) : (
                 packages.map(pkg => (
-                  <div key={pkg.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex items-center justify-between">
+                  <div key={pkg.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex items-center justify-between text-xs">
                     <div>
-                      <div className="font-bold text-xs text-[#1e1b15]">{pkg.nama_paket}</div>
-                      <div className="text-[11px] text-[#514440]">
-                        Sisa Kuota: <span className="font-bold text-emerald-700">{pkg.sisa_kuota}</span> / {pkg.total_kuota} Kali
+                      <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
+                      <div className="text-[10px] text-gray-500">
+                        Sisa Kuota: <span className="font-bold text-[#7d5141]">{pkg.sisa_kuota}</span> dari {pkg.total_kuota}x
                       </div>
                     </div>
                     <button
                       onClick={() => handleUsePackage(pkg.id)}
                       disabled={pkg.sisa_kuota <= 0}
-                      className="px-3 py-1.5 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 text-white font-semibold text-xs rounded-lg cursor-pointer transition-all"
+                      className={`px-3 py-1 rounded-lg font-bold text-[10px] cursor-pointer transition-all ${
+                        pkg.sisa_kuota > 0 
+                          ? 'bg-[#7d5141] text-white hover:bg-[#653d2e]' 
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      }`}
                     >
-                      Potong 1 Kuota
+                      {pkg.sisa_kuota > 0 ? 'Gunakan 1x' : 'Habis'}
                     </button>
                   </div>
                 ))
               )}
             </div>
 
-            {/* Add New Package Form */}
-            <form onSubmit={handleAddPackage} className="pt-3 border-t border-[#e5ded4] space-y-2.5">
-              <h4 className="text-xs font-bold text-[#514440] uppercase">+ Tambah Pembelian Paket Baru</h4>
-              <div>
-                <input
-                  type="text"
-                  value={namaPaket}
-                  onChange={(e) => setNamaPaket(e.target.value)}
-                  placeholder="Nama Paket (misal: Paket Glowing 5x)"
-                  required
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
-                />
-              </div>
+            <form onSubmit={handleAddPackage} className="border-t border-[#e5ded4] pt-3 space-y-2">
+              <div className="text-xs font-bold text-[#1e1b15]">+ Tambah Paket Treatment Baru</div>
+              <input
+                type="text"
+                value={namaPaket}
+                onChange={(e) => setNamaPaket(e.target.value)}
+                placeholder="Nama Paket (Misal: Paket Glowing Deluxe 5x)"
+                required
+                className="w-full px-3 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
+              />
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number"
@@ -566,45 +667,40 @@ export default function PatientManagement() {
                   onChange={(e) => setTotalKuota(e.target.value)}
                   placeholder="Total Kuota (x)"
                   required
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
+                  className="w-full px-3 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
                 />
                 <input
                   type="number"
                   value={hargaPaket}
                   onChange={(e) => setHargaPaket(e.target.value)}
-                  placeholder="Harga (Rp)"
-                  required
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
+                  placeholder="Harga Paket (Rp)"
+                  className="w-full px-3 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
                 />
               </div>
-              <button
-                type="submit"
-                className="w-full py-2 bg-amber-700 hover:bg-amber-800 text-white font-semibold text-xs rounded-xl cursor-pointer shadow-xs"
-              >
-                + Simpan Pembelian Paket
+              <button type="submit" className="w-full py-2 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-xl cursor-pointer">
+                Simpan Paket Pasien
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL SET REMINDER JADWAL KEMBALI */}
+      {/* MODAL REMINDER JADWAL KONTROL */}
       {showReminderModal && selectedPatient && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-[#e5ded4] space-y-4">
             <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
-              <h3 className="font-serif font-bold text-base text-[#1e1b15]">Jadwal Kontrol Kembali Pasien</h3>
-              <button onClick={() => setShowReminderModal(false)} className="text-gray-400 font-bold text-lg">×</button>
+              <h3 className="font-serif font-bold text-base text-[#1e1b15]">Set Reminder Kontrol WA</h3>
+              <button onClick={() => setShowReminderModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">×</button>
             </div>
 
             <form onSubmit={handleSaveReminder} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Pasien</label>
-                <input type="text" value={selectedPatient.nama_lengkap} disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-xl text-xs" />
+                <input type="text" value={selectedPatient.nama_lengkap} disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold" />
               </div>
-
               <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Tanggal Kontrol Kembali</label>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Tanggal Rencana Kembali / Kontrol *</label>
                 <input
                   type="date"
                   value={tglKembali}
@@ -613,12 +709,8 @@ export default function PatientManagement() {
                   className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
                 />
               </div>
-
-              <button
-                type="submit"
-                className="w-full py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-semibold text-xs rounded-xl shadow-md cursor-pointer"
-              >
-                Simpan & Integrasikan ke WA Gateway
+              <button type="submit" className="w-full py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer">
+                Jadwalkan Pengingat WA
               </button>
             </form>
           </div>

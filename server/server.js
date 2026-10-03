@@ -384,6 +384,14 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter } = req.body;
 
+    const canEdit = (req.user.role === 'Super Admin' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik');
+    if (!canEdit) {
+      const perm = await getQuery('SELECT can_update FROM role_permissions WHERE role = ? AND module_key = "patient_management"', [req.user.role]);
+      if (!perm || !perm.can_update) {
+        return res.status(403).json({ message: 'Hanya Super Admin dan Admin Klinik yang diizinkan mengedit data pasien' });
+      }
+    }
+
     if (no_ktp) {
       const existingKtp = await getQuery('SELECT id FROM pasien WHERE no_ktp = ? AND id != ?', [no_ktp, id]);
       if (existingKtp) return res.status(400).json({ message: 'data sudah terdaftar (No. KTP sudah digunakan oleh pasien lain)' });
@@ -403,6 +411,42 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'Data pasien berhasil diperbarui', pasien: updated });
   } catch (err) {
     res.status(500).json({ message: 'Error updating patient', error: err.message });
+  }
+});
+
+app.delete('/api/pasien/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const canDelete = (req.user.role === 'Super Admin' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik');
+    if (!canDelete) {
+      const perm = await getQuery('SELECT can_delete FROM role_permissions WHERE role = ? AND module_key = "patient_management"', [req.user.role]);
+      if (!perm || !perm.can_delete) {
+        return res.status(403).json({ message: 'Hanya Super Admin dan Admin Klinik yang diizinkan menghapus data pasien' });
+      }
+    }
+
+    // Clean up foreign key references
+    await runQuery('DELETE FROM pasien_reminder WHERE pasien_id = ?', [id]);
+    
+    const pkgs = await allQuery('SELECT id FROM pasien_paket WHERE pasien_id = ?', [id]);
+    for (const pkg of pkgs) {
+      await runQuery('DELETE FROM pasien_paket_usage WHERE pasien_paket_id = ?', [pkg.id]);
+    }
+    await runQuery('DELETE FROM pasien_paket WHERE pasien_id = ?', [id]);
+    await runQuery('DELETE FROM doingan WHERE pasien_id = ?', [id]);
+
+    const trxs = await allQuery('SELECT id FROM transaksi WHERE pasien_id = ?', [id]);
+    for (const trx of trxs) {
+      await runQuery('DELETE FROM transaksi_detail WHERE transaksi_id = ?', [trx.id]);
+    }
+    await runQuery('DELETE FROM transaksi WHERE pasien_id = ?', [id]);
+
+    await runQuery('DELETE FROM pasien WHERE id = ?', [id]);
+
+    res.json({ message: 'Data pasien berhasil dihapus secara permanen' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting patient', error: err.message });
   }
 });
 
