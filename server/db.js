@@ -345,14 +345,24 @@ async function seedDefaultData() {
   ];
 
   for (const u of defaultUsers) {
-    const existing = await getQuery('SELECT id FROM users WHERE username = ?', [u.username]);
-    if (!existing) {
-      await runQuery('DELETE FROM users WHERE id = ?', [u.id]);
-      await runQuery('INSERT INTO users (id, username, password, full_name, role, phone) VALUES (?, ?, ?, ?, ?, ?)',
-        [u.id, u.username, u.password, u.full_name, u.role, u.phone]);
+    const existingByUsername = await getQuery('SELECT id FROM users WHERE username = ?', [u.username]);
+    const existingById = await getQuery('SELECT id FROM users WHERE id = ?', [u.id]);
+
+    if (existingByUsername) {
+      await runQuery(
+        'UPDATE users SET password = ?, role = ?, full_name = ?, phone = ? WHERE id = ?',
+        [u.password, u.role, u.full_name, u.phone, existingByUsername.id]
+      );
+    } else if (existingById) {
+      await runQuery(
+        'UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ? WHERE id = ?',
+        [u.username, u.password, u.full_name, u.role, u.phone, u.id]
+      );
     } else {
-      await runQuery('UPDATE users SET password = ?, role = ?, full_name = ?, phone = ? WHERE username = ?',
-        [u.password, u.role, u.full_name, u.phone, u.username]);
+      await runQuery(
+        'INSERT INTO users (id, username, password, full_name, role, phone) VALUES (?, ?, ?, ?, ?, ?)',
+        [u.id, u.username, u.password, u.full_name, u.role, u.phone]
+      );
     }
   }
 
