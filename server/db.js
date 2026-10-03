@@ -74,9 +74,14 @@ async function initDb() {
         full_name TEXT NOT NULL,
         role TEXT NOT NULL,
         phone TEXT,
+        gaji_pokok REAL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    try {
+      await runQuery(`ALTER TABLE users ADD COLUMN gaji_pokok REAL DEFAULT 0`);
+    } catch (e) {}
 
     // 3. Dynamic ACL Table
     await runQuery(`
@@ -340,13 +345,13 @@ async function seedDefaultData() {
   const defaultPasswordHash = bcrypt.hashSync('admin1234', salt);
 
   const defaultUsers = [
-    { id: 'usr-1', username: 'superadmin', password: defaultPasswordHash, full_name: 'Ipang Super Admin', role: 'Super Admin', phone: '081234567890' },
-    { id: 'usr-2', username: 'adminklinik', password: defaultPasswordHash, full_name: 'Gifary Admin Klinik', role: 'Admin Klinik', phone: '081234567891' },
-    { id: 'usr-3', username: 'anita', password: defaultPasswordHash, full_name: 'Perawat Anita', role: 'Nurse', phone: '081234567892' },
-    { id: 'usr-4', username: 'maya', password: defaultPasswordHash, full_name: 'Maya Beautician', role: 'Beautician', phone: '081234567893' },
-    { id: 'usr-5', username: 'doni', password: defaultPasswordHash, full_name: 'Doni Marketing', role: 'Marketing', phone: '081234567894' },
-    { id: 'usr-6', username: 'rere', password: defaultPasswordHash, full_name: 'Rere Admin FO', role: 'Admin FO', phone: '081234567895' },
-    { id: 'usr-7', username: 'desi', password: defaultPasswordHash, full_name: 'dr. Desi', role: 'Dokter', phone: '081234567896' }
+    { id: 'usr-1', username: 'superadmin', password: defaultPasswordHash, full_name: 'Ipang Super Admin', role: 'Super Admin', phone: '081234567890', gaji_pokok: 0 },
+    { id: 'usr-2', username: 'adminklinik', password: defaultPasswordHash, full_name: 'Gifary Admin Klinik', role: 'Admin Klinik', phone: '081234567891', gaji_pokok: 0 },
+    { id: 'usr-3', username: 'anita', password: defaultPasswordHash, full_name: 'Perawat Anita', role: 'Nurse', phone: '081234567892', gaji_pokok: 3800000 },
+    { id: 'usr-4', username: 'maya', password: defaultPasswordHash, full_name: 'Maya Beautician', role: 'Beautician', phone: '081234567893', gaji_pokok: 3500000 },
+    { id: 'usr-5', username: 'doni', password: defaultPasswordHash, full_name: 'Doni Marketing', role: 'Marketing', phone: '081234567894', gaji_pokok: 4200000 },
+    { id: 'usr-6', username: 'rere', password: defaultPasswordHash, full_name: 'Rere Admin FO', role: 'Admin FO', phone: '081234567895', gaji_pokok: 4000000 },
+    { id: 'usr-7', username: 'desi', password: defaultPasswordHash, full_name: 'dr. Desi', role: 'Dokter', phone: '081234567896', gaji_pokok: 10000000 }
   ];
 
   for (const u of defaultUsers) {
@@ -355,21 +360,31 @@ async function seedDefaultData() {
 
     if (existingByUsername) {
       await runQuery(
-        'UPDATE users SET password = ?, role = ?, full_name = ?, phone = ? WHERE id = ?',
-        [u.password, u.role, u.full_name, u.phone, existingByUsername.id]
+        'UPDATE users SET password = ?, role = ?, full_name = ?, phone = ?, gaji_pokok = ? WHERE id = ?',
+        [u.password, u.role, u.full_name, u.phone, u.gaji_pokok, existingByUsername.id]
       );
     } else if (existingById) {
       await runQuery(
-        'UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ? WHERE id = ?',
-        [u.username, u.password, u.full_name, u.role, u.phone, u.id]
+        'UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ? WHERE id = ?',
+        [u.username, u.password, u.full_name, u.role, u.phone, u.gaji_pokok, u.id]
       );
     } else {
       await runQuery(
-        'INSERT INTO users (id, username, password, full_name, role, phone) VALUES (?, ?, ?, ?, ?, ?)',
-        [u.id, u.username, u.password, u.full_name, u.role, u.phone]
+        'INSERT INTO users (id, username, password, full_name, role, phone, gaji_pokok) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [u.id, u.username, u.password, u.full_name, u.role, u.phone, u.gaji_pokok]
       );
     }
   }
+
+  // Backfill default salary for roles if not set
+  try {
+    await runQuery(`UPDATE users SET gaji_pokok = 10000000 WHERE role = 'Dokter' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
+    await runQuery(`UPDATE users SET gaji_pokok = 4000000 WHERE (role = 'Admin FO' OR role = 'Resepsionis / Cashier') AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
+    await runQuery(`UPDATE users SET gaji_pokok = 3500000 WHERE (role = 'Beautician' OR role = 'Therapist / BTC') AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
+    await runQuery(`UPDATE users SET gaji_pokok = 3800000 WHERE role = 'Nurse' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
+    await runQuery(`UPDATE users SET gaji_pokok = 4200000 WHERE role = 'Marketing' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
+    await runQuery(`UPDATE users SET gaji_pokok = 0 WHERE role IN ('Super Admin', 'Admin System', 'Admin Klinik')`);
+  } catch (e) {}
 
   const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Nurse', 'Beautician', 'Marketing', 'Admin FO', 'Dokter'];
   const modules = [

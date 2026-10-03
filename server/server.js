@@ -92,7 +92,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
-    const users = await allQuery('SELECT id, username, full_name, role, phone, created_at FROM users ORDER BY created_at DESC');
+    const users = await allQuery('SELECT id, username, full_name, role, phone, gaji_pokok, created_at FROM users ORDER BY created_at DESC');
     res.json(users);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching users', error: err.message });
@@ -105,7 +105,7 @@ app.post('/api/users', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Akses ditolak: Menu kelola user hanya untuk Super Admin & Admin Klinik' });
     }
 
-    const { username, password, full_name, role, phone } = req.body;
+    const { username, password, full_name, role, phone, gaji_pokok } = req.body;
     if (!username || !password || !full_name || !role) {
       return res.status(400).json({ message: 'Username, Password, Nama, dan Role wajib diisi' });
     }
@@ -119,12 +119,14 @@ app.post('/api/users', authenticateToken, async (req, res) => {
     const passwordHash = bcrypt.hashSync(password, salt);
     const id = 'usr-' + Date.now();
 
-    await runQuery(`
-      INSERT INTO users (id, username, password, full_name, role, phone)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [id, username, passwordHash, full_name, role, phone || null]);
+    const salaryVal = role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik' ? 0 : parseFloat(gaji_pokok || 0);
 
-    const newUser = await getQuery('SELECT id, username, full_name, role, phone FROM users WHERE id = ?', [id]);
+    await runQuery(`
+      INSERT INTO users (id, username, password, full_name, role, phone, gaji_pokok)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [id, username, passwordHash, full_name, role, phone || null, salaryVal]);
+
+    const newUser = await getQuery('SELECT id, username, full_name, role, phone, gaji_pokok FROM users WHERE id = ?', [id]);
     res.status(201).json({ message: 'User baru berhasil dibuat', user: newUser });
   } catch (err) {
     res.status(500).json({ message: 'Error creating user', error: err.message });
@@ -138,26 +140,28 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { username, password, full_name, role, phone } = req.body;
+    const { username, password, full_name, role, phone, gaji_pokok } = req.body;
 
     const existingUsername = await getQuery('SELECT id FROM users WHERE username = ? AND id != ?', [username, id]);
     if (existingUsername) {
       return res.status(400).json({ message: 'Username sudah digunakan oleh user lain' });
     }
 
+    const salaryVal = role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik' ? 0 : parseFloat(gaji_pokok || 0);
+
     if (password && password.trim() !== '') {
       const salt = bcrypt.genSaltSync(10);
       const passwordHash = bcrypt.hashSync(password, salt);
       await runQuery(`
-        UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ? WHERE id = ?
-      `, [username, passwordHash, full_name, role, phone || null, id]);
+        UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ? WHERE id = ?
+      `, [username, passwordHash, full_name, role, phone || null, salaryVal, id]);
     } else {
       await runQuery(`
-        UPDATE users SET username = ?, full_name = ?, role = ?, phone = ? WHERE id = ?
-      `, [username, full_name, role, phone || null, id]);
+        UPDATE users SET username = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ? WHERE id = ?
+      `, [username, full_name, role, phone || null, salaryVal, id]);
     }
 
-    const updated = await getQuery('SELECT id, username, full_name, role, phone FROM users WHERE id = ?', [id]);
+    const updated = await getQuery('SELECT id, username, full_name, role, phone, gaji_pokok FROM users WHERE id = ?', [id]);
     res.json({ message: 'Data user berhasil diperbarui', user: updated });
   } catch (err) {
     res.status(500).json({ message: 'Error updating user', error: err.message });
@@ -934,19 +938,20 @@ app.get('/api/payroll/summary', authenticateToken, async (req, res) => {
     `, [monthStart, monthEnd]);
 
     const payrollResult = [];
+    const payrollUsers = users.filter(u => u.role !== 'Super Admin' && u.role !== 'Admin System' && u.role !== 'Admin Klinik');
 
-    for (const u of users) {
-      let gajiPokok = 0;
+    for (const u of payrollUsers) {
+      let gajiPokok = (u.gaji_pokok !== undefined && u.gaji_pokok !== null && u.gaji_pokok > 0) ? u.gaji_pokok : 0;
+      if (!gajiPokok) {
+        if (u.role === 'Dokter') gajiPokok = 10000000;
+        else if (u.role === 'Admin FO' || u.role === 'Resepsionis / Cashier') gajiPokok = 4000000;
+        else if (u.role === 'Beautician' || u.role === 'Therapist / BTC') gajiPokok = 3500000;
+        else if (u.role === 'Nurse') gajiPokok = 3800000;
+        else if (u.role === 'Marketing') gajiPokok = 4200000;
+      }
       let komisiProduk = 0;
       let komisiTindakan = 0;
       let bonusLain = 0;
-
-      if (u.role === 'Super Admin' || u.role === 'Admin System' || u.role === 'Admin Klinik') gajiPokok = 6000000;
-      else if (u.role === 'Dokter') gajiPokok = 10000000;
-      else if (u.role === 'Admin FO' || u.role === 'Resepsionis / Cashier') gajiPokok = 4000000;
-      else if (u.role === 'Beautician' || u.role === 'Therapist / BTC') gajiPokok = 3500000;
-      else if (u.role === 'Nurse') gajiPokok = 3800000;
-      else if (u.role === 'Marketing') gajiPokok = 4200000;
 
       // Calculate Doingan Commissions for Nurse, Beautician, Marketing
       doinganLogs.forEach(d => {

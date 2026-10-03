@@ -159,26 +159,26 @@ export default function LogisticsInventory() {
           <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Logistik & Stok Inventori (ASM)</h1>
           <p className="text-xs text-[#514440]">Kelola stok produk retail skin care, bahan medis BTC terapis, operasional klinik non-medis, dan pengajuan perubahan produk & stok.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2.5 sm:justify-end">
+          <button
+            onClick={() => setShowProductModal(true)}
+            className="px-4 py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" /> Tambah Produk Inventori
+          </button>
+          <button
+            onClick={() => setShowMutationModal(true)}
+            className="px-3.5 py-2.5 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Request / Mutasi Stok
+          </button>
           <button
             onClick={() => {
               if (products.length > 0) openEditModal(products[0]);
             }}
-            className="px-3.5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+            className="px-3.5 py-2.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
           >
             <Edit className="w-3.5 h-3.5" /> Edit Nama / Harga / Stok
-          </button>
-          <button
-            onClick={() => setShowMutationModal(true)}
-            className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            <RefreshCw className="w-3.5 h-3.5" /> + Request / Mutasi Stok
-          </button>
-          <button
-            onClick={() => setShowProductModal(true)}
-            className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-semibold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" /> + Tambah Produk Inventori
           </button>
         </div>
       </div>

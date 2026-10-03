@@ -34,6 +34,7 @@ export default function ClinicSettingsAcl() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('Nurse');
+  const [gajiPokok, setGajiPokok] = useState(0);
 
   // ACL Matrix State
   const [aclMatrix, setAclMatrix] = useState([]);
@@ -103,6 +104,7 @@ export default function ClinicSettingsAcl() {
     setFullName('');
     setPhone('');
     setRole('Nurse');
+    setGajiPokok(3800000);
     setMsg('');
     setErrorMsg('');
     setShowUserModal(true);
@@ -116,6 +118,7 @@ export default function ClinicSettingsAcl() {
     setFullName(u.full_name);
     setPhone(u.phone || '');
     setRole(u.role);
+    setGajiPokok(u.gaji_pokok || 0);
     setMsg('');
     setErrorMsg('');
     setShowUserModal(true);
@@ -137,7 +140,7 @@ export default function ClinicSettingsAcl() {
     }
 
     try {
-      const payload = { username, password, full_name: fullName, role, phone };
+      const payload = { username, password, full_name: fullName, role, phone, gaji_pokok: Number(gajiPokok) };
       if (editUserMode && selectedUserId) {
         await axios.put(`/api/users/${selectedUserId}`, payload);
         setMsg('User berhasil diperbarui!');
@@ -397,6 +400,7 @@ export default function ClinicSettingsAcl() {
                     <th className="py-3 px-4">Nama Lengkap</th>
                     <th className="py-3 px-4">Username (Login)</th>
                     <th className="py-3 px-4">Role Pengguna</th>
+                    <th className="py-3 px-4">Nominal Gaji Pokok</th>
                     <th className="py-3 px-4">No. HP</th>
                     <th className="py-3 px-4 text-center">Aksi / Kelola</th>
                   </tr>
@@ -410,6 +414,13 @@ export default function ClinicSettingsAcl() {
                         <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#faf3e8] text-[#7d5141] border border-[#d6c2bd]">
                           {u.role}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 font-semibold text-[#1e1b15]">
+                        {u.role === 'Super Admin' || u.role === 'Admin System' || u.role === 'Admin Klinik' ? (
+                          <span className="text-[#83746f] italic text-[11px]">Tanpa Gaji (Non-Payroll)</span>
+                        ) : (
+                          `Rp ${(u.gaji_pokok || 0).toLocaleString('id-ID')}`
+                        )}
                       </td>
                       <td className="py-3 px-4 text-[#514440]">{u.phone || '-'}</td>
                       <td className="py-3 px-4">
@@ -566,7 +577,16 @@ export default function ClinicSettingsAcl() {
                 <label className="block text-xs font-semibold text-[#514440] mb-1">Pilihan Role (Dropdown) *</label>
                 <select
                   value={role}
-                  onChange={(e) => setRole(e.target.value)}
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    setRole(newRole);
+                    if (newRole === 'Dokter') setGajiPokok(10000000);
+                    else if (newRole === 'Admin FO') setGajiPokok(4000000);
+                    else if (newRole === 'Beautician') setGajiPokok(3500000);
+                    else if (newRole === 'Nurse') setGajiPokok(3800000);
+                    else if (newRole === 'Marketing') setGajiPokok(4200000);
+                    else setGajiPokok(0);
+                  }}
                   required
                   className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141]"
                 >
@@ -574,6 +594,25 @@ export default function ClinicSettingsAcl() {
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Form Field 6: Nominal Gaji Pokok */}
+              <div>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Nominal Gaji Pokok (Rp) *</label>
+                {role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik' ? (
+                  <div className="px-3 py-2 bg-gray-100 border border-gray-200 rounded-xl text-xs text-gray-500 italic">
+                    Role {role} tidak memiliki kalkulasi gaji pokok (Non-Payroll).
+                  </div>
+                ) : (
+                  <input
+                    type="number"
+                    value={gajiPokok}
+                    onChange={(e) => setGajiPokok(e.target.value)}
+                    required
+                    placeholder="misal: 4000000"
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
+                  />
+                )}
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-[#e5ded4]">
