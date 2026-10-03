@@ -342,7 +342,7 @@ async function seedDefaultData() {
   const defaultUsers = [
     { id: 'usr-1', username: 'superadmin', password: defaultPasswordHash, full_name: 'Ipang Super Admin', role: 'Super Admin', phone: '081234567890' },
     { id: 'usr-2', username: 'adminklinik', password: defaultPasswordHash, full_name: 'Gifary Admin Klinik', role: 'Admin Klinik', phone: '081234567891' },
-    { id: 'usr-3', username: 'nurse-anita', password: defaultPasswordHash, full_name: 'Perawat Anita', role: 'Nurse', phone: '081234567892' },
+    { id: 'usr-3', username: 'anita', password: defaultPasswordHash, full_name: 'Perawat Anita', role: 'Nurse', phone: '081234567892' },
     { id: 'usr-4', username: 'maya', password: defaultPasswordHash, full_name: 'Maya Beautician', role: 'Beautician', phone: '081234567893' },
     { id: 'usr-5', username: 'doni', password: defaultPasswordHash, full_name: 'Doni Marketing', role: 'Marketing', phone: '081234567894' },
     { id: 'usr-6', username: 'rere', password: defaultPasswordHash, full_name: 'Rere Admin FO', role: 'Admin FO', phone: '081234567895' },

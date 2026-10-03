@@ -193,14 +193,14 @@ export default function PosBillingCounter() {
               >
                 {filteredPatients.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.nama_lengkap} ({p.tipe_pasien}) - {p.no_hp}
+                    {p.nama_lengkap} ({p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}) - {p.no_hp}
                   </option>
                 ))}
               </select>
             </div>
             {selectedPatient && (
               <div className="flex items-center justify-between text-xs pt-1 px-1 text-[#7d5141] font-semibold">
-                <span>Tipe: {selectedPatient.tipe_pasien}</span>
+                <span>Tipe: {selectedPatient.tipe_pasien === 'NON-TRIAL' || selectedPatient.tipe_pasien === 'Reguler' ? 'MEMBER' : selectedPatient.tipe_pasien}</span>
                 <span>Poin Sekarang: +{selectedPatient.total_poin} Poin</span>
               </div>
             )}
@@ -438,7 +438,7 @@ export default function PosBillingCounter() {
                 No. Nota : {receiptData.transaction.no_nota}<br/>
                 Tanggal  : {new Date(receiptData.transaction.created_at).toLocaleString('id-ID')}<br/>
                 Kasir    : {receiptData.transaction.kasir_nama}<br/>
-                Pelanggan: {receiptData.transaction.pasien_nama} ({receiptData.transaction.tipe_pasien})
+                Pelanggan: {receiptData.transaction.pasien_nama} ({receiptData.transaction.tipe_pasien === 'NON-TRIAL' || receiptData.transaction.tipe_pasien === 'Reguler' ? 'MEMBER' : receiptData.transaction.tipe_pasien})
               </div>
 
               <div className="border-t border-b border-dashed border-gray-400 py-1 space-y-1">

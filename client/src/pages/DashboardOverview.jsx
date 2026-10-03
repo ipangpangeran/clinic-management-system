@@ -152,7 +152,7 @@ export default function DashboardOverview({ setActiveTab }) {
                           ? 'bg-amber-100 text-amber-800' 
                           : 'bg-emerald-100 text-emerald-800'
                       }`}>
-                        {p.tipe_pasien}
+                        {p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}
                       </span>
                     </td>
                     <td className="py-3 px-3 font-medium text-[#7d5141]">+{p.total_poin} Poin</td>

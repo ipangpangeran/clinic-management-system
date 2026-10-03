@@ -158,7 +158,7 @@ export default function DoinganActivity() {
               >
                 {patients.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.nama_lengkap} ({p.tipe_pasien}) - {p.no_hp}
+                    {p.nama_lengkap} ({p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}) - {p.no_hp}
                   </option>
                 ))}
               </select>
