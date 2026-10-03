@@ -92,10 +92,166 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
-    const users = await allQuery('SELECT id, username, full_name, role, phone FROM users');
+    const users = await allQuery('SELECT id, username, full_name, role, phone, created_at FROM users ORDER BY created_at DESC');
     res.json(users);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching users', error: err.message });
+  }
+});
+
+app.post('/api/users', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik') {
+      return res.status(403).json({ message: 'Akses ditolak: Menu kelola user hanya untuk Super Admin & Admin Klinik' });
+    }
+
+    const { username, password, full_name, role, phone } = req.body;
+    if (!username || !password || !full_name || !role) {
+      return res.status(400).json({ message: 'Username, Password, Nama, dan Role wajib diisi' });
+    }
+
+    const existing = await getQuery('SELECT id FROM users WHERE username = ?', [username]);
+    if (existing) {
+      return res.status(400).json({ message: 'Username sudah digunakan oleh user lain' });
+    }
+
+    const salt = bcrypt.genSaltSync(10);
+    const passwordHash = bcrypt.hashSync(password, salt);
+    const id = 'usr-' + Date.now();
+
+    await runQuery(`
+      INSERT INTO users (id, username, password, full_name, role, phone)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [id, username, passwordHash, full_name, role, phone || null]);
+
+    const newUser = await getQuery('SELECT id, username, full_name, role, phone FROM users WHERE id = ?', [id]);
+    res.status(201).json({ message: 'User baru berhasil dibuat', user: newUser });
+  } catch (err) {
+    res.status(500).json({ message: 'Error creating user', error: err.message });
+  }
+});
+
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik') {
+      return res.status(403).json({ message: 'Akses ditolak: Menu kelola user hanya untuk Super Admin & Admin Klinik' });
+    }
+
+    const { id } = req.params;
+    const { username, password, full_name, role, phone } = req.body;
+
+    const existingUsername = await getQuery('SELECT id FROM users WHERE username = ? AND id != ?', [username, id]);
+    if (existingUsername) {
+      return res.status(400).json({ message: 'Username sudah digunakan oleh user lain' });
+    }
+
+    if (password && password.trim() !== '') {
+      const salt = bcrypt.genSaltSync(10);
+      const passwordHash = bcrypt.hashSync(password, salt);
+      await runQuery(`
+        UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ? WHERE id = ?
+      `, [username, passwordHash, full_name, role, phone || null, id]);
+    } else {
+      await runQuery(`
+        UPDATE users SET username = ?, full_name = ?, role = ?, phone = ? WHERE id = ?
+      `, [username, full_name, role, phone || null, id]);
+    }
+
+    const updated = await getQuery('SELECT id, username, full_name, role, phone FROM users WHERE id = ?', [id]);
+    res.json({ message: 'Data user berhasil diperbarui', user: updated });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating user', error: err.message });
+  }
+});
+
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik') {
+      return res.status(403).json({ message: 'Akses ditolak: Menu kelola user hanya untuk Super Admin & Admin Klinik' });
+    }
+
+    const { id } = req.params;
+    if (id === req.user.id) {
+      return res.status(400).json({ message: 'Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif' });
+    }
+
+    await runQuery('DELETE FROM users WHERE id = ?', [id]);
+    res.json({ message: 'User berhasil dihapus' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting user', error: err.message });
+  }
+});
+
+// --- DOINGAN & ACTIVITY LOG ROUTES (NURSE, BEAUTICIAN, MARKETING) ---
+app.get('/api/doingan', authenticateToken, async (req, res) => {
+  try {
+    const list = await allQuery(`
+      SELECT d.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, u.full_name as petugas_nama
+      FROM doingan d
+      JOIN pasien p ON d.pasien_id = p.id
+      JOIN users u ON d.petugas_id = u.id
+      ORDER BY d.created_at DESC
+    `);
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching doingan records', error: err.message });
+  }
+});
+
+app.post('/api/doingan', authenticateToken, async (req, res) => {
+  try {
+    const { pasien_id, tindakan_id, nama_tindakan, status_doingan, nominal_dp, nominal_membership, notes } = req.body;
+    
+    if (!pasien_id) return res.status(400).json({ message: 'Pasien wajib dipilih' });
+
+    const role = req.user.role;
+    let komisi = 0;
+    let finalNamaTindakan = nama_tindakan || 'Tindakan Klinik';
+
+    if (tindakan_id) {
+      const tm = await getQuery('SELECT nama_tindakan, nominal_nurse_tindakan FROM tindakan_medis WHERE id = ?', [tindakan_id]);
+      if (tm) {
+        finalNamaTindakan = tm.nama_tindakan;
+        if (role === 'Nurse') komisi = tm.nominal_nurse_tindakan || 15000;
+      }
+    }
+
+    if (role === 'Beautician') {
+      if (status_doingan === 'Mbr' || status_doingan === 'Member') {
+        komisi = 17000;
+      } else if (status_doingan === 'Trial') {
+        komisi = 13000;
+      }
+    } else if (role === 'Marketing') {
+      if (status_doingan === 'Trial') {
+        komisi = 10000;
+      } else if (status_doingan === 'Membership' || status_doingan === 'DP Membership') {
+        const baseAmount = Number(nominal_membership) || Number(nominal_dp) || 0;
+        komisi = Math.max(50000, Math.round(baseAmount * 0.05));
+      }
+    } else if (role === 'Nurse' && komisi === 0) {
+      komisi = 15000;
+    }
+
+    const id = 'doi-' + Date.now();
+    await runQuery(`
+      INSERT INTO doingan (id, pasien_id, petugas_id, role_petugas, tindakan_id, nama_tindakan, status_doingan, nominal_dp, nominal_membership, komisi, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, pasien_id, req.user.id, role, tindakan_id || null, finalNamaTindakan, status_doingan || 'Regular', nominal_dp || 0, nominal_membership || 0, komisi, notes || '']);
+
+    res.status(201).json({ message: 'Catatan doingan berhasil disimpan', komisi });
+  } catch (err) {
+    res.status(500).json({ message: 'Error creating doingan', error: err.message });
+  }
+});
+
+app.delete('/api/doingan/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await runQuery('DELETE FROM doingan WHERE id = ?', [id]);
+    res.json({ message: 'Catatan doingan berhasil dihapus' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting doingan', error: err.message });
   }
 });
 
@@ -619,6 +775,11 @@ app.get('/api/payroll/summary', authenticateToken, async (req, res) => {
       WHERE t.created_at >= ? AND t.created_at <= ?
     `, [monthStart, monthEnd]);
 
+    const doinganLogs = await allQuery(`
+      SELECT * FROM doingan
+      WHERE created_at >= ? AND created_at <= ?
+    `, [monthStart, monthEnd]);
+
     const payrollResult = [];
 
     for (const u of users) {
@@ -627,19 +788,24 @@ app.get('/api/payroll/summary', authenticateToken, async (req, res) => {
       let komisiTindakan = 0;
       let bonusLain = 0;
 
-      if (u.role === 'Admin System' || u.role === 'Admin Klinik') gajiPokok = 6000000;
-      else if (u.role === 'Manager') gajiPokok = 8000000;
-      else if (u.role === 'Assistant Manager (ASM)') gajiPokok = 5500000;
+      if (u.role === 'Super Admin' || u.role === 'Admin System' || u.role === 'Admin Klinik') gajiPokok = 6000000;
       else if (u.role === 'Dokter') gajiPokok = 10000000;
-      else if (u.role === 'Resepsionis / Cashier') gajiPokok = 4000000;
-      else if (u.role === 'Therapist / BTC') gajiPokok = 3500000;
+      else if (u.role === 'Admin FO' || u.role === 'Resepsionis / Cashier') gajiPokok = 4000000;
+      else if (u.role === 'Beautician' || u.role === 'Therapist / BTC') gajiPokok = 3500000;
       else if (u.role === 'Nurse') gajiPokok = 3800000;
       else if (u.role === 'Marketing') gajiPokok = 4200000;
 
-      if (u.role === 'Therapist / BTC') {
+      // Calculate Doingan Commissions for Nurse, Beautician, Marketing
+      doinganLogs.forEach(d => {
+        if (d.petugas_id === u.id) {
+          komisiTindakan += (d.komisi || 0);
+        }
+      });
+
+      if (u.role === 'Therapist / BTC' || u.role === 'Beautician') {
         trxDetails.forEach(d => {
-          if (d.therapist_id === u.id || d.therapist_id === null) {
-            const fixInc = d.komisi_fix_therapist || 15000;
+          if (d.therapist_id === u.id) {
+            const fixInc = d.komisi_fix_therapist || 17000;
             const pct = (d.percent_btc_bonus || 5) / 100;
             komisiTindakan += (fixInc * d.jumlah) + (d.subtotal_item * pct);
           }
@@ -670,14 +836,14 @@ app.get('/api/payroll/summary', authenticateToken, async (req, res) => {
 
       if (u.role === 'Nurse') {
         trxDetails.forEach(d => {
-          if (d.jenis_item === 'TINDAKAN') {
+          if (d.jenis_item === 'TINDAKAN' && d.therapist_id === u.id) {
             const nurseFee = d.nominal_nurse_tindakan || 15000;
             komisiTindakan += nurseFee * d.jumlah;
           }
         });
       }
 
-      if (u.role === 'Resepsionis / Cashier') {
+      if (u.role === 'Admin FO' || u.role === 'Resepsionis / Cashier') {
         let totalTurnover = 0;
         trxs.forEach(t => {
           if (t.kasir_id === u.id) totalTurnover += t.grand_total;

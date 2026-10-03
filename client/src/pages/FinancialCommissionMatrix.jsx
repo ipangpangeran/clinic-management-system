@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { DollarSign, FileText, CheckCircle, Calculator, Percent, Sparkles, User, Printer } from 'lucide-react';
+import { DollarSign, FileText, CheckCircle, Calculator, Sparkles, User, Printer } from 'lucide-react';
 
 export default function FinancialCommissionMatrix() {
   const [activeTab, setActiveTab] = useState('PAYROLL'); // 'PAYROLL', 'FORMULAS', 'PRICING'
@@ -65,13 +65,13 @@ export default function FinancialCommissionMatrix() {
       {/* Header Bar */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Keuangan, Pricing & Komisi 5 Lini (Manager)</h1>
-          <p className="text-xs text-[#514440]">Otoritas pengaturan harga, formula insentif 5 lini profesi, dan pengeluaran payroll gaji bulanan.</p>
+          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Keuangan, Catalog & Matrix Komisi Role</h1>
+          <p className="text-xs text-[#514440]">Skema komisi otomatis untuk Nurse, Beautician, Marketing, Admin FO, dan Laporan Payroll Gaji.</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
+      <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
         <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
           <div className="flex gap-2 text-xs">
             <button
@@ -86,14 +86,14 @@ export default function FinancialCommissionMatrix() {
               className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'FORMULAS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
             >
               <Calculator className="w-3.5 h-3.5 inline mr-1" />
-              Skema Rumus Komisi 5 Lini Profesi
+              Skema Rumus Komisi Per Role (Revisi)
             </button>
             <button
               onClick={() => setActiveTab('PRICING')}
               className={`px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'PRICING' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
             >
               <DollarSign className="w-3.5 h-3.5 inline mr-1" />
-              Manajemen Catalog & Tarif Tindakan
+              Katalog 15 Tindakan & Pricing
             </button>
           </div>
 
@@ -124,14 +124,14 @@ export default function FinancialCommissionMatrix() {
         {/* PAYROLL SUMMARY TABLE */}
         {activeTab === 'PAYROLL' && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
               <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
                 <tr>
                   <th className="py-3 px-4">Nama Karyawan</th>
                   <th className="py-3 px-4">Role / Lini Profesi</th>
                   <th className="py-3 px-4">Gaji Pokok</th>
-                  <th className="py-3 px-4">Komisi Produk</th>
-                  <th className="py-3 px-4">Komisi Tindakan</th>
+                  <th className="py-3 px-4">Komisi Transaksi/Omset</th>
+                  <th className="py-3 px-4">Komisi Doingan / Tindakan</th>
                   <th className="py-3 px-4">Grand Total THP</th>
                   <th className="py-3 px-4">Status Pembayaran</th>
                   <th className="py-3 px-4 text-center">Slip Gaji</th>
@@ -175,83 +175,82 @@ export default function FinancialCommissionMatrix() {
           </div>
         )}
 
-        {/* RUMUS KOMISI 5 LINI PROFESI (MATRIKS DEFLOW) */}
+        {/* RUMUS KOMISI ROLE REVISI */}
         {activeTab === 'FORMULAS' && (
           <div className="space-y-4">
-            <h3 className="font-serif font-bold text-base text-[#1e1b15]">Skema Formulas Komisi 5 Lini Profesi Spesifik DEFLOW</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <h3 className="font-serif font-bold text-base text-[#1e1b15]">Skema Aturan Komisi & Aktivitas Per Role (Spesifikasi DEFLOW)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">1. Therapist / BTC (Beauty Consultant)</div>
+                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">1. Nurse (Perawat)</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Komisi = Insentif Fix Per Tindakan + (Harga Paket × % Bonus BTC)
+                  Aktivitas: Doingan / Nama Pasien<br/>
+                  Komisi = Nominal Fix Komisi Tindakan Medis Per Pasien
                 </div>
-                <p className="text-[11px] text-[#514440]">Mendapatkan bonus fix tiap menyelesaikan facial/laser ditambah persentase bonus paket treatment.</p>
+                <p className="text-[11px] text-[#514440]">Mendapatkan komisi tindakan medis untuk setiap prosedur yang dikerjakan / didampingi perawat.</p>
               </div>
 
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">2. Marketing</div>
+                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">2. Beautician</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Komisi = Nominal Tetap Per Kepala Pasien Baru + (Total Transaksi Pertama × % Bonus)
+                  Aktivitas: Doingan / Nama Pasien & Status Doingan<br/>
+                  - Mbr (Member)   : Rp 17.000 / Doingan<br/>
+                  - Trial (Free)    : Rp 13.000 / Doingan
                 </div>
-                <p className="text-[11px] text-[#514440]">Insentif per pasien baru yang terkonversi ditambah komisi transaksi pertama pasien.</p>
+                <p className="text-[11px] text-[#514440]">Komisi otomatis terhitung sesuai status doingan pasien member (Rp 17.000) atau trial free (Rp 13.000).</p>
               </div>
 
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">3. Dokter</div>
+                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">3. Marketing</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Komisi = Tarif Konsultasi Fix + (Harga Tindakan Medis × % Jasa Medis)
+                  Aktivitas: Nama Pasien, Status, Membership, DP Membership<br/>
+                  - Trial (Free)       : Rp 10.000 / Pasien<br/>
+                  - Komisi Membership  : Bonus % atau Nominal DP Membership
                 </div>
-                <p className="text-[11px] text-[#514440]">Tarif konsul kulit tetap per pasien ditambah % jasa medis prosedur laser & peeling.</p>
+                <p className="text-[11px] text-[#514440]">Insentif per registrasi pasien trial (Rp 10.000) ditambah komisi konversi membership dan DP membership.</p>
               </div>
 
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">4. Nurse (Perawat Pendamping)</div>
+                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">4. Admin FO (Front Office)</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Komisi = Nominal Per Tindakan yang Didampingi
+                  Aktivitas: Mendaftarkan Pasien & Membuat Tagihan / Billing<br/>
+                  Komisi = Omset Billing Kasir Harian (1.5%)
                 </div>
-                <p className="text-[11px] text-[#514440]">Fee nominal flat per tindakan medis dokter yang didampingi perawat di ruang steril.</p>
-              </div>
-
-              <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2 md:col-span-2 lg:col-span-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">5. Front Desk / Kasir (FD)</div>
-                <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Komisi = Total Omset Kasir Per Hari × % Komisi FD (1.5%)
-                </div>
-                <p className="text-[11px] text-[#514440]">Komisi omset harian kasir dari seluruh pembayaran produk retail dan paket treatment.</p>
+                <p className="text-[11px] text-[#514440]">Mengelola pendaftaran pasien awal dan kasir nota billing counter.</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* PRICING & TARIF CATALOG */}
+        {/* PRICING & 15 TINDAKAN CATALOG */}
         {activeTab === 'PRICING' && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
-                <tr>
-                  <th className="py-3 px-4">Nama Tindakan Medis</th>
-                  <th className="py-3 px-4">Tarif Konsul Dokter</th>
-                  <th className="py-3 px-4">Tarif Tindakan Medis</th>
-                  <th className="py-3 px-4">Fix Insentif Therapist</th>
-                  <th className="py-3 px-4">% Bonus BTC</th>
-                  <th className="py-3 px-4">% Jasa Medis Dokter</th>
-                  <th className="py-3 px-4">Nominal Perawat</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e5ded4]">
-                {treatments.map(t => (
-                  <tr key={t.id} className="hover:bg-[#fff8f0]">
-                    <td className="py-3 px-4 font-bold text-[#1e1b15]">{t.nama_tindakan}</td>
-                    <td className="py-3 px-4 text-[#514440]">Rp {t.tarif_konsul_dokter.toLocaleString('id-ID')}</td>
-                    <td className="py-3 px-4 font-bold text-[#7d5141]">Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}</td>
-                    <td className="py-3 px-4 text-[#514440]">Rp {t.komisi_fix_therapist.toLocaleString('id-ID')}</td>
-                    <td className="py-3 px-4 text-[#514440]">{t.percent_btc_bonus}%</td>
-                    <td className="py-3 px-4 text-[#514440]">{t.percent_jasa_medis_dokter}%</td>
-                    <td className="py-3 px-4 text-[#514440]">Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}</td>
+          <div className="space-y-4">
+            <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Katalog 15 Jenis Tindakan / Treatment Resmi DEFLOW</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-3 px-4">No</th>
+                    <th className="py-3 px-4">Nama Jenis Tindakan / Treatment</th>
+                    <th className="py-3 px-4">Tarif Konsul Dokter</th>
+                    <th className="py-3 px-4">Tarif Tindakan Medis</th>
+                    <th className="py-3 px-4">Komisi Beautician (Fix)</th>
+                    <th className="py-3 px-4">Komisi Nurse (Fix)</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {treatments.map((t, index) => (
+                    <tr key={t.id} className="hover:bg-[#fff8f0]">
+                      <td className="py-3 px-4 text-[#83746f] font-bold">{index + 1}</td>
+                      <td className="py-3 px-4 font-bold text-[#1e1b15] text-sm">{t.nama_tindakan}</td>
+                      <td className="py-3 px-4 text-[#514440]">Rp {t.tarif_konsul_dokter.toLocaleString('id-ID')}</td>
+                      <td className="py-3 px-4 font-bold text-[#7d5141]">Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}</td>
+                      <td className="py-3 px-4 text-emerald-700 font-semibold">Rp {t.komisi_fix_therapist.toLocaleString('id-ID')}</td>
+                      <td className="py-3 px-4 text-blue-700 font-semibold">Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
@@ -281,11 +280,11 @@ export default function FinancialCommissionMatrix() {
                   <span>Rp {selectedSlip.gaji_pokok.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Komisi Produk/Omset:</span>
+                  <span>Komisi Transaksi/Omset:</span>
                   <span>Rp {selectedSlip.total_komisi_produk.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Komisi Tindakan/Jasa:</span>
+                  <span>Komisi Doingan/Tindakan:</span>
                   <span>Rp {selectedSlip.total_komisi_tindakan.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="border-t border-gray-400 pt-1 flex justify-between font-bold text-sm text-[#7d5141]">

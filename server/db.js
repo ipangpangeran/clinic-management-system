@@ -266,6 +266,26 @@ async function initDb() {
       )
     `);
 
+    // 15. Doingan / Treatment & Marketing Activity Log
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS doingan (
+        id TEXT PRIMARY KEY,
+        pasien_id TEXT NOT NULL,
+        petugas_id TEXT NOT NULL,
+        role_petugas TEXT NOT NULL,
+        tindakan_id TEXT,
+        nama_tindakan TEXT NOT NULL,
+        status_doingan TEXT,
+        nominal_dp REAL DEFAULT 0,
+        nominal_membership REAL DEFAULT 0,
+        komisi REAL DEFAULT 0,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(pasien_id) REFERENCES pasien(id),
+        FOREIGN KEY(petugas_id) REFERENCES users(id)
+      )
+    `);
+
     // Migration: Fix any negative sisa_stok in stok_produk
     try {
       await runQuery(`UPDATE stok_produk SET sisa_stok = 1 WHERE sisa_stok < 0 OR id = 'prod-5'`);
@@ -290,60 +310,55 @@ async function seedDefaultData() {
     `);
   }
 
-  const userRow = await getQuery('SELECT COUNT(*) as count FROM users');
-  if (userRow.count === 0) {
-    const salt = bcrypt.genSaltSync(10);
-    const defaultPasswordHash = bcrypt.hashSync('admin1234', salt);
+  const salt = bcrypt.genSaltSync(10);
+  const defaultPasswordHash = bcrypt.hashSync('admin1234', salt);
 
-    const defaultUsers = [
-      { id: 'usr-1', username: 'admin-ipang', password: defaultPasswordHash, full_name: 'Ipang Pangeran (Super Admin)', role: 'Admin System', phone: '081234567890' },
-      { id: 'usr-2', username: 'admin-gifary', password: defaultPasswordHash, full_name: 'Gifary (Admin Klinik)', role: 'Admin Klinik', phone: '081234567891' },
-      { id: 'usr-3', username: 'resepsionis', password: defaultPasswordHash, full_name: 'Siti Resepsionis', role: 'Resepsionis / Cashier', phone: '081234567892' },
-      { id: 'usr-4', username: 'asm', password: defaultPasswordHash, full_name: 'Budi Assistant Manager', role: 'Assistant Manager (ASM)', phone: '081234567893' },
-      { id: 'usr-5', username: 'mgr', password: defaultPasswordHash, full_name: 'Anita Manager', role: 'Manager', phone: '081234567894' },
-      { id: 'usr-6', username: 'dr-clara', password: defaultPasswordHash, full_name: 'dr. Clara Sp.KK', role: 'Dokter', phone: '081234567895' },
-      { id: 'usr-7', username: 'therapist-maya', password: defaultPasswordHash, full_name: 'Maya Beauty Consultant', role: 'Therapist / BTC', phone: '081234567896' },
-      { id: 'usr-8', username: 'nurse-rina', password: defaultPasswordHash, full_name: 'Perawat Rina', role: 'Nurse', phone: '081234567897' },
-      { id: 'usr-9', username: 'marketing-doni', password: defaultPasswordHash, full_name: 'Doni Marketing', role: 'Marketing', phone: '081234567898' }
-    ];
+  const defaultUsers = [
+    { id: 'usr-1', username: 'superadmin', password: defaultPasswordHash, full_name: 'Ipang Super Admin', role: 'Super Admin', phone: '081234567890' },
+    { id: 'usr-2', username: 'adminklinik', password: defaultPasswordHash, full_name: 'Gifary Admin Klinik', role: 'Admin Klinik', phone: '081234567891' },
+    { id: 'usr-3', username: 'nurse-anita', password: defaultPasswordHash, full_name: 'Perawat Anita', role: 'Nurse', phone: '081234567892' },
+    { id: 'usr-4', username: 'beautician-maya', password: defaultPasswordHash, full_name: 'Maya Beautician', role: 'Beautician', phone: '081234567893' },
+    { id: 'usr-5', username: 'marketing-doni', password: defaultPasswordHash, full_name: 'Doni Marketing', role: 'Marketing', phone: '081234567894' },
+    { id: 'usr-6', username: 'fo-rere', password: defaultPasswordHash, full_name: 'Rere Admin FO', role: 'Admin FO', phone: '081234567895' },
+    { id: 'usr-7', username: 'dr-clara', password: defaultPasswordHash, full_name: 'dr. Clara Sp.KK', role: 'Dokter', phone: '081234567896' }
+  ];
 
-    for (const u of defaultUsers) {
+  for (const u of defaultUsers) {
+    const existing = await getQuery('SELECT id FROM users WHERE id = ? OR username = ?', [u.id, u.username]);
+    if (!existing) {
       await runQuery('INSERT INTO users (id, username, password, full_name, role, phone) VALUES (?, ?, ?, ?, ?, ?)',
         [u.id, u.username, u.password, u.full_name, u.role, u.phone]);
+    } else {
+      await runQuery('UPDATE users SET role = ?, full_name = ? WHERE id = ? OR username = ?', [u.role, u.full_name, u.id, u.username]);
     }
   }
 
-  const aclRow = await getQuery('SELECT COUNT(*) as count FROM role_permissions');
-  if (aclRow.count === 0) {
-    const roles = ['Admin System', 'Admin Klinik', 'Resepsionis / Cashier', 'Assistant Manager (ASM)', 'Manager', 'Dokter', 'Therapist / BTC', 'Nurse'];
-    const modules = [
-      'clinic_profile', 'acl', 'patient_intake', 'patient_packages', 
-      'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical', 
-      'pricing', 'commission_formulas', 'payroll'
-    ];
+  const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Nurse', 'Beautician', 'Marketing', 'Admin FO', 'Dokter'];
+  const modules = [
+    'clinic_profile', 'acl', 'patient_intake', 'doingan', 'patient_packages', 
+    'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical', 
+    'pricing', 'commission_formulas', 'payroll'
+  ];
 
-    for (const role of roles) {
-      for (const mod of modules) {
-        let c=0, r=0, u=0, d=0;
-        if (role === 'Admin System' || role === 'Admin Klinik') {
-          c=1; r=1; u=1; d=1;
-        } else if (role === 'Resepsionis / Cashier') {
-          if (['patient_intake', 'patient_packages', 'reminders'].includes(mod)) { c=1; r=1; u=1; d=1; }
-          else if (['clinic_profile', 'inventory_retail', 'inventory_btc', 'inventory_non_medical', 'pricing'].includes(mod)) { r=1; }
-        } else if (role === 'Assistant Manager (ASM)') {
-          if (['inventory_retail', 'inventory_btc', 'inventory_non_medical'].includes(mod)) { c=1; r=1; u=1; d=1; }
-          else if (['clinic_profile', 'patient_intake', 'patient_packages', 'reminders', 'pricing', 'payroll'].includes(mod)) { r=1; }
-        } else if (role === 'Manager') {
-          if (['pricing', 'commission_formulas', 'payroll'].includes(mod)) { c=1; r=1; u=1; d=1; }
-          else if (['clinic_profile', 'patient_intake', 'patient_packages', 'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical'].includes(mod)) { r=1; }
-        } else {
-          if (['patient_intake', 'patient_packages', 'reminders', 'inventory_btc'].includes(mod)) { r=1; }
-          if (mod === 'inventory_btc') { c=1; }
-          if (mod === 'payroll') { r=1; }
-        }
-        await runQuery('INSERT INTO role_permissions (role, module_key, can_create, can_read, can_update, can_delete) VALUES (?, ?, ?, ?, ?, ?)',
-          [role, mod, c, r, u, d]);
+  for (const role of roles) {
+    for (const mod of modules) {
+      let c=0, r=0, u=0, d=0;
+      if (role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik') {
+        c=1; r=1; u=1; d=1;
+      } else if (role === 'Admin FO') {
+        if (['patient_intake', 'patient_packages', 'reminders'].includes(mod)) { c=1; r=1; u=1; d=1; }
+        else if (['clinic_profile', 'doingan', 'pricing'].includes(mod)) { r=1; }
+      } else if (role === 'Nurse' || role === 'Beautician' || role === 'Marketing') {
+        if (['doingan', 'patient_intake'].includes(mod)) { c=1; r=1; u=1; d=0; }
+        else if (['payroll', 'pricing', 'patient_packages'].includes(mod)) { r=1; }
+      } else {
+        if (['patient_intake', 'doingan', 'patient_packages', 'reminders'].includes(mod)) { r=1; }
       }
+      await runQuery(`
+        INSERT INTO role_permissions (role, module_key, can_create, can_read, can_update, can_delete)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(role, module_key) DO NOTHING
+      `, [role, mod, c, r, u, d]);
     }
   }
 
@@ -386,12 +401,12 @@ async function seedDefaultData() {
     const products = [
       ['prod-1', 'DEFLOW Glowing Facial Wash 100ml', 'SKU-FW01', 'RETAIL', 150000, 45, 10, 'botol'],
       ['prod-2', 'DEFLOW Rose Water Toner 100ml', 'SKU-TN01', 'RETAIL', 125000, 30, 10, 'botol'],
-      ['prod-3', 'DEFLOW Brightening Serum Vit-C 30ml', 'SKU-SR01', 'RETAIL', 280000, 2, 5, 'botol'], // sisa_stok 2 (< 3 for notification testing!)
+      ['prod-3', 'DEFLOW Brightening Serum Vit-C 30ml', 'SKU-SR01', 'RETAIL', 280000, 2, 5, 'botol'],
       ['prod-4', 'DEFLOW UV Shield Sunscreen SPF 50', 'SKU-SS01', 'RETAIL', 175000, 50, 15, 'tube'],
-      ['prod-5', 'DEFLOW Night Rejuvenating Cream 30g', 'SKU-NC01', 'RETAIL', 240000, 1, 5, 'jar'], // sisa_stok 1 (< 3 for notification testing!)
+      ['prod-5', 'DEFLOW Night Rejuvenating Cream 30g', 'SKU-NC01', 'RETAIL', 240000, 1, 5, 'jar'],
       ['prod-6', 'Serum Laser Hyaluronic Grade A (Ampul)', 'SKU-BTC01', 'THERAPIST_BTC', 350000, 25, 5, 'ampul'],
       ['prod-7', 'Masker Peel-Off Gold Collagen 500g', 'SKU-BTC02', 'THERAPIST_BTC', 450000, 8, 2, 'pack'],
-      ['prod-8', 'Cairan Chemical Peeling Glycolic 30%', 'SKU-BTC03', 'THERAPIST_BTC', 500000, 2, 2, 'botol'], // sisa_stok 2 (< 3 for notification testing!)
+      ['prod-8', 'Cairan Chemical Peeling Glycolic 30%', 'SKU-BTC03', 'THERAPIST_BTC', 500000, 2, 2, 'botol'],
       ['prod-9', 'Tisu Facial Wajah Premium 250s', 'SKU-OPS01', 'KLINIK_NON_MEDIS', 18000, 120, 20, 'pack'],
       ['prod-10', 'Sarung Tangan Nitrile Steril (Size M)', 'SKU-OPS02', 'KLINIK_NON_MEDIS', 85000, 35, 10, 'box'],
       ['prod-11', 'Kapas Kecantikan Soft Round 100s', 'SKU-OPS03', 'KLINIK_NON_MEDIS', 15000, 80, 15, 'pack']
@@ -401,17 +416,49 @@ async function seedDefaultData() {
     }
   }
 
-  const tndRow = await getQuery('SELECT COUNT(*) as count FROM tindakan_medis');
-  if (tndRow.count === 0) {
-    const treatments = [
-      ['tnd-1', 'Consultation & Skin Analysis', 150000, 0, 0, 0, 100, 0],
-      ['tnd-2', 'DEFLOW Signature Glowing Facial', 0, 450000, 25000, 5, 0, 10000],
-      ['tnd-3', 'Laser Pico Rejuvenation & Brightening', 150000, 1200000, 50000, 5, 20, 25000],
-      ['tnd-4', 'Chemical Peeling Acne Control', 0, 550000, 30000, 5, 15, 15000]
-    ];
-    for (const t of treatments) {
+  // Seed the 15 requested treatments from user prompt
+  const requestedTreatments = [
+    ['tnd-1', 'Platelet-Rich Plasma (PRP)', 150000, 1200000, 17000, 5, 20, 15000],
+    ['tnd-2', 'DNA Salmon', 150000, 1500000, 17000, 5, 20, 15000],
+    ['tnd-3', 'Laser Pico', 150000, 1000000, 17000, 5, 20, 15000],
+    ['tnd-4', 'Laser DPL', 0, 800000, 17000, 5, 15, 15000],
+    ['tnd-5', 'Laser Blackdoll4', 0, 850000, 17000, 5, 15, 15000],
+    ['tnd-6', 'Laser Underarmd', 0, 450000, 17000, 5, 15, 13000],
+    ['tnd-7', 'Peeling Acne', 0, 350000, 17000, 5, 10, 13000],
+    ['tnd-8', 'Peeling Baru', 0, 400000, 17000, 5, 10, 13000],
+    ['tnd-9', 'Vittaran Poly Booster', 150000, 1800000, 17000, 5, 20, 15000],
+    ['tnd-10', 'JuveLook', 150000, 2500000, 17000, 5, 20, 15000],
+    ['tnd-11', 'Cauter', 100000, 500000, 17000, 5, 15, 13000],
+    ['tnd-12', 'Benang Hidung', 200000, 2000000, 17000, 5, 25, 20000],
+    ['tnd-13', 'Benang Pipi', 200000, 3000000, 17000, 5, 25, 20000],
+    ['tnd-14', 'Infus Whitening', 0, 600000, 17000, 5, 15, 13000],
+    ['tnd-15', 'Infus Choromosome', 0, 1200000, 17000, 5, 20, 15000]
+  ];
+
+  for (const t of requestedTreatments) {
+    const existing = await getQuery('SELECT id FROM tindakan_medis WHERE id = ? OR nama_tindakan = ?', [t[0], t[1]]);
+    if (!existing) {
       await runQuery('INSERT INTO tindakan_medis (id, nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', t);
     }
+  }
+
+  // Seed initial doingan sample records if empty
+  const dRow = await getQuery('SELECT COUNT(*) as count FROM doingan');
+  if (dRow.count === 0) {
+    await runQuery(`
+      INSERT INTO doingan (id, pasien_id, petugas_id, role_petugas, tindakan_id, nama_tindakan, status_doingan, nominal_dp, nominal_membership, komisi, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, ['doi-1', 'pasien-1', 'usr-4', 'Beautician', 'tnd-1', 'Platelet-Rich Plasma (PRP)', 'Mbr', 0, 0, 17000, 'Doingan treatment member berjalan lancar']);
+
+    await runQuery(`
+      INSERT INTO doingan (id, pasien_id, petugas_id, role_petugas, tindakan_id, nama_tindakan, status_doingan, nominal_dp, nominal_membership, komisi, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, ['doi-2', 'pasien-2', 'usr-4', 'Beautician', 'tnd-7', 'Peeling Acne', 'Trial', 0, 0, 13000, 'Doingan pasien trial free']);
+
+    await runQuery(`
+      INSERT INTO doingan (id, pasien_id, petugas_id, role_petugas, tindakan_id, nama_tindakan, status_doingan, nominal_dp, nominal_membership, komisi, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, ['doi-3', 'pasien-2', 'usr-5', 'Marketing', null, 'Pasien Trial Marketing', 'Trial', 0, 0, 10000, 'Registrasi pasien trial oleh Marketing']);
   }
 }
 

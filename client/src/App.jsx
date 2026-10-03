@@ -5,6 +5,7 @@ import Header from './components/Header';
 import LoginPage from './pages/LoginPage';
 import DashboardOverview from './pages/DashboardOverview';
 import PatientManagement from './pages/PatientManagement';
+import DoinganActivity from './pages/DoinganActivity';
 import PosBillingCounter from './pages/PosBillingCounter';
 import LogisticsInventory from './pages/LogisticsInventory';
 import FinancialCommissionMatrix from './pages/FinancialCommissionMatrix';
@@ -36,6 +37,8 @@ function MainApp() {
         return <DashboardOverview setActiveTab={setActiveTab} />;
       case 'patients':
         return <PatientManagement />;
+      case 'doingan':
+        return <DoinganActivity />;
       case 'pos':
         return <PosBillingCounter />;
       case 'inventory':
@@ -64,7 +67,6 @@ function MainApp() {
           {renderTabContent()}
         </main>
       </div>
-
     </div>
   );
 }

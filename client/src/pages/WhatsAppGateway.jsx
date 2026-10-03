@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import { AuthContext } from '../context/AuthContext';
 import { MessageSquare, Send, CheckCircle2, Trash2, RefreshCw, Smartphone, ExternalLink } from 'lucide-react';
 
 export default function WhatsAppGateway({ setActiveTab }) {
+  const { user } = useContext(AuthContext);
   const [waLogs, setWaLogs] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [clinic, setClinic] = useState(null);
@@ -49,8 +51,6 @@ export default function WhatsAppGateway({ setActiveTab }) {
     }
   };
 
-
-  const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
   const pendingReminders = reminders.filter(r => r.status === 'PENDING');
 
   const getMaskedEndpoint = (fullUrl) => {
@@ -62,6 +62,8 @@ export default function WhatsAppGateway({ setActiveTab }) {
       return fullUrl.split('?')[0].split('/send')[0];
     }
   };
+
+  const isSuperAdmin = user?.role === 'Super Admin' || user?.role === 'Admin System';
 
   return (
     <div className="space-y-6">
@@ -81,7 +83,7 @@ export default function WhatsAppGateway({ setActiveTab }) {
         </button>
       </div>
 
-      {/* Clean Gateway API Status Card (Without Technical Payload JSON) */}
+      {/* Gateway API Status Card */}
       <div className="bg-white p-6 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -101,13 +103,12 @@ export default function WhatsAppGateway({ setActiveTab }) {
             </div>
           </div>
 
-
           <div className="flex items-center gap-3">
             <div className="text-right text-xs">
               <span className="text-[#83746f]">Jadwal Cron Job Otomatis:</span>
               <div className="font-mono font-bold text-[#7d5141]">08:00 AM (Setiap Hari)</div>
             </div>
-            {setActiveTab && (
+            {setActiveTab && isSuperAdmin && (
               <button
                 onClick={() => setActiveTab('acl')}
                 className="px-3 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#7d5141] font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-xs"
@@ -121,9 +122,9 @@ export default function WhatsAppGateway({ setActiveTab }) {
         </div>
       </div>
 
-      {/* Grid: Pending H-1 Reminders with Delete Action vs Dispatch Logs */}
+      {/* Grid: Pending H-1 Reminders vs Dispatch Logs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Antrean H-1 Reminders (With Delete Button) */}
+        {/* Antrean H-1 Reminders */}
         <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
           <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
             <h3 className="font-serif font-bold text-base text-[#1e1b15]">Antrean Reminder Jadwal Kontrol</h3>
@@ -147,7 +148,6 @@ export default function WhatsAppGateway({ setActiveTab }) {
                       <span className="text-[10px] text-amber-900 font-mono font-bold bg-amber-100 px-2 py-0.5 rounded border border-amber-200">
                         {r.tgl_kembali}
                       </span>
-                      {/* Delete Button for Reminder Queue */}
                       <button
                         onClick={() => handleDeleteReminder(r.id, r.pasien_nama)}
                         className="p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-all cursor-pointer"

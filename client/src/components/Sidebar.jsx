@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { 
   LayoutDashboard, UserPlus, ShoppingBag, PackageCheck, 
-  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, User
+  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
@@ -10,15 +10,15 @@ export default function Sidebar({ activeTab, setActiveTab }) {
 
   const navItems = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, module: null },
-    { id: 'patients', label: 'Pendaftaran Pasien & Paket', icon: UserPlus, module: 'patient_intake' },
+    { id: 'patients', label: 'Pendaftaran Pasien (Admin FO)', icon: UserPlus, module: 'patient_intake' },
+    { id: 'doingan', label: 'Doingan & Aktivitas Perawatan', icon: Sparkles, module: 'doingan' },
     { id: 'pos', label: 'POS & Billing Counter', icon: ShoppingBag, module: 'patient_packages' },
-    { id: 'inventory', label: 'Logistik & Stok (ASM)', icon: PackageCheck, module: 'inventory_retail' },
-    { id: 'financial', label: 'Keuangan & Komisi 5 Lini', icon: DollarSign, module: 'pricing' },
-    { id: 'acl', label: 'Dynamic ACL & Profil Klinik', icon: ShieldCheck, module: 'acl' },
+    { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: 'inventory_retail' },
+    { id: 'financial', label: 'Keuangan & Komisi Gaji', icon: DollarSign, module: 'pricing' },
+    { id: 'acl', label: 'Kelola User & Dynamic ACL', icon: ShieldCheck, module: 'acl' },
     { id: 'wa', label: 'WhatsApp Gateway & Reminder', icon: MessageSquare, module: 'reminders' },
   ];
 
-  // Helper to extract clean initials from user full_name
   const getInitials = (name) => {
     if (!name) return 'U';
     const parts = name.trim().split(' ');
@@ -42,7 +42,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
           />
         </div>
 
-        {/* User Card - Premium Luxury Styling */}
+        {/* User Card */}
         <div className="mx-4 my-4 p-3.5 bg-gradient-to-r from-[#faf3e8] to-[#f4ede3] border border-[#d6c2bd] rounded-2xl flex items-center gap-3.5 shadow-xs">
           <div className="w-10 h-10 rounded-xl bg-[#7d5141] text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-xs shrink-0">
             {getInitials(user?.full_name)}
@@ -57,7 +57,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         </div>
 
         {/* Nav Links */}
-        <nav className="px-3 space-y-1.5">
+        <nav className="px-3 space-y-1">
           {navItems.map((item) => {
             if (item.module && !hasPermission(item.module, 'can_read')) return null;
             const Icon = item.icon;
@@ -67,17 +67,17 @@ export default function Sidebar({ activeTab, setActiveTab }) {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-[14px] font-semibold tracking-wide transition-all cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all cursor-pointer ${
                   isActive 
                     ? 'bg-[#7d5141] text-white shadow-md font-bold' 
                     : 'text-[#514440] hover:bg-[#faf3e8] hover:text-[#1e1b15]'
                 }`}
               >
-                <div className="flex items-center gap-3.5">
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-[#83746f]'}`} />
+                <div className="flex items-center gap-3">
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#83746f]'}`} />
                   <span>{item.label}</span>
                 </div>
-                {isActive && <ChevronRight className="w-4 h-4 text-white" />}
+                {isActive && <ChevronRight className="w-3.5 h-3.5 text-white" />}
               </button>
             );
           })}
@@ -88,7 +88,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
       <div className="p-4 border-t border-[#e5ded4]">
         <button
           onClick={logout}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#faf3e8] hover:bg-red-50 text-[#514440] hover:text-red-600 border border-[#d6c2bd] hover:border-red-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#faf3e8] hover:bg-red-50 text-[#514440] hover:text-red-600 border border-[#d6c2bd] hover:border-red-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
         >
           <LogOut className="w-4 h-4" />
           <span>Keluar Sistem</span>
