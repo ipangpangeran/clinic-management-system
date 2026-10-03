@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -13,8 +13,30 @@ import ClinicSettingsAcl from './pages/ClinicSettingsAcl';
 import WhatsAppGateway from './pages/WhatsAppGateway';
 
 function MainApp() {
-  const { user, loading } = useContext(AuthContext);
+  const { user, loading, hasPermission } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('overview');
+
+  useEffect(() => {
+    if (!user) {
+      setActiveTab('overview');
+      return;
+    }
+
+    const navModules = {
+      patients: 'patient_intake',
+      doingan: 'doingan',
+      pos: 'patient_packages',
+      inventory: 'inventory_retail',
+      financial: 'pricing',
+      acl: 'acl',
+      wa: 'reminders'
+    };
+
+    const requiredModule = navModules[activeTab];
+    if (requiredModule && !hasPermission(requiredModule, 'can_read')) {
+      setActiveTab('overview');
+    }
+  }, [user, activeTab, hasPermission]);
 
   if (loading) {
     return (

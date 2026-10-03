@@ -175,6 +175,24 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif' });
     }
 
+    // Clean up foreign key references before deleting user
+    await runQuery('DELETE FROM riwayat_gaji WHERE user_id = ?', [id]);
+    await runQuery('DELETE FROM doingan WHERE petugas_id = ?', [id]);
+    await runQuery('UPDATE transaksi SET therapist_id = NULL WHERE therapist_id = ?', [id]);
+    await runQuery('UPDATE transaksi SET doctor_id = NULL WHERE doctor_id = ?', [id]);
+    await runQuery('UPDATE transaksi SET nurse_id = NULL WHERE nurse_id = ?', [id]);
+    await runQuery('UPDATE transaksi SET marketing_id = NULL WHERE marketing_id = ?', [id]);
+    await runQuery('UPDATE transaksi_detail SET therapist_id = NULL WHERE therapist_id = ?', [id]);
+    await runQuery('UPDATE stok_mutasi SET requester_user_id = NULL WHERE requester_user_id = ?', [id]);
+    await runQuery('UPDATE stok_mutasi SET approver_user_id = NULL WHERE approver_user_id = ?', [id]);
+    await runQuery('UPDATE pasien_paket_usage SET used_by_user_id = NULL WHERE used_by_user_id = ?', [id]);
+    
+    // Reassign transactions as kasir to current admin performing delete to satisfy FK
+    const trxAsKasir = await getQuery('SELECT id FROM transaksi WHERE kasir_id = ?', [id]);
+    if (trxAsKasir) {
+      await runQuery('UPDATE transaksi SET kasir_id = ? WHERE kasir_id = ?', [req.user.id, id]);
+    }
+
     await runQuery('DELETE FROM users WHERE id = ?', [id]);
     res.json({ message: 'User berhasil dihapus' });
   } catch (err) {
