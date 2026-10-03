@@ -21,7 +21,7 @@ export default function PatientManagement() {
   const canExportExcel = isSuperOrAdmin || hasPermission('patient_management', 'can_read');
 
   // Form State
-  const [formType, setFormType] = useState('TRIAL'); // 'TRIAL' or 'NON-TRIAL'
+  const [formType, setFormType] = useState('TRIAL'); // 'TRIAL' or 'MEMBER'
   const [noKtp, setNoKtp] = useState('');
   const [noHp, setNoHp] = useState('');
   const [namaLengkap, setNamaLengkap] = useState('');
@@ -182,11 +182,11 @@ export default function PatientManagement() {
         no_hp: noHp,
         nama_lengkap: namaLengkap,
         tipe_pasien: formType,
-        alamat: formType === 'NON-TRIAL' ? alamat : null,
-        tgl_lahir: formType === 'NON-TRIAL' ? tglLahir : null,
-        riwayat_alergi: formType === 'NON-TRIAL' ? riwayatAlergi : null,
-        jenis_kulit: formType === 'NON-TRIAL' ? jenisKulit : null,
-        rekomendasi_dokter: formType === 'NON-TRIAL' ? rekomendasiDokter : null,
+        alamat: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? alamat : null,
+        tgl_lahir: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? tglLahir : null,
+        riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? riwayatAlergi : null,
+        jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? jenisKulit : null,
+        rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? rekomendasiDokter : null,
       };
 
       if (editMode && selectedPatient) {
@@ -337,10 +337,10 @@ export default function PatientManagement() {
             Trial ({patients.filter(p => p.tipe_pasien === 'TRIAL').length})
           </button>
           <button
-            onClick={() => setFilterType('NON-TRIAL')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'NON-TRIAL' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
+            onClick={() => setFilterType('MEMBER')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'MEMBER' || filterType === 'NON-TRIAL' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
           >
-            Reguler ({patients.filter(p => p.tipe_pasien === 'NON-TRIAL').length})
+            Member ({patients.filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL').length})
           </button>
         </div>
       </div>
@@ -354,7 +354,7 @@ export default function PatientManagement() {
                 <th className="py-3 px-4">Nama Pasien</th>
                 <th className="py-3 px-4">Kontak (HP & NIK)</th>
                 <th className="py-3 px-4">Tipe Pasien</th>
-                <th className="py-3 px-4">Detail Medis (Reguler)</th>
+                <th className="py-3 px-4">Detail Medis (Member)</th>
                 <th className="py-3 px-4">Poin</th>
                 <th className="py-3 px-4 text-center">Aksi / Kelola</th>
               </tr>
@@ -381,11 +381,11 @@ export default function PatientManagement() {
                           ? 'bg-amber-100 text-amber-900 border border-amber-300' 
                           : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                       }`}>
-                        {p.tipe_pasien}
+                        {p.tipe_pasien === 'NON-TRIAL' ? 'MEMBER' : p.tipe_pasien}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 max-w-xs text-[11px] text-[#514440]">
-                      {p.tipe_pasien === 'NON-TRIAL' ? (
+                      {p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' ? (
                         <div>
                           <div><strong>Alergi:</strong> {p.riwayat_alergi || 'Tidak ada'}</div>
                           <div><strong>Kulit:</strong> {p.jenis_kulit || '-'}</div>
@@ -489,14 +489,14 @@ export default function PatientManagement() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFormType('NON-TRIAL')}
+                    onClick={() => setFormType('MEMBER')}
                     className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                      formType === 'NON-TRIAL' 
+                      formType === 'MEMBER' || formType === 'NON-TRIAL'
                         ? 'bg-emerald-100 border-emerald-400 text-emerald-900 shadow-xs' 
                         : 'bg-[#faf3e8] border-[#d6c2bd] text-[#514440]'
                     }`}
                   >
-                    Pasien Reguler (Member/Lengkap)
+                    Pasien Member
                   </button>
                 </div>
               </div>
@@ -537,7 +537,7 @@ export default function PatientManagement() {
                 </div>
               </div>
 
-              {formType === 'NON-TRIAL' && (
+              {(formType === 'MEMBER' || formType === 'NON-TRIAL') && (
                 <div className="space-y-3 border-t border-[#e5ded4] pt-3">
                   <div>
                     <label className="block text-xs font-semibold text-[#514440] mb-1">Alamat Lengkap</label>

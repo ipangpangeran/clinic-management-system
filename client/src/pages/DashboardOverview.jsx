@@ -30,7 +30,7 @@ export default function DashboardOverview({ setActiveTab }) {
   };
 
   const trialCount = patients.filter(p => p.tipe_pasien === 'TRIAL').length;
-  const regulerCount = patients.filter(p => p.tipe_pasien === 'NON-TRIAL').length;
+  const regulerCount = patients.filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL').length;
   const lowStockCount = products.filter(p => p.sisa_stok <= p.minimum_stok).length;
   const pendingRemindersList = reminders.filter(r => r.status === 'PENDING');
 
@@ -67,7 +67,7 @@ export default function DashboardOverview({ setActiveTab }) {
             <p className="text-xs font-semibold text-[#83746f] uppercase tracking-wider">Total Pasien</p>
             <h3 className="text-2xl font-bold text-[#1e1b15] font-serif">{patients.length}</h3>
             <div className="text-[11px] text-[#514440]">
-              <span className="text-amber-700 font-semibold">{trialCount} Trial</span> • <span className="text-emerald-700 font-semibold">{regulerCount} Reguler</span>
+              <span className="text-amber-700 font-semibold">{trialCount} Trial</span> • <span className="text-emerald-700 font-semibold">{regulerCount} Member</span>
             </div>
           </div>
           <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] text-[#7d5141] rounded-xl">

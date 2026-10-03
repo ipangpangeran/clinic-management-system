@@ -99,7 +99,7 @@ async function initDb() {
         no_ktp TEXT UNIQUE,
         no_hp TEXT UNIQUE NOT NULL,
         nama_lengkap TEXT NOT NULL,
-        tipe_pasien TEXT NOT NULL CHECK(tipe_pasien IN ('TRIAL', 'NON-TRIAL')),
+        tipe_pasien TEXT NOT NULL CHECK(tipe_pasien IN ('TRIAL', 'NON-TRIAL', 'MEMBER')),
         alamat TEXT,
         tgl_lahir DATE,
         riwayat_alergi TEXT,
@@ -314,6 +314,7 @@ async function initDb() {
       await runQuery(`UPDATE doingan SET komisi = 13000 WHERE (komisi IS NULL OR komisi = 0) AND status_doingan = 'Trial' AND role_petugas != 'Marketing'`);
       await runQuery(`UPDATE doingan SET komisi = 10000 WHERE (komisi IS NULL OR komisi = 0) AND status_doingan = 'Trial' AND role_petugas = 'Marketing'`);
       await runQuery(`UPDATE doingan SET komisi = 15000 WHERE (komisi IS NULL OR komisi = 0)`);
+      await runQuery(`UPDATE pasien SET tipe_pasien = 'MEMBER' WHERE tipe_pasien = 'NON-TRIAL' OR tipe_pasien = 'Reguler'`);
     } catch (e) {
       // ignore
     }
@@ -342,10 +343,10 @@ async function seedDefaultData() {
     { id: 'usr-1', username: 'superadmin', password: defaultPasswordHash, full_name: 'Ipang Super Admin', role: 'Super Admin', phone: '081234567890' },
     { id: 'usr-2', username: 'adminklinik', password: defaultPasswordHash, full_name: 'Gifary Admin Klinik', role: 'Admin Klinik', phone: '081234567891' },
     { id: 'usr-3', username: 'nurse-anita', password: defaultPasswordHash, full_name: 'Perawat Anita', role: 'Nurse', phone: '081234567892' },
-    { id: 'usr-4', username: 'beautician-maya', password: defaultPasswordHash, full_name: 'Maya Beautician', role: 'Beautician', phone: '081234567893' },
-    { id: 'usr-5', username: 'marketing-doni', password: defaultPasswordHash, full_name: 'Doni Marketing', role: 'Marketing', phone: '081234567894' },
-    { id: 'usr-6', username: 'fo-rere', password: defaultPasswordHash, full_name: 'Rere Admin FO', role: 'Admin FO', phone: '081234567895' },
-    { id: 'usr-7', username: 'dr-clara', password: defaultPasswordHash, full_name: 'dr. Clara Sp.KK', role: 'Dokter', phone: '081234567896' }
+    { id: 'usr-4', username: 'maya', password: defaultPasswordHash, full_name: 'Maya Beautician', role: 'Beautician', phone: '081234567893' },
+    { id: 'usr-5', username: 'doni', password: defaultPasswordHash, full_name: 'Doni Marketing', role: 'Marketing', phone: '081234567894' },
+    { id: 'usr-6', username: 'rere', password: defaultPasswordHash, full_name: 'Rere Admin FO', role: 'Admin FO', phone: '081234567895' },
+    { id: 'usr-7', username: 'desi', password: defaultPasswordHash, full_name: 'dr. Desi', role: 'Dokter', phone: '081234567896' }
   ];
 
   for (const u of defaultUsers) {
@@ -405,7 +406,7 @@ async function seedDefaultData() {
     await runQuery(`
       INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, total_poin)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, ['pasien-1', '3171012345670001', '081298765432', 'Nia Ramadhani', 'NON-TRIAL', 'Jl. Senopati No. 12, Jakarta', '1995-04-15', 'Tidak ada', 'Kombinasi / Sensitif', 120]);
+    `, ['pasien-1', '3171012345670001', '081298765432', 'Nia Ramadhani', 'MEMBER', 'Jl. Senopati No. 12, Jakarta', '1995-04-15', 'Tidak ada', 'Kombinasi / Sensitif', 120]);
     
     await runQuery(`
       INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, total_poin)
@@ -415,7 +416,7 @@ async function seedDefaultData() {
     await runQuery(`
       INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, total_poin)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, ['pasien-3', '3171012345670003', '087812345678', 'Siti Rahma', 'NON-TRIAL', 'Jl. Kemang Selatan No. 9', '1992-11-03', 'Alergi Debu', 'Kering', 350]);
+    `, ['pasien-3', '3171012345670003', '087812345678', 'Siti Rahma', 'MEMBER', 'Jl. Kemang Selatan No. 9', '1992-11-03', 'Alergi Debu', 'Kering', 350]);
 
     await runQuery(`
       INSERT INTO pasien_paket (id, pasien_id, nama_paket, sisa_kuota, total_kuota, harga_paket)
