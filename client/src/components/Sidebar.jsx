@@ -13,8 +13,8 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
     { id: 'patients', label: 'Pendaftaran Pasien (Admin FO)', icon: UserPlus, module: 'patient_intake' },
     { id: 'doingan', label: 'Doingan & Aktivitas Perawatan', icon: Sparkles, module: 'doingan' },
     { id: 'pos', label: 'POS & Billing Counter', icon: ShoppingBag, module: 'patient_packages' },
-    { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: 'inventory_retail' },
-    { id: 'financial', label: 'Keuangan & Komisi Gaji', icon: DollarSign, module: 'pricing' },
+    { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'] },
+    { id: 'financial', label: 'Keuangan & Komisi Gaji', icon: DollarSign, module: ['payroll', 'commission_formulas', 'pricing'] },
     { id: 'acl', label: 'Kelola User & Dynamic ACL', icon: ShieldCheck, module: 'acl' },
     { id: 'wa', label: 'WhatsApp Gateway & Reminder', icon: MessageSquare, module: 'reminders' },
   ];
@@ -76,7 +76,13 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
         {/* Nav Links */}
         <nav className="px-3 space-y-1 overflow-y-auto max-h-[calc(100vh-220px)]">
           {navItems.map((item) => {
-            if (item.module && !hasPermission(item.module, 'can_read')) return null;
+            if (item.module) {
+              if (Array.isArray(item.module)) {
+                if (!item.module.some(mod => hasPermission(mod, 'can_read'))) return null;
+              } else {
+                if (!hasPermission(item.module, 'can_read')) return null;
+              }
+            }
             const Icon = item.icon;
             const isActive = activeTab === item.id;
 

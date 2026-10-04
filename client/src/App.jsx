@@ -27,15 +27,21 @@ function MainApp() {
       patients: 'patient_intake',
       doingan: 'doingan',
       pos: 'patient_packages',
-      inventory: 'inventory_retail',
-      financial: 'pricing',
+      inventory: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'],
+      financial: ['payroll', 'commission_formulas', 'pricing'],
       acl: 'acl',
       wa: 'reminders'
     };
 
     const requiredModule = navModules[activeTab];
-    if (requiredModule && !hasPermission(requiredModule, 'can_read')) {
-      setActiveTab('overview');
+    if (requiredModule) {
+      if (Array.isArray(requiredModule)) {
+        if (!requiredModule.some(mod => hasPermission(mod, 'can_read'))) {
+          setActiveTab('overview');
+        }
+      } else if (!hasPermission(requiredModule, 'can_read')) {
+        setActiveTab('overview');
+      }
     }
   }, [user, activeTab, hasPermission]);
 
