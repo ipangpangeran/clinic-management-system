@@ -359,6 +359,12 @@ async function initDb() {
       // ignore
     }
 
+    // Migration: Consolidate old roles into Manager
+    try {
+      await runQuery(`UPDATE users SET role = 'Manager' WHERE role IN ('Nurse', 'Beautician', 'Marketing', 'Dokter', 'Therapist / BTC')`);
+      await runQuery(`UPDATE role_permissions SET role = 'Manager' WHERE role IN ('Nurse', 'Beautician', 'Marketing', 'Dokter', 'Therapist / BTC')`);
+    } catch (e) {}
+
     await seedDefaultData();
     console.log('[DB] Database schema and column migration completed.');
 
@@ -382,11 +388,8 @@ async function seedDefaultData() {
   const defaultUsers = [
     { id: 'usr-1', username: 'superadmin', password: defaultPasswordHash, full_name: 'Ipang Super Admin', role: 'Super Admin', phone: '081234567890', gaji_pokok: 0 },
     { id: 'usr-2', username: 'adminklinik', password: defaultPasswordHash, full_name: 'Gifary Admin Klinik', role: 'Admin Klinik', phone: '081234567891', gaji_pokok: 0 },
-    { id: 'usr-3', username: 'anita', password: defaultPasswordHash, full_name: 'Perawat Anita', role: 'Nurse', phone: '081234567892', gaji_pokok: 3800000 },
-    { id: 'usr-4', username: 'maya', password: defaultPasswordHash, full_name: 'Maya Beautician', role: 'Beautician', phone: '081234567893', gaji_pokok: 3500000 },
-    { id: 'usr-5', username: 'doni', password: defaultPasswordHash, full_name: 'Doni Marketing', role: 'Marketing', phone: '081234567894', gaji_pokok: 4200000 },
-    { id: 'usr-6', username: 'rere', password: defaultPasswordHash, full_name: 'Rere Admin FO', role: 'Admin FO', phone: '081234567895', gaji_pokok: 4000000 },
-    { id: 'usr-7', username: 'desi', password: defaultPasswordHash, full_name: 'dr. Desi', role: 'Dokter', phone: '081234567896', gaji_pokok: 10000000 }
+    { id: 'usr-3', username: 'manager1', password: defaultPasswordHash, full_name: 'Manager Klinik', role: 'Manager', phone: '081234567892', gaji_pokok: 5000000 },
+    { id: 'usr-6', username: 'rere', password: defaultPasswordHash, full_name: 'Rere Admin FO', role: 'Admin FO', phone: '081234567895', gaji_pokok: 4000000 }
   ];
 
   for (const u of defaultUsers) {
@@ -413,15 +416,12 @@ async function seedDefaultData() {
 
   // Backfill default salary for roles if not set
   try {
-    await runQuery(`UPDATE users SET gaji_pokok = 10000000 WHERE role = 'Dokter' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
+    await runQuery(`UPDATE users SET gaji_pokok = 5000000 WHERE role = 'Manager' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
     await runQuery(`UPDATE users SET gaji_pokok = 4000000 WHERE (role = 'Admin FO' OR role = 'Resepsionis / Cashier') AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
-    await runQuery(`UPDATE users SET gaji_pokok = 3500000 WHERE (role = 'Beautician' OR role = 'Therapist / BTC') AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
-    await runQuery(`UPDATE users SET gaji_pokok = 3800000 WHERE role = 'Nurse' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
-    await runQuery(`UPDATE users SET gaji_pokok = 4200000 WHERE role = 'Marketing' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
     await runQuery(`UPDATE users SET gaji_pokok = 0 WHERE role IN ('Super Admin', 'Admin System', 'Admin Klinik')`);
   } catch (e) {}
 
-  const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Nurse', 'Beautician', 'Marketing', 'Admin FO', 'Dokter'];
+  const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Manager', 'Admin FO'];
   const modules = [
     'clinic_profile', 'acl', 'patient_intake', 'patient_management', 'doingan', 'patient_packages', 
     'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical', 
@@ -433,15 +433,12 @@ async function seedDefaultData() {
       let c=0, r=0, u=0, d=0;
       if (role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik') {
         c=1; r=1; u=1; d=1;
+      } else if (role === 'Manager') {
+        c=1; r=1; u=1; d=1;
       } else if (role === 'Admin FO') {
-        if (['patient_intake', 'patient_packages', 'reminders'].includes(mod)) { c=1; r=1; u=1; d=1; }
+        if (['patient_intake', 'patient_packages', 'reminders', 'doingan'].includes(mod)) { c=1; r=1; u=1; d=1; }
         else if (['patient_management'].includes(mod)) { c=1; r=1; u=0; d=0; }
-        else if (['clinic_profile', 'doingan', 'pricing'].includes(mod)) { r=1; }
-      } else if (role === 'Nurse' || role === 'Beautician' || role === 'Marketing') {
-        if (['doingan', 'patient_intake'].includes(mod)) { c=1; r=1; u=1; d=0; }
-        else if (['payroll', 'pricing', 'patient_packages'].includes(mod)) { r=1; }
-      } else {
-        if (['patient_intake', 'doingan', 'patient_packages', 'reminders'].includes(mod)) { r=1; }
+        else if (['clinic_profile', 'pricing'].includes(mod)) { r=1; }
       }
       await runQuery(`
         INSERT INTO role_permissions (role, module_key, can_create, can_read, can_update, can_delete)

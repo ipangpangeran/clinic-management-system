@@ -265,38 +265,19 @@ export default function FinancialCommissionMatrix() {
         {activeTab === 'FORMULAS' && (
           <div className="space-y-4">
             <h3 className="font-serif font-bold text-base text-[#1e1b15]">Skema Aturan Komisi & Aktivitas Per Role (Spesifikasi DEFLOW)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">1. Nurse (Perawat)</div>
-                <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Aktivitas: Doingan / Nama Pasien<br/>
-                  Komisi = Nominal Fix Komisi Tindakan Medis Per Pasien
-                </div>
-                <p className="text-[11px] text-[#514440]">Mendapatkan komisi tindakan medis untuk setiap prosedur yang dikerjakan / didampingi perawat.</p>
-              </div>
-
-              <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">2. Beautician</div>
+                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">1. Manager (Terapis & Perawatan)</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
                   Aktivitas: Doingan / Nama Pasien & Status Doingan<br/>
                   - Mbr (Member)   : Rp 17.000 / Doingan<br/>
                   - Trial (Free)    : Rp 13.000 / Doingan
                 </div>
-                <p className="text-[11px] text-[#514440]">Komisi otomatis terhitung sesuai status doingan pasien member (Rp 17.000) atau trial free (Rp 13.000).</p>
+                <p className="text-[11px] text-[#514440]">Komisi otomatis terhitung sesuai status doingan pasien member (Rp 17.000) atau trial free (Rp 13.000) dan tindakan perawatan medis.</p>
               </div>
 
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">3. Marketing</div>
-                <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Aktivitas: Nama Pasien, Status, Membership, DP Membership<br/>
-                  - Trial (Free)       : Rp 10.000 / Pasien<br/>
-                  - Komisi Membership  : Bonus % atau Nominal DP Membership
-                </div>
-                <p className="text-[11px] text-[#514440]">Insentif per registrasi pasien trial (Rp 10.000) ditambah komisi konversi membership dan DP membership.</p>
-              </div>
-
-              <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">4. Admin FO (Front Office)</div>
+                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">2. Admin FO (Front Office & Kasir)</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
                   Aktivitas: Mendaftarkan Pasien & Membuat Tagihan / Billing<br/>
                   Komisi = Omset Billing Kasir Harian (1.5%)
@@ -313,7 +294,7 @@ export default function FinancialCommissionMatrix() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
               <div>
                 <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Katalog Jenis Tindakan / Treatment Resmi DEFLOW</h3>
-                <p className="text-xs text-[#514440]">Kelola jenis tindakan medis, penyesuaian tarif, serta skema komisi Beautician, Nurse, & Dokter.</p>
+                <p className="text-xs text-[#514440]">Kelola jenis tindakan medis, penyesuaian tarif, serta skema komisi insentif.</p>
               </div>
               
               <div className="flex flex-wrap items-center gap-2">

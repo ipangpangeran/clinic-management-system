@@ -238,28 +238,26 @@ export default function DoinganActivity() {
               </div>
             )}
 
-            {/* Beautician Specific Status Doingan */}
-            {user?.role === 'Beautician' && (
-              <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Status Doingan Pasien *</label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setStatusDoingan('Mbr')}
-                    className={`py-2 px-3 rounded-xl font-bold transition-all cursor-pointer ${statusDoingan === 'Mbr' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
-                  >
-                    Mbr / Member (Komisi Rp 17.000)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatusDoingan('Trial')}
-                    className={`py-2 px-3 rounded-xl font-bold transition-all cursor-pointer ${statusDoingan === 'Trial' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}
-                  >
-                    Trial / Free (Komisi Rp 13.000)
-                  </button>
-                </div>
+            {/* Status Doingan Pasien */}
+            <div>
+              <label className="block text-xs font-semibold text-[#514440] mb-1">Status Doingan Pasien *</label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setStatusDoingan('Mbr')}
+                  className={`py-2 px-3 rounded-xl font-bold transition-all cursor-pointer ${statusDoingan === 'Mbr' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
+                >
+                  Mbr / Member (Komisi Rp 17.000)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusDoingan('Trial')}
+                  className={`py-2 px-3 rounded-xl font-bold transition-all cursor-pointer ${statusDoingan === 'Trial' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}
+                >
+                  Trial / Free (Komisi Rp 13.000)
+                </button>
               </div>
-            )}
+            </div>
 
             {/* Marketing Specific Options */}
             {user?.role === 'Marketing' && (

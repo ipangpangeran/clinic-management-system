@@ -43,14 +43,14 @@ export default function ClinicSettingsAcl() {
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const rolesList = ['Super Admin', 'Admin Klinik', 'Nurse', 'Beautician', 'Marketing', 'Admin FO', 'Dokter'];
+  const rolesList = ['Super Admin', 'Admin Klinik', 'Manager', 'Admin FO'];
   
   const modulesList = [
     { key: 'clinic_profile', name: 'Detail Profil Klinik' },
     { key: 'acl', name: 'Konfigurasi Dynamic ACL & Users' },
     { key: 'patient_intake', name: 'Pendaftaran Pasien (Admin FO)' },
     { key: 'patient_management', name: 'Manajemen Data Pasien (Edit, Hapus, Export Excel)' },
-    { key: 'doingan', name: 'Catatan Doingan & Komisi (Nurse, Beautician, Marketing)' },
+    { key: 'doingan', name: 'Catatan Doingan & Komisi Perawatan (Manager & Admin FO)' },
     { key: 'patient_packages', name: 'Paket Treatment Pasien' },
     { key: 'reminders', name: 'Reminder Jadwal Kembali WA' },
     { key: 'inventory_retail', name: 'Stok Retail Skincare' },
@@ -58,7 +58,7 @@ export default function ClinicSettingsAcl() {
     { key: 'inventory_non_medical', name: 'Stok Operasional Non-Medis' },
     { key: 'pricing', name: 'Manajemen Harga & Catalog (15 Tindakan)' },
     { key: 'tindakan_crud', name: 'CRUD Jenis Tindakan Medis & Penyesuaian Harga Tarif' },
-    { key: 'commission_formulas', name: 'Rumus Komisi 5 Lini Profesi' },
+    { key: 'commission_formulas', name: 'Skema & Rumus Komisi Manager & Admin FO' },
     { key: 'payroll', name: 'Laporan Payroll & Slip Gaji' }
   ];
 
@@ -104,8 +104,8 @@ export default function ClinicSettingsAcl() {
     setPassword('');
     setFullName('');
     setPhone('');
-    setRole('Nurse');
-    setGajiPokok(3800000);
+    setRole('Manager');
+    setGajiPokok(5000000);
     setMsg('');
     setErrorMsg('');
     setShowUserModal(true);
@@ -581,11 +581,8 @@ export default function ClinicSettingsAcl() {
                   onChange={(e) => {
                     const newRole = e.target.value;
                     setRole(newRole);
-                    if (newRole === 'Dokter') setGajiPokok(10000000);
+                    if (newRole === 'Manager') setGajiPokok(5000000);
                     else if (newRole === 'Admin FO') setGajiPokok(4000000);
-                    else if (newRole === 'Beautician') setGajiPokok(3500000);
-                    else if (newRole === 'Nurse') setGajiPokok(3800000);
-                    else if (newRole === 'Marketing') setGajiPokok(4200000);
                     else setGajiPokok(0);
                   }}
                   required

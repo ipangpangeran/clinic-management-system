@@ -97,10 +97,10 @@ export default function PosBillingCounter() {
   const earnedPoints = Math.floor(grandTotal / 50000);
 
   const selectedPatient = patients.find(p => p.id === selectedPatientId);
-  const therapists = users.filter(u => u.role === 'Beautician' || u.role === 'Therapist / BTC' || u.role === 'Admin Klinik');
-  const doctors = users.filter(u => u.role === 'Dokter');
-  const nurses = users.filter(u => u.role === 'Nurse');
-  const marketings = users.filter(u => u.role === 'Marketing');
+  const therapists = users.filter(u => u.role === 'Manager' || u.role === 'Admin FO' || u.role === 'Admin Klinik' || u.role === 'Super Admin');
+  const doctors = users.filter(u => u.role === 'Manager' || u.role === 'Super Admin');
+  const nurses = users.filter(u => u.role === 'Manager' || u.role === 'Admin FO');
+  const marketings = users.filter(u => u.role === 'Manager' || u.role === 'Admin FO');
 
   const handleCheckout = async () => {
     if (!selectedPatientId) {
@@ -326,13 +326,13 @@ export default function PosBillingCounter() {
               <div className="font-bold text-[#514440] uppercase tracking-wider text-[10px]">Referensi Petugas Tindakan (Komisi 5 Lini)</div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#83746f]">Beautician / Therapist</label>
+                  <label className="block text-[10px] font-semibold text-[#83746f]">Petugas / Manager / Terapis</label>
                   <select
                     value={selectedTherapistId}
                     onChange={(e) => setSelectedTherapistId(e.target.value)}
                     className="w-full p-1.5 bg-white border border-[#d6c2bd] rounded-lg text-[11px]"
                   >
-                    <option value="">-- Pilih Beautician --</option>
+                    <option value="">-- Pilih Petugas / Manager --</option>
                     {therapists.map(t => <option key={t.id} value={t.id}>{t.full_name} ({t.role})</option>)}
                   </select>
                 </div>
