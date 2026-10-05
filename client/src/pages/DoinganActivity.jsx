@@ -4,7 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import StaffMobilePortal from './StaffMobilePortal';
 import { 
   Sparkles, User, FileCheck, DollarSign, Award, Plus, Trash2, CheckCircle2, ShieldAlert,
-  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck
+  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck, UserPlus, FileText
 } from 'lucide-react';
 
 export default function DoinganActivity() {
@@ -328,7 +328,7 @@ export default function DoinganActivity() {
                   >
                     {staffList.map(s => (
                       <option key={s.id} value={s.id} disabled={s.is_busy}>
-                        {s.full_name} ({s.lini_profesi || s.role}) - {s.is_busy ? `🔴 SEDANG MENANGANI (${s.active_doingan?.pasien_nama})` : '🟢 SENGANG (KOSONG)'}
+                        {s.full_name} ({s.lini_profesi || s.role}) - {s.is_busy ? `🔴 SEDANG MENANGANI (${s.active_doingan?.pasien_nama})` : '🟢 KOSONG'}
                       </option>
                     ))}
                   </select>
@@ -380,7 +380,7 @@ export default function DoinganActivity() {
                         </span>
                       ) : (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> SENGANG / KOSONG
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> KOSONG
                         </span>
                       )}
                     </div>

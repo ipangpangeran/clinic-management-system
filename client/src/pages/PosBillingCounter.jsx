@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock } from 'lucide-react';
 
 export default function PosBillingCounter() {
   const [patients, setPatients] = useState([]);
   const [products, setProducts] = useState([]);
   const [treatments, setTreatments] = useState([]);
   const [users, setUsers] = useState([]);
+  const [unbilledList, setUnbilledList] = useState([]);
 
   // Transaction Cart State
   const [selectedPatientId, setSelectedPatientId] = useState('');
@@ -17,11 +18,9 @@ export default function PosBillingCounter() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentAmount, setPaymentAmount] = useState('');
 
-  // Selected Professional Lines for Commissions
+  // Selected Professional Lines for Commissions (Auto-assigned)
   const [selectedTherapistId, setSelectedTherapistId] = useState('');
-  const [selectedDoctorId, setSelectedDoctorId] = useState('');
-  const [selectedNurseId, setSelectedNurseId] = useState('');
-  const [selectedMarketingId, setSelectedMarketingId] = useState('');
+  const [activeDoinganId, setActiveDoinganId] = useState(null);
 
   // Thermal Receipt Modal
   const [receiptData, setReceiptData] = useState(null);
@@ -34,21 +33,44 @@ export default function PosBillingCounter() {
 
   const fetchInitialPosData = async () => {
     try {
-      const [pRes, prodRes, tRes, uRes] = await Promise.all([
+      const [pRes, prodRes, tRes, uRes, unbilledRes] = await Promise.all([
         axios.get('/api/pasien'),
         axios.get('/api/stok'),
         axios.get('/api/tindakan'),
-        axios.get('/api/users')
+        axios.get('/api/users'),
+        axios.get('/api/doingan/unbilled')
       ]);
       setPatients(pRes.data);
       setProducts(prodRes.data.filter(p => p.tipe_stok === 'RETAIL'));
       setTreatments(tRes.data);
       setUsers(uRes.data);
+      setUnbilledList(unbilledRes.data || []);
 
       if (pRes.data.length > 0) setSelectedPatientId(pRes.data[0].id);
     } catch (err) {
       console.error('Error fetching POS data', err);
     }
+  };
+
+  const handleProcessUnbilledDoingan = (doi) => {
+    setSelectedPatientId(doi.pasien_id);
+    setSelectedTherapistId(doi.petugas_id);
+    setActiveDoinganId(doi.id);
+
+    const matchingTreatment = treatments.find(t => t.id === doi.tindakan_id) || treatments.find(t => t.nama_tindakan === doi.nama_tindakan);
+    const finalPrice = matchingTreatment ? (matchingTreatment.tarif_tindakan_medis || matchingTreatment.tarif_konsul_dokter || 150000) : 150000;
+
+    const newItem = {
+      item_id: doi.tindakan_id || 'doi-' + doi.id,
+      tindakan_id: doi.tindakan_id || null,
+      jenis_item: 'TINDAKAN',
+      nama_item: doi.nama_tindakan || 'Tindakan Treatment',
+      harga_satuan: finalPrice,
+      jumlah: 1,
+      therapist_id: doi.petugas_id
+    };
+
+    setCart([newItem]);
   };
 
   const addToCart = (item, type) => {
@@ -97,10 +119,7 @@ export default function PosBillingCounter() {
   const earnedPoints = Math.floor(grandTotal / 50000);
 
   const selectedPatient = patients.find(p => p.id === selectedPatientId);
-  const therapists = users.filter(u => u.role === 'Manager' || u.role === 'Admin FO' || u.role === 'Admin Klinik' || u.role === 'Super Admin');
-  const doctors = users.filter(u => u.role === 'Manager' || u.role === 'Super Admin');
-  const nurses = users.filter(u => u.role === 'Manager' || u.role === 'Admin FO');
-  const marketings = users.filter(u => u.role === 'Manager' || u.role === 'Admin FO');
+  const selectedTherapistUser = users.find(u => u.id === selectedTherapistId);
 
   const handleCheckout = async () => {
     if (!selectedPatientId) {
@@ -120,9 +139,7 @@ export default function PosBillingCounter() {
         discount_amount: discount,
         payment_amount: payment,
         therapist_id: selectedTherapistId || null,
-        doctor_id: selectedDoctorId || null,
-        nurse_id: selectedNurseId || null,
-        marketing_id: selectedMarketingId || null
+        doingan_id: activeDoinganId || null
       };
 
       const res = await axios.post('/api/transaksi', payload);
@@ -137,6 +154,8 @@ export default function PosBillingCounter() {
       setCart([]);
       setDiscountAmount(0);
       setPaymentAmount('');
+      setActiveDoinganId(null);
+      setSelectedTherapistId('');
       fetchInitialPosData();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menyimpan transaksi');
@@ -163,9 +182,45 @@ export default function PosBillingCounter() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">POS & Billing Counter</h1>
-          <p className="text-xs text-[#514440]">Point of Sale kasir klinik, hitung poin, PPN 11%, dan cetak struk termal 58mm/80mm.</p>
+          <p className="text-xs text-[#514440]">Point of Sale kasir klinik, tagihan otomatis pasien selesai treatment, hitung poin, PPN 11%, dan cetak struk termal.</p>
         </div>
       </div>
+
+      {/* AUTO BILLING QUEUE BANNER */}
+      {unbilledList.length > 0 && (
+        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-300 shadow-xs space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-700 animate-pulse" />
+              <span>Antrian Tagihan Pasien Selesai Treatment ({unbilledList.length})</span>
+            </div>
+            <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full uppercase font-bold">Auto POS Billing Queue</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {unbilledList.map(doi => (
+              <div key={doi.id} className="bg-white p-3 rounded-xl border border-amber-200 text-xs space-y-1.5 shadow-2xs">
+                <div className="flex justify-between items-start">
+                  <div className="font-bold text-[#1e1b15]">{doi.pasien_nama}</div>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">{doi.tipe_pasien}</span>
+                </div>
+                <div className="text-[11px] text-[#514440]">
+                  <strong>Tindakan:</strong> {doi.nama_tindakan}
+                </div>
+                <div className="text-[11px] text-emerald-800 font-semibold">
+                  <strong>Petugas:</strong> {doi.petugas_nama} ({doi.lini_profesi || doi.petugas_role})
+                </div>
+                <button
+                  onClick={() => handleProcessUnbilledDoingan(doi)}
+                  className="w-full mt-1 py-1.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-[11px] rounded-lg cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  <span>Proses Tagihan ini ke Kasir</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Product & Service Catalog (7 Cols) */}
@@ -321,35 +376,16 @@ export default function PosBillingCounter() {
               )}
             </div>
 
-            {/* Professional Lini Assignment (For Commission Tracking) */}
-            <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-2 text-xs">
-              <div className="font-bold text-[#514440] uppercase tracking-wider text-[10px]">Referensi Petugas Tindakan (Komisi 5 Lini)</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#83746f]">Petugas / Manager / Terapis</label>
-                  <select
-                    value={selectedTherapistId}
-                    onChange={(e) => setSelectedTherapistId(e.target.value)}
-                    className="w-full p-1.5 bg-white border border-[#d6c2bd] rounded-lg text-[11px]"
-                  >
-                    <option value="">-- Pilih Petugas / Manager --</option>
-                    {therapists.map(t => <option key={t.id} value={t.id}>{t.full_name} ({t.role})</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-semibold text-[#83746f]">Dokter Penanggungjawab</label>
-                  <select
-                    value={selectedDoctorId}
-                    onChange={(e) => setSelectedDoctorId(e.target.value)}
-                    className="w-full p-1.5 bg-white border border-[#d6c2bd] rounded-lg text-[11px]"
-                  >
-                    <option value="">-- Pilih Dokter --</option>
-                    {doctors.map(d => <option key={d.id} value={d.id}>{d.full_name}</option>)}
-                  </select>
+            {/* AUTOMATIC STAFF ASSIGNMENT INFO BADGE (Manual Dropdowns Removed) */}
+            {selectedTherapistUser && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1 text-xs">
+                <div className="font-bold text-emerald-900 uppercase tracking-wider text-[10px]">Petugas yang Melayani (Otomatis):</div>
+                <div className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{selectedTherapistUser.full_name} ({selectedTherapistUser.lini_profesi || selectedTherapistUser.role})</span>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Price Calculations */}
             <div className="space-y-1.5 pt-2 border-t border-[#e5ded4] text-xs">

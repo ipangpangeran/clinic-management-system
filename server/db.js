@@ -378,6 +378,9 @@ async function initDb() {
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN completed_at DATETIME`);
     } catch (e) {}
+    try {
+      await runQuery(`ALTER TABLE doingan ADD COLUMN is_billed INTEGER DEFAULT 0`);
+    } catch (e) {}
 
     try {
       await runQuery(`UPDATE doingan SET started_at = created_at WHERE started_at IS NULL`);

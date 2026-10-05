@@ -424,6 +424,23 @@ app.get('/api/doingan/recap', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/doingan/unbilled -> Returns completed treatment sessions waiting for POS billing
+app.get('/api/doingan/unbilled', authenticateToken, async (req, res) => {
+  try {
+    const list = await allQuery(`
+      SELECT d.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, u.full_name as petugas_nama, u.role as petugas_role, u.lini_profesi
+      FROM doingan d
+      JOIN pasien p ON d.pasien_id = p.id
+      JOIN users u ON d.petugas_id = u.id
+      WHERE d.status_pengerjaan = 'COMPLETED' AND (d.is_billed IS NULL OR d.is_billed = 0)
+      ORDER BY d.completed_at DESC
+    `);
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching unbilled doingan sessions', error: err.message });
+  }
+});
+
 app.post('/api/doingan', authenticateToken, async (req, res) => {
   try {
     const { pasien_id, tindakan_id, nama_tindakan, status_doingan, nominal_dp, nominal_membership, notes } = req.body;
@@ -1093,6 +1110,14 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
     }
 
     await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [earnedPoints, pasien_id]);
+    
+    // Mark associated completed doingan as billed
+    const { doingan_id } = req.body;
+    if (doingan_id) {
+      await runQuery('UPDATE doingan SET is_billed = 1 WHERE id = ?', [doingan_id]);
+    } else {
+      await runQuery('UPDATE doingan SET is_billed = 1 WHERE pasien_id = ? AND status_pengerjaan = "COMPLETED" AND (is_billed IS NULL OR is_billed = 0)', [pasien_id]);
+    }
 
     res.status(201).json({
       message: 'Transaksi berhasil disimpan',

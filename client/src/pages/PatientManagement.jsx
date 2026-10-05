@@ -820,7 +820,7 @@ export default function PatientManagement() {
                       <option key={s.id} value={s.id} disabled={s.is_busy}>
                         {s.is_busy 
                           ? `🔴 SEDANG MENANGANI (${s.active_doingan?.pasien_nama || 'Pasien'}) — ${s.full_name}` 
-                          : `🟢 SENGANG (KOSONG) — ${s.full_name}`
+                          : `🟢 KOSONG — ${s.full_name}`
                         }
                       </option>
                     ))}
@@ -829,11 +829,11 @@ export default function PatientManagement() {
                   {selectedStaffId ? (
                     <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 font-semibold flex items-center gap-2">
                       <Clock className="w-4 h-4 text-emerald-600 shrink-0 animate-pulse" />
-                      <span>Sesi pengerjaan akan otomatis berstatus <strong>IN_PROGRESS</strong> & timer durasi mulai berjalan setelah submit!</span>
+                      <span>Sesi pengerjaan akan otomatis berstatus <strong>IN_PROGRESS</strong> setelah submit!</span>
                     </div>
                   ) : (
                     <div className="mt-1 text-[10px] text-[#83746f] italic">
-                      * Pilih petugas berpita 🟢 SENGANG untuk langsung memulai timer pengerjaan.
+                      * Pilih petugas berpita 🟢 KOSONG untuk langsung memulai penugasan.
                     </div>
                   )}
                 </div>

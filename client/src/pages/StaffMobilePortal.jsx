@@ -137,7 +137,7 @@ export default function StaffMobilePortal() {
           ) : (
             <span className="px-3 py-1 bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              🟢 SANGAT SENGANG / KOSONG
+              🟢 KOSONG
             </span>
           )}
         </div>
