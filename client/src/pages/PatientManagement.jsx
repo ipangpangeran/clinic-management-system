@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { AuthContext } from '../context/AuthContext';
-import { UserPlus, Search, Edit, Trash2, Download, Package, Calendar, AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet } from 'lucide-react';
+import { UserPlus, Search, Edit, Trash2, Download, Package, Calendar, AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet, UserCheck, Clock, RefreshCw, Sparkles, Stethoscope } from 'lucide-react';
 
 export default function PatientManagement() {
   const { user, hasPermission } = useContext(AuthContext);
@@ -21,6 +21,8 @@ export default function PatientManagement() {
   const canExportExcel = isSuperOrAdmin || hasPermission('patient_management', 'can_read');
 
   // Form State
+  const [modePendaftaran, setModePendaftaran] = useState('NEW'); // 'NEW' or 'EXISTING'
+  const [selectedExistingPatientId, setSelectedExistingPatientId] = useState('');
   const [formType, setFormType] = useState('TRIAL'); // 'TRIAL' or 'MEMBER'
   const [noKtp, setNoKtp] = useState('');
   const [noHp, setNoHp] = useState('');
@@ -33,6 +35,12 @@ export default function PatientManagement() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [editMode, setEditMode] = useState(false);
+
+  // Live Staff Assignment State
+  const [kebutuhanLayanan, setKebutuhanLayanan] = useState('Beautician'); // 'Beautician' or 'Nurse'
+  const [staffList, setStaffList] = useState([]);
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [loadingStaff, setLoadingStaff] = useState(false);
 
   // Package Form State
   const [namaPaket, setNamaPaket] = useState('');
@@ -56,9 +64,29 @@ export default function PatientManagement() {
     }
   };
 
+  const fetchStaffAvailability = async (lini) => {
+    setLoadingStaff(true);
+    try {
+      const res = await axios.get(`/api/staff-availability?lini=${lini}`);
+      setStaffList(res.data);
+    } catch (err) {
+      console.error('Error fetching staff availability', err);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  const handleLayananChange = (lini) => {
+    setKebutuhanLayanan(lini);
+    setSelectedStaffId('');
+    fetchStaffAvailability(lini);
+  };
+
   const openNewPatientModal = () => {
     setEditMode(false);
     setSelectedPatient(null);
+    setModePendaftaran('NEW');
+    setSelectedExistingPatientId('');
     setFormType('TRIAL');
     setNoKtp('');
     setNoHp('');
@@ -68,9 +96,28 @@ export default function PatientManagement() {
     setRiwayatAlergi('');
     setJenisKulit('');
     setRekomendasiDokter('');
+    setKebutuhanLayanan('Beautician');
+    setSelectedStaffId('');
     setErrorMessage('');
     setSuccessMessage('');
     setShowModal(true);
+    fetchStaffAvailability('Beautician');
+  };
+
+  const openIntakeForExisting = (p) => {
+    setEditMode(false);
+    setSelectedPatient(p);
+    setModePendaftaran('EXISTING');
+    setSelectedExistingPatientId(p.id);
+    setFormType(p.tipe_pasien);
+    setNamaLengkap(p.nama_lengkap);
+    setNoHp(p.no_hp);
+    setKebutuhanLayanan('Beautician');
+    setSelectedStaffId('');
+    setErrorMessage('');
+    setSuccessMessage('');
+    setShowModal(true);
+    fetchStaffAvailability('Beautician');
   };
 
   const openEditModal = (p) => {
@@ -80,6 +127,7 @@ export default function PatientManagement() {
     }
     setEditMode(true);
     setSelectedPatient(p);
+    setModePendaftaran('NEW');
     setFormType(p.tipe_pasien);
     setNoKtp(p.no_ktp || '');
     setNoHp(p.no_hp || '');
@@ -89,9 +137,12 @@ export default function PatientManagement() {
     setRiwayatAlergi(p.riwayat_alergi || '');
     setJenisKulit(p.jenis_kulit || '');
     setRekomendasiDokter(p.rekomendasi_dokter || '');
+    setKebutuhanLayanan('Beautician');
+    setSelectedStaffId('');
     setErrorMessage('');
     setSuccessMessage('');
     setShowModal(true);
+    fetchStaffAvailability('Beautician');
   };
 
   const handleDeletePatient = async (patientId, patientName) => {
@@ -142,21 +193,20 @@ export default function PatientManagement() {
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     
-    // Set column widths for optimal display in Excel
     worksheet['!cols'] = [
-      { wch: 5 },   // No
-      { wch: 15 },  // ID Pasien
-      { wch: 25 },  // Nama Lengkap
-      { wch: 20 },  // NIK
-      { wch: 16 },  // No HP
-      { wch: 14 },  // Tipe Pasien
-      { wch: 35 },  // Alamat
-      { wch: 15 },  // Tanggal Lahir
-      { wch: 20 },  // Riwayat Alergi
-      { wch: 20 },  // Jenis Kulit
-      { wch: 25 },  // Rekomendasi Dokter
-      { wch: 12 },  // Total Poin
-      { wch: 22 }   // Tanggal Terdaftar
+      { wch: 5 },
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 20 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 35 },
+      { wch: 15 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 12 },
+      { wch: 22 }
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -171,36 +221,73 @@ export default function PatientManagement() {
     setErrorMessage('');
     setSuccessMessage('');
 
-    if (!noHp || !namaLengkap) {
-      setErrorMessage('Nama Lengkap dan No. Handphone wajib diisi');
-      return;
-    }
+    let patientIdToAssign = null;
+    let targetPatientName = namaLengkap;
 
     try {
-      const payload = {
-        no_ktp: noKtp || null,
-        no_hp: noHp,
-        nama_lengkap: namaLengkap,
-        tipe_pasien: formType,
-        alamat: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? alamat : null,
-        tgl_lahir: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? tglLahir : null,
-        riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? riwayatAlergi : null,
-        jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? jenisKulit : null,
-        rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? rekomendasiDokter : null,
-      };
-
       if (editMode && selectedPatient) {
+        const payload = {
+          no_ktp: noKtp || null,
+          no_hp: noHp,
+          nama_lengkap: namaLengkap,
+          tipe_pasien: formType,
+          alamat: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? alamat : null,
+          tgl_lahir: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? tglLahir : null,
+          riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? riwayatAlergi : null,
+          jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? jenisKulit : null,
+          rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? rekomendasiDokter : null,
+        };
         await axios.put(`/api/pasien/${selectedPatient.id}`, payload);
-        setSuccessMessage('Data pasien berhasil diperbarui / di-upgrade!');
-      } else {
-        await axios.post('/api/pasien', payload);
+        patientIdToAssign = selectedPatient.id;
+        setSuccessMessage('Data pasien berhasil diperbarui!');
+      } else if (modePendaftaran === 'NEW') {
+        if (!noHp || !namaLengkap) {
+          setErrorMessage('Nama Lengkap dan No. Handphone wajib diisi');
+          return;
+        }
+        const payload = {
+          no_ktp: noKtp || null,
+          no_hp: noHp,
+          nama_lengkap: namaLengkap,
+          tipe_pasien: formType,
+          alamat: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? alamat : null,
+          tgl_lahir: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? tglLahir : null,
+          riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? riwayatAlergi : null,
+          jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? jenisKulit : null,
+          rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? rekomendasiDokter : null,
+        };
+        const res = await axios.post('/api/pasien', payload);
+        patientIdToAssign = res.data.pasien?.id;
+        targetPatientName = res.data.pasien?.nama_lengkap || namaLengkap;
         setSuccessMessage('Pasien baru berhasil didaftarkan!');
+      } else if (modePendaftaran === 'EXISTING') {
+        if (!selectedExistingPatientId) {
+          setErrorMessage('Silakan pilih pasien terdaftar terlebih dahulu');
+          return;
+        }
+        patientIdToAssign = selectedExistingPatientId;
+        const found = patients.find(p => p.id === selectedExistingPatientId);
+        if (found) targetPatientName = found.nama_lengkap;
+      }
+
+      // Live Assignment process if staff selected
+      if (selectedStaffId && patientIdToAssign) {
+        const selectedStaffObj = staffList.find(s => s.id === selectedStaffId);
+        const katName = kebutuhanLayanan === 'Nurse' ? 'Tindakan Medis (Nurse)' : 'Facial (Beautician)';
+
+        await axios.post('/api/doingan/assign', {
+          pasien_id: patientIdToAssign,
+          petugas_id: selectedStaffId,
+          kategori_layanan: katName
+        });
+
+        setSuccessMessage(`Berhasil! Pasien ${targetPatientName} di-assign ke ${selectedStaffObj?.full_name || 'Petugas'}. Sesi otomatis IN_PROGRESS!`);
       }
 
       fetchPatients();
       setTimeout(() => {
         setShowModal(false);
-      }, 1200);
+      }, 1500);
     } catch (err) {
       const msg = err.response?.data?.message || 'Terjadi kesalahan sistem';
       setErrorMessage(msg);
@@ -283,8 +370,8 @@ export default function PatientManagement() {
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Pendaftaran & Manajemen Pasien</h1>
-          <p className="text-xs text-[#514440]">Kelola registrasi pasien baru, data medis, pencarian, export Excel, dan hapus data (Khusus Super Admin & Admin Klinik).</p>
+          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Pendaftaran Pasien & Live Assignment</h1>
+          <p className="text-xs text-[#514440]">Menu Pendaftaran & Intake Pasien oleh Admin FO dengan fitur live assignment tim Beautician & Nurse realtime.</p>
         </div>
         <div className="flex items-center gap-2">
           {canExportExcel && (
@@ -294,7 +381,7 @@ export default function PatientManagement() {
               title="Export data pasien ke format Excel / CSV"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>Export ke Excel</span>
+              <span>Export Excel</span>
             </button>
           )}
           <button
@@ -302,7 +389,7 @@ export default function PatientManagement() {
             className="px-4 py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
-            <span>+ Tambah Pasien Baru</span>
+            <span>+ Pendaftaran & Live Intake</span>
           </button>
         </div>
       </div>
@@ -398,12 +485,21 @@ export default function PatientManagement() {
                       +{p.total_poin} Poin
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => openIntakeForExisting(p)}
+                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 rounded-lg font-medium text-[11px] flex items-center gap-1 cursor-pointer shadow-2xs"
+                          title="Live Intake & Assign Pasien ke Petugas"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Intake / Assign</span>
+                        </button>
+
                         {canEditPatient && (
                           <button
                             onClick={() => openEditModal(p)}
                             className="p-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#514440] rounded-lg font-medium text-[11px] flex items-center gap-1 cursor-pointer"
-                            title="Edit Profile / Upgrade Trial to Reguler"
+                            title="Edit Profile Pasien"
                           >
                             <Edit className="w-3.5 h-3.5 text-[#7d5141]" />
                             <span>Edit</span>
@@ -413,7 +509,7 @@ export default function PatientManagement() {
                           <button
                             onClick={() => handleDeletePatient(p.id, p.nama_lengkap)}
                             className="p-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg font-medium text-[11px] flex items-center gap-1 cursor-pointer"
-                            title="Hapus Data Pasien (Khusus Super Admin & Admin Klinik)"
+                            title="Hapus Data Pasien"
                           >
                             <Trash2 className="w-3.5 h-3.5 text-red-600" />
                             <span>Hapus</span>
@@ -445,15 +541,18 @@ export default function PatientManagement() {
         </div>
       </div>
 
-      {/* MODAL INTAKE PENDAFTARAN PASIEN BARU & UPGRADE */}
+      {/* MODAL INTAKE PENDAFTARAN PASIEN & LIVE STAFF ASSIGNMENT */}
       {showModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#e5ded4] space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-[#e5ded4] space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
-              <h3 className="font-serif font-bold text-lg text-[#1e1b15]">
-                {editMode ? 'Edit / Upgrade Profile Pasien' : 'Form Registration Intake Pasien Baru'}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg">×</button>
+              <div>
+                <h3 className="font-serif font-bold text-lg text-[#1e1b15]">
+                  {editMode ? 'Edit / Upgrade Profile Pasien' : 'Pendaftaran Pasien & Live Assignment (Admin FO)'}
+                </h3>
+                <p className="text-xs text-[#7d5141] font-semibold">Form registrasi & penugasan realtime ke Beautician / Nurse</p>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer">×</button>
             </div>
 
             {/* Error Message Warning */}
@@ -473,139 +572,286 @@ export default function PatientManagement() {
             )}
 
             <form onSubmit={handleSavePatient} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Tipe Pasien</label>
-                <div className="grid grid-cols-2 gap-2">
+              {!editMode && (
+                <div className="p-1 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex gap-1">
                   <button
                     type="button"
-                    onClick={() => setFormType('TRIAL')}
-                    className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                      formType === 'TRIAL' 
-                        ? 'bg-amber-100 border-amber-400 text-amber-900 shadow-xs' 
-                        : 'bg-[#faf3e8] border-[#d6c2bd] text-[#514440]'
+                    onClick={() => setModePendaftaran('NEW')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      modePendaftaran === 'NEW' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
                     }`}
                   >
-                    Pasien Trial (Free)
+                    + Pasien Baru (Registrasi)
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFormType('MEMBER')}
-                    className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                      formType === 'MEMBER' || formType === 'NON-TRIAL'
-                        ? 'bg-emerald-100 border-emerald-400 text-emerald-900 shadow-xs' 
-                        : 'bg-[#faf3e8] border-[#d6c2bd] text-[#514440]'
+                    onClick={() => setModePendaftaran('EXISTING')}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      modePendaftaran === 'EXISTING' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
                     }`}
                   >
-                    Pasien Member
+                    👤 Pasien Terdaftar (Intake Langsung)
                   </button>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Lengkap Pasien *</label>
-                <input
-                  type="text"
-                  value={namaLengkap}
-                  onChange={(e) => setNamaLengkap(e.target.value)}
-                  required
-                  placeholder="Misal: Maya Septha"
-                  className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-[#514440] mb-1">No. Handphone (WA) *</label>
-                  <input
-                    type="text"
-                    value={noHp}
-                    onChange={(e) => setNoHp(e.target.value)}
+              {/* SECTION 1: DATA PASIEN */}
+              {!editMode && modePendaftaran === 'EXISTING' ? (
+                <div className="space-y-2 p-3.5 bg-amber-50/50 border border-amber-200 rounded-xl">
+                  <label className="block text-xs font-bold text-amber-900">Pilih Pasien Terdaftar *</label>
+                  <select
+                    value={selectedExistingPatientId}
+                    onChange={(e) => {
+                      setSelectedExistingPatientId(e.target.value);
+                      const p = patients.find(item => item.id === e.target.value);
+                      if (p) setFormType(p.tipe_pasien);
+                    }}
                     required
-                    placeholder="0812XXXXXXXX"
-                    className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
-                  />
+                    className="w-full px-3.5 py-2 bg-white border border-amber-300 rounded-xl text-xs font-medium focus:outline-none focus:border-[#7d5141]"
+                  >
+                    <option value="">-- Pilih Pasien Yang Datang --</option>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.nama_lengkap} - HP: {p.no_hp} ({p.tipe_pasien === 'NON-TRIAL' ? 'MEMBER' : p.tipe_pasien})
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-[#514440] mb-1">NIK / No. KTP (Opsional)</label>
-                  <input
-                    type="text"
-                    value={noKtp}
-                    onChange={(e) => setNoKtp(e.target.value)}
-                    placeholder="3171XXXXXXXXXXXX"
-                    className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
-                  />
-                </div>
-              </div>
-
-              {(formType === 'MEMBER' || formType === 'NON-TRIAL') && (
-                <div className="space-y-3 border-t border-[#e5ded4] pt-3">
+              ) : (
+                <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-semibold text-[#514440] mb-1">Alamat Lengkap</label>
-                    <textarea
-                      value={alamat}
-                      onChange={(e) => setAlamat(e.target.value)}
-                      placeholder="Jl. Soekarno-Hatta No. 45, Pekanbaru"
+                    <label className="block text-xs font-semibold text-[#514440] mb-1">Tipe Pasien Datang</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormType('TRIAL')}
+                        className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                          formType === 'TRIAL' 
+                            ? 'bg-amber-100 border-amber-400 text-amber-900 shadow-xs' 
+                            : 'bg-[#faf3e8] border-[#d6c2bd] text-[#514440]'
+                        }`}
+                      >
+                        Pasien Trial (Free)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormType('MEMBER')}
+                        className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                          formType === 'MEMBER' || formType === 'NON-TRIAL'
+                            ? 'bg-emerald-100 border-emerald-400 text-emerald-900 shadow-xs' 
+                            : 'bg-[#faf3e8] border-[#d6c2bd] text-[#514440]'
+                        }`}
+                      >
+                        Pasien Member
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Lengkap Pasien *</label>
+                    <input
+                      type="text"
+                      value={namaLengkap}
+                      onChange={(e) => setNamaLengkap(e.target.value)}
+                      required
+                      placeholder="Misal: Maya Septha"
                       className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
-                      rows="2"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-[#514440] mb-1">Tanggal Lahir</label>
+                      <label className="block text-xs font-semibold text-[#514440] mb-1">No. Handphone (WA) *</label>
                       <input
-                        type="date"
-                        value={tglLahir}
-                        onChange={(e) => setTglLahir(e.target.value)}
+                        type="text"
+                        value={noHp}
+                        onChange={(e) => setNoHp(e.target.value)}
+                        required
+                        placeholder="0812XXXXXXXX"
                         className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[#514440] mb-1">Jenis Kulit Pasien</label>
-                      <select
-                        value={jenisKulit}
-                        onChange={(e) => setJenisKulit(e.target.value)}
+                      <label className="block text-xs font-semibold text-[#514440] mb-1">NIK / No. KTP (Opsional)</label>
+                      <input
+                        type="text"
+                        value={noKtp}
+                        onChange={(e) => setNoKtp(e.target.value)}
+                        placeholder="3171XXXXXXXXXXXX"
                         className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
-                      >
-                        <option value="">-- Pilih Jenis Kulit --</option>
-                        <option value="Normal">Normal</option>
-                        <option value="Berminyak">Berminyak (Oily)</option>
-                        <option value="Kering">Kering (Dry)</option>
-                        <option value="Kombinasi / Sensitif">Kombinasi / Sensitif</option>
-                        <option value="Acne Prone">Acne Prone (Berjerawat)</option>
-                      </select>
+                      />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-[#514440] mb-1">Riwayat Alergi (Obat / Bahan Kosmetik)</label>
-                    <input
-                      type="text"
-                      value={riwayatAlergi}
-                      onChange={(e) => setRiwayatAlergi(e.target.value)}
-                      placeholder="Misal: Alergi Seafood, Alergi Paraben, Alergi Cold"
-                      className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
-                    />
-                  </div>
+                  {(formType === 'MEMBER' || formType === 'NON-TRIAL') && (
+                    <div className="space-y-3 border-t border-[#e5ded4] pt-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#514440] mb-1">Alamat Lengkap</label>
+                        <textarea
+                          value={alamat}
+                          onChange={(e) => setAlamat(e.target.value)}
+                          placeholder="Jl. Soekarno-Hatta No. 45, Pekanbaru"
+                          className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
+                          rows="2"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-[#514440] mb-1">Catatan / Rekomendasi Dokter</label>
-                    <input
-                      type="text"
-                      value={rekomendasiDokter}
-                      onChange={(e) => setRekomendasiDokter(e.target.value)}
-                      placeholder="Rekomendasi dokter penanggung jawab"
-                      className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
-                    />
-                  </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-[#514440] mb-1">Tanggal Lahir</label>
+                          <input
+                            type="date"
+                            value={tglLahir}
+                            onChange={(e) => setTglLahir(e.target.value)}
+                            className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#514440] mb-1">Jenis Kulit Pasien</label>
+                          <select
+                            value={jenisKulit}
+                            onChange={(e) => setJenisKulit(e.target.value)}
+                            className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
+                          >
+                            <option value="">-- Pilih Jenis Kulit --</option>
+                            <option value="Normal">Normal</option>
+                            <option value="Berminyak">Berminyak (Oily)</option>
+                            <option value="Kering">Kering (Dry)</option>
+                            <option value="Kombinasi / Sensitif">Kombinasi / Sensitif</option>
+                            <option value="Acne Prone">Acne Prone (Berjerawat)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-[#514440] mb-1">Riwayat Alergi (Obat / Bahan Kosmetik)</label>
+                        <input
+                          type="text"
+                          value={riwayatAlergi}
+                          onChange={(e) => setRiwayatAlergi(e.target.value)}
+                          placeholder="Misal: Alergi Seafood, Alergi Paraben, Alergi Cold"
+                          className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-[#514440] mb-1">Catatan / Rekomendasi Dokter</label>
+                        <input
+                          type="text"
+                          value={rekomendasiDokter}
+                          onChange={(e) => setRekomendasiDokter(e.target.value)}
+                          placeholder="Rekomendasi dokter penanggung jawab"
+                          className="w-full px-3.5 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* SECTION 2: KEBUTUHAN LAYANAN & LIVE STAFF ASSIGNMENT */}
+              <div className="border-t border-[#e5ded4] pt-4 space-y-3 bg-[#fffbf7] p-3.5 rounded-xl border border-[#eedfd5]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#1e1b15]">
+                    <Clock className="w-4 h-4 text-[#7d5141]" />
+                    <span>Kebutuhan Layanan & Live Staff Assignment</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fetchStaffAvailability(kebutuhanLayanan)}
+                    className="text-[11px] text-[#7d5141] hover:text-[#514440] font-semibold flex items-center gap-1 cursor-pointer"
+                    title="Refresh live status petugas"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingStaff ? 'animate-spin' : ''}`} />
+                    <span>Refresh Live Status</span>
+                  </button>
+                </div>
+
+                {/* Pilih Kebutuhan Layanan */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#514440] mb-1.5">Pilih Kebutuhan Layanan Pasien:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleLayananChange('Beautician')}
+                      className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer flex items-center gap-2 ${
+                        kebutuhanLayanan === 'Beautician'
+                          ? 'bg-pink-50 border-pink-400 text-pink-950 font-bold shadow-xs'
+                          : 'bg-white border-[#d6c2bd] text-[#514440] hover:bg-gray-50'
+                      }`}
+                    >
+                      <Sparkles className="w-4 h-4 text-pink-600 shrink-0" />
+                      <div>
+                        <div>Facial / Perawatan</div>
+                        <div className="text-[10px] font-normal text-pink-800">Tim Beautician</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleLayananChange('Nurse')}
+                      className={`p-2.5 rounded-xl border text-left text-xs transition-all cursor-pointer flex items-center gap-2 ${
+                        kebutuhanLayanan === 'Nurse'
+                          ? 'bg-blue-50 border-blue-400 text-blue-950 font-bold shadow-xs'
+                          : 'bg-white border-[#d6c2bd] text-[#514440] hover:bg-[#faf3e8]'
+                      }`}
+                    >
+                      <Stethoscope className="w-4 h-4 text-blue-600 shrink-0" />
+                      <div>
+                        <div>Tindakan Medis</div>
+                        <div className="text-[10px] font-normal text-blue-800">Tim Nurse</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Status Staff Dropdown */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">
+                    Daftar Petugas ({kebutuhanLayanan === 'Beautician' ? 'Beautician' : 'Nurse'}) - Status Realtime:
+                  </label>
+                  <select
+                    value={selectedStaffId}
+                    onChange={(e) => setSelectedStaffId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-[#d6c2bd] rounded-xl text-xs font-semibold text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                  >
+                    <option value="">-- (Opsional) Pilih Petugas Untuk Live Assignment --</option>
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id} disabled={s.is_busy}>
+                        {s.is_busy 
+                          ? `🔴 SEDANG MENANGANI (${s.active_doingan?.pasien_nama || 'Pasien'}) — ${s.full_name}` 
+                          : `🟢 SENGANG (KOSONG) — ${s.full_name}`
+                        }
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedStaffId ? (
+                    <div className="mt-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-900 font-semibold flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-emerald-600 shrink-0 animate-pulse" />
+                      <span>Sesi pengerjaan akan otomatis berstatus <strong>IN_PROGRESS</strong> & timer durasi mulai berjalan setelah submit!</span>
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-[10px] text-[#83746f] italic">
+                      * Pilih petugas berpita 🟢 SENGANG untuk langsung memulai timer pengerjaan.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <button
                 type="submit"
-                className="w-full py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                className="w-full py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
               >
-                {editMode ? 'Simpan Perubahan Pasien' : 'Daftarkan Pasien Sekarang'}
+                <UserCheck className="w-4 h-4" />
+                <span>
+                  {editMode 
+                    ? 'Simpan Perubahan Pasien' 
+                    : selectedStaffId 
+                      ? 'Submit Intake & Start Live Session (IN_PROGRESS)' 
+                      : 'Simpan Pendaftaran Pasien'
+                  }
+                </span>
               </button>
             </form>
           </div>
