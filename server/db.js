@@ -373,10 +373,14 @@ async function initDb() {
       await runQuery(`ALTER TABLE doingan ADD COLUMN status_pengerjaan TEXT DEFAULT 'IN_PROGRESS'`);
     } catch (e) {}
     try {
-      await runQuery(`ALTER TABLE doingan ADD COLUMN started_at DATETIME DEFAULT CURRENT_TIMESTAMP`);
+      await runQuery(`ALTER TABLE doingan ADD COLUMN started_at DATETIME`);
     } catch (e) {}
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN completed_at DATETIME`);
+    } catch (e) {}
+
+    try {
+      await runQuery(`UPDATE doingan SET started_at = created_at WHERE started_at IS NULL`);
     } catch (e) {}
 
     // Migration: Fix any negative sisa_stok in stok_produk
