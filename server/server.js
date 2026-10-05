@@ -224,10 +224,10 @@ app.get('/api/doingan', authenticateToken, async (req, res) => {
 app.get('/api/staff-availability', authenticateToken, async (req, res) => {
   try {
     const { lini } = req.query; // 'Beautician' or 'Nurse'
-    let query = "SELECT id, username, full_name, role, lini_profesi FROM users WHERE role NOT IN ('Super Admin', 'Admin System', 'Admin Klinik')";
+    let query = "SELECT id, username, full_name, role, lini_profesi FROM users WHERE role NOT IN ('Super Admin', 'Admin System', 'Admin Klinik', 'Admin FO', 'Manager')";
     const params = [];
     if (lini) {
-      query += " AND (lini_profesi = ? OR role = ?)";
+      query += " AND (role = ? OR (lini_profesi = ? AND role IN ('Beautician', 'Nurse')))";
       params.push(lini, lini);
     }
     const staffList = await allQuery(query, params);

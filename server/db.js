@@ -88,6 +88,11 @@ async function initDb() {
       await runQuery(`ALTER TABLE users ADD COLUMN lini_profesi TEXT DEFAULT 'Beautician'`);
     } catch (e) {}
 
+    try {
+      await runQuery(`UPDATE users SET lini_profesi = 'Nurse' WHERE role = 'Nurse' OR username LIKE '%nurse%'`);
+      await runQuery(`UPDATE users SET lini_profesi = 'Beautician' WHERE role = 'Beautician' OR username LIKE '%beautician%'`);
+    } catch (e) {}
+
     // 3. Dynamic ACL Table
     await runQuery(`
       CREATE TABLE IF NOT EXISTS role_permissions (
