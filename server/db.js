@@ -7,7 +7,7 @@ const db = new sqlite3.Database(dbPath);
 
 function runQuery(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
+    db.run(sql, params, function (err) {
       if (err) reject(err);
       else resolve(this);
     });
@@ -58,11 +58,11 @@ async function initDb() {
     // Migration: Add wa_api_url and idle_timeout_minutes if missing in existing DB
     try {
       await runQuery(`ALTER TABLE clinic_profile ADD COLUMN wa_api_url TEXT DEFAULT 'https://api-wa.ipangpangeran.com/send?api_key=ipang-super-secret-key-123456'`);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       await runQuery(`ALTER TABLE clinic_profile ADD COLUMN idle_timeout_minutes INTEGER DEFAULT 15`);
-    } catch (e) {}
+    } catch (e) { }
 
 
     // 2. Users Table
@@ -82,16 +82,16 @@ async function initDb() {
 
     try {
       await runQuery(`ALTER TABLE users ADD COLUMN gaji_pokok REAL DEFAULT 0`);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       await runQuery(`ALTER TABLE users ADD COLUMN lini_profesi TEXT DEFAULT 'Beautician'`);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       await runQuery(`UPDATE users SET lini_profesi = 'Nurse' WHERE role = 'Nurse' OR username LIKE '%nurse%'`);
       await runQuery(`UPDATE users SET lini_profesi = 'Beautician' WHERE role = 'Beautician' OR username LIKE '%beautician%'`);
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. Dynamic ACL Table
     await runQuery(`
@@ -269,7 +269,7 @@ async function initDb() {
 
     try {
       await runQuery(`ALTER TABLE tindakan_medis ADD COLUMN kategori_petugas TEXT DEFAULT 'NURSE'`);
-    } catch (e) {}
+    } catch (e) { }
 
     // 11. Transactions
     await runQuery(`
@@ -368,23 +368,23 @@ async function initDb() {
 
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN kategori_layanan TEXT DEFAULT 'Facial (Beautician)'`);
-    } catch (e) {}
+    } catch (e) { }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN status_pengerjaan TEXT DEFAULT 'IN_PROGRESS'`);
-    } catch (e) {}
+    } catch (e) { }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN started_at DATETIME`);
-    } catch (e) {}
+    } catch (e) { }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN completed_at DATETIME`);
-    } catch (e) {}
+    } catch (e) { }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN is_billed INTEGER DEFAULT 0`);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       await runQuery(`UPDATE doingan SET started_at = created_at WHERE started_at IS NULL`);
-    } catch (e) {}
+    } catch (e) { }
 
     // Migration: Fix any negative sisa_stok in stok_produk
     try {
@@ -402,7 +402,7 @@ async function initDb() {
     try {
       await runQuery(`UPDATE users SET role = 'Manager' WHERE role IN ('Nurse', 'Beautician', 'Marketing', 'Dokter', 'Therapist / BTC')`);
       await runQuery(`UPDATE role_permissions SET role = 'Manager' WHERE role IN ('Nurse', 'Beautician', 'Marketing', 'Dokter', 'Therapist / BTC')`);
-    } catch (e) {}
+    } catch (e) { }
 
     await seedDefaultData();
     console.log('[DB] Database schema and column migration completed.');
@@ -429,8 +429,10 @@ async function seedDefaultData() {
     { id: 'usr-2', username: 'adminklinik', password: defaultPasswordHash, full_name: 'Gifary Admin Klinik', role: 'Admin Klinik', phone: '081234567891', gaji_pokok: 0 },
     { id: 'usr-3', username: 'manager', password: defaultPasswordHash, full_name: 'Fitria Duwita', role: 'Manager', phone: '081234567892', gaji_pokok: 5000000 },
     { id: 'usr-6', username: 'admin', password: defaultPasswordHash, full_name: 'Rani Yolanda Putri', role: 'Admin FO', phone: '081234567895', gaji_pokok: 4000000 },
-    { id: 'usr-7', username: 'beautician1', password: defaultPasswordHash, full_name: 'Siti Anita (Beautician)', role: 'Beautician', phone: '081234567896', gaji_pokok: 3500000 },
-    { id: 'usr-8', username: 'nurse1', password: defaultPasswordHash, full_name: 'Suster Maya (Nurse)', role: 'Nurse', phone: '081234567897', gaji_pokok: 3800000 }
+    { id: 'usr-7', username: 'indah.khairun', password: defaultPasswordHash, full_name: 'Indah Khairun Nisa', role: 'Beautician', phone: '081234567896', gaji_pokok: 3500000 },
+    { id: 'usr-8', username: 'riska.yulia', password: defaultPasswordHash, full_name: 'Riska Yulia Dewi', role: 'Nurse', phone: '081234567897', gaji_pokok: 3800000 },
+    { id: 'usr-9', username: 'henni.mariani', password: defaultPasswordHash, full_name: 'Henni Mariani', role: 'Beautician', phone: '081234567896', gaji_pokok: 3500000 },
+    { id: 'usr-10', username: 'anggun.aprilia', password: defaultPasswordHash, full_name: 'Anggun Aprilia Sofyani', role: 'Beautician', phone: '081234567896', gaji_pokok: 3500000 }
   ];
 
   for (const u of defaultUsers) {
@@ -460,28 +462,28 @@ async function seedDefaultData() {
     await runQuery(`UPDATE users SET gaji_pokok = 5000000 WHERE role = 'Manager' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
     await runQuery(`UPDATE users SET gaji_pokok = 4000000 WHERE (role = 'Admin FO' OR role = 'Resepsionis / Cashier') AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
     await runQuery(`UPDATE users SET gaji_pokok = 0 WHERE role IN ('Super Admin', 'Admin System', 'Admin Klinik')`);
-  } catch (e) {}
+  } catch (e) { }
 
   const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Manager', 'Admin FO', 'Beautician', 'Nurse'];
   const modules = [
-    'clinic_profile', 'acl', 'patient_intake', 'patient_management', 'doingan', 'patient_packages', 
-    'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical', 
+    'clinic_profile', 'acl', 'patient_intake', 'patient_management', 'doingan', 'patient_packages',
+    'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical',
     'pricing', 'tindakan_crud', 'commission_formulas', 'payroll'
   ];
 
   for (const role of roles) {
     for (const mod of modules) {
-      let c=0, r=0, u=0, d=0;
+      let c = 0, r = 0, u = 0, d = 0;
       if (role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik') {
-        c=1; r=1; u=1; d=1;
+        c = 1; r = 1; u = 1; d = 1;
       } else if (role === 'Manager') {
-        c=1; r=1; u=1; d=1;
+        c = 1; r = 1; u = 1; d = 1;
       } else if (role === 'Admin FO') {
-        if (['patient_intake', 'patient_packages', 'reminders', 'doingan'].includes(mod)) { c=1; r=1; u=1; d=1; }
-        else if (['patient_management'].includes(mod)) { c=1; r=1; u=0; d=0; }
-        else if (['clinic_profile', 'pricing'].includes(mod)) { r=1; }
+        if (['patient_intake', 'patient_packages', 'reminders', 'doingan'].includes(mod)) { c = 1; r = 1; u = 1; d = 1; }
+        else if (['patient_management'].includes(mod)) { c = 1; r = 1; u = 0; d = 0; }
+        else if (['clinic_profile', 'pricing'].includes(mod)) { r = 1; }
       } else if (role === 'Beautician' || role === 'Nurse') {
-        if (['doingan'].includes(mod)) { c=1; r=1; u=1; d=0; }
+        if (['doingan'].includes(mod)) { c = 1; r = 1; u = 1; d = 0; }
       }
       await runQuery(`
         INSERT INTO role_permissions (role, module_key, can_create, can_read, can_update, can_delete)
@@ -497,7 +499,7 @@ async function seedDefaultData() {
       INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, total_poin)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, ['pasien-1', '3171012345670001', '081298765432', 'Nia Ramadhani', 'MEMBER', 'Jl. Senopati No. 12, Jakarta', '1995-04-15', 'Tidak ada', 'Kombinasi / Sensitif', 120]);
-    
+
     await runQuery(`
       INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, total_poin)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

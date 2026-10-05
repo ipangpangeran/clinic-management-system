@@ -28,9 +28,9 @@ export default function LoginPage() {
         {/* Header Logo */}
         <div className="text-center space-y-2">
           <div className="flex justify-center mb-3">
-            <img 
-              src="/logo/DEFLOW_LOGO_TAGLINE_CKLT.png" 
-              alt="DEFLOW Aesthetic Clinic" 
+            <img
+              src="/logo/DEFLOW_LOGO_TAGLINE_CKLT.png"
+              alt="DEFLOW Aesthetic Clinic"
               className="h-20 object-contain"
               onError={(e) => {
                 e.target.onerror = null;
@@ -132,17 +132,38 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setUsername('beautician1'); setPassword('admin1234'); }}
+              onClick={() => { setUsername('rahma'); setPassword('admin1234'); }}
               className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
             >
-              💆‍♀️ Beautician Terapis
+              💆‍♀️ Beautician Rahma
             </button>
             <button
               type="button"
-              onClick={() => { setUsername('nurse1'); setPassword('admin1234'); }}
+              onClick={() => { setUsername('riska.yulia'); setPassword('admin1234'); }}
               className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
             >
-              🩺 Nurse Medis
+              🩺 Nurse Riska
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('indah.khairun'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
+            >
+              💆‍♀️ Beautician Indah
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('henni.mariani'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
+            >
+              💆‍♀️ Beautician Henni
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('anggun.aprilia'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
+            >
+              💆‍♀️ Beautician Anggun
             </button>
           </div>
         </div>
