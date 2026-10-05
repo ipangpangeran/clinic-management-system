@@ -12,8 +12,11 @@ import FinancialCommissionMatrix from './pages/FinancialCommissionMatrix';
 import ClinicSettingsAcl from './pages/ClinicSettingsAcl';
 import WhatsAppGateway from './pages/WhatsAppGateway';
 
+import StaffMobilePortal from './pages/StaffMobilePortal';
+import { LogOut } from 'lucide-react';
+
 function MainApp() {
-  const { user, loading, hasPermission } = useContext(AuthContext);
+  const { user, logout, loading, hasPermission } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('overview');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -58,6 +61,51 @@ function MainApp() {
 
   if (!user) {
     return <LoginPage />;
+  }
+
+  // Specialized Layout for Beautician & Nurse Staff Roles
+  if (user.role === 'Beautician' || user.role === 'Nurse') {
+    return (
+      <div className="min-h-screen bg-[#fff8f0] flex flex-col">
+        {/* Staff Dedicated Header */}
+        <header className="bg-[#2a241e] text-white px-4 py-3 sticky top-0 z-30 shadow-md border-b border-[#4a3b32] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <img 
+              src="/logo/DEFLOW_LOGO_TAGLINE.png" 
+              alt="DEFLOW" 
+              className="h-9 object-contain"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = '/logo/DEFLOW_LOGO_ONLY.png';
+              }}
+            />
+            <span className="text-[10px] font-bold text-amber-200 bg-white/10 px-2 py-0.5 rounded-md uppercase tracking-wider hidden sm:inline">
+              Portal Petugas ({user.role})
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="font-bold text-xs truncate max-w-[130px] sm:max-w-none">{user.full_name}</div>
+              <div className="text-[10px] text-amber-200 font-semibold">{user.role}</div>
+            </div>
+            <button
+              onClick={logout}
+              className="p-2 bg-white/10 hover:bg-red-600/30 text-gray-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-white/10 flex items-center gap-1"
+              title="Keluar"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Keluar</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Staff Mobile Portal Content */}
+        <main className="flex-1 p-4 sm:p-6 max-w-lg w-full mx-auto">
+          <StaffMobilePortal />
+        </main>
+      </div>
+    );
   }
 
   const renderTabContent = () => {

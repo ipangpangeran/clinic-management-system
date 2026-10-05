@@ -416,7 +416,9 @@ async function seedDefaultData() {
     { id: 'usr-1', username: 'superadmin', password: defaultPasswordHash, full_name: 'Ipang Super Admin', role: 'Super Admin', phone: '081234567890', gaji_pokok: 0 },
     { id: 'usr-2', username: 'adminklinik', password: defaultPasswordHash, full_name: 'Gifary Admin Klinik', role: 'Admin Klinik', phone: '081234567891', gaji_pokok: 0 },
     { id: 'usr-3', username: 'manager', password: defaultPasswordHash, full_name: 'Fitria Duwita', role: 'Manager', phone: '081234567892', gaji_pokok: 5000000 },
-    { id: 'usr-6', username: 'admin', password: defaultPasswordHash, full_name: 'Rani Yolanda Putri', role: 'Admin FO', phone: '081234567895', gaji_pokok: 4000000 }
+    { id: 'usr-6', username: 'admin', password: defaultPasswordHash, full_name: 'Rani Yolanda Putri', role: 'Admin FO', phone: '081234567895', gaji_pokok: 4000000 },
+    { id: 'usr-7', username: 'beautician1', password: defaultPasswordHash, full_name: 'Siti Anita (Beautician)', role: 'Beautician', phone: '081234567896', gaji_pokok: 3500000 },
+    { id: 'usr-8', username: 'nurse1', password: defaultPasswordHash, full_name: 'Suster Maya (Nurse)', role: 'Nurse', phone: '081234567897', gaji_pokok: 3800000 }
   ];
 
   for (const u of defaultUsers) {
@@ -448,7 +450,7 @@ async function seedDefaultData() {
     await runQuery(`UPDATE users SET gaji_pokok = 0 WHERE role IN ('Super Admin', 'Admin System', 'Admin Klinik')`);
   } catch (e) {}
 
-  const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Manager', 'Admin FO'];
+  const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Manager', 'Admin FO', 'Beautician', 'Nurse'];
   const modules = [
     'clinic_profile', 'acl', 'patient_intake', 'patient_management', 'doingan', 'patient_packages', 
     'reminders', 'inventory_retail', 'inventory_btc', 'inventory_non_medical', 
@@ -466,6 +468,8 @@ async function seedDefaultData() {
         if (['patient_intake', 'patient_packages', 'reminders', 'doingan'].includes(mod)) { c=1; r=1; u=1; d=1; }
         else if (['patient_management'].includes(mod)) { c=1; r=1; u=0; d=0; }
         else if (['clinic_profile', 'pricing'].includes(mod)) { r=1; }
+      } else if (role === 'Beautician' || role === 'Nurse') {
+        if (['doingan'].includes(mod)) { c=1; r=1; u=1; d=0; }
       }
       await runQuery(`
         INSERT INTO role_permissions (role, module_key, can_create, can_read, can_update, can_delete)

@@ -90,11 +90,62 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 px-4 bg-[#7d5141] hover:bg-[#653d2e] text-white font-medium rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+            className="w-full py-3 px-4 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
           >
             {submitting ? 'Memproses...' : 'Masuk ke Sistem'}
           </button>
         </form>
+
+        {/* Demo Quick Login Helper */}
+        <div className="pt-2 border-t border-[#e5ded4] space-y-2">
+          <p className="text-[11px] font-bold text-[#7d5141] text-center uppercase tracking-wider">
+            Demo Akun Fast Login (Klik Untuk Coba):
+          </p>
+          <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => { setUsername('superadmin'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#1e1b15] font-bold rounded-lg text-left truncate cursor-pointer"
+            >
+              👑 Super Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('adminklinik'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#1e1b15] font-bold rounded-lg text-left truncate cursor-pointer"
+            >
+              🏥 Admin Klinik
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('manager'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#1e1b15] font-bold rounded-lg text-left truncate cursor-pointer"
+            >
+              💼 Manager
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('admin'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#1e1b15] font-bold rounded-lg text-left truncate cursor-pointer"
+            >
+              📋 Admin FO
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('beautician1'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
+            >
+              💆‍♀️ Beautician Terapis
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('nurse1'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
+            >
+              🩺 Nurse Medis
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
