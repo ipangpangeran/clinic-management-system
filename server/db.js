@@ -73,6 +73,7 @@ async function initDb() {
         password TEXT NOT NULL,
         full_name TEXT NOT NULL,
         role TEXT NOT NULL,
+        lini_profesi TEXT DEFAULT 'Beautician',
         phone TEXT,
         gaji_pokok REAL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -81,6 +82,10 @@ async function initDb() {
 
     try {
       await runQuery(`ALTER TABLE users ADD COLUMN gaji_pokok REAL DEFAULT 0`);
+    } catch (e) {}
+
+    try {
+      await runQuery(`ALTER TABLE users ADD COLUMN lini_profesi TEXT DEFAULT 'Beautician'`);
     } catch (e) {}
 
     // 3. Dynamic ACL Table
@@ -247,6 +252,7 @@ async function initDb() {
       CREATE TABLE IF NOT EXISTS tindakan_medis (
         id TEXT PRIMARY KEY,
         nama_tindakan TEXT NOT NULL,
+        kategori_petugas TEXT DEFAULT 'NURSE' CHECK(kategori_petugas IN ('NURSE', 'BEAUTICIAN')),
         tarif_konsul_dokter REAL DEFAULT 0,
         tarif_tindakan_medis REAL DEFAULT 0,
         komisi_fix_therapist REAL DEFAULT 0,
@@ -255,6 +261,10 @@ async function initDb() {
         nominal_nurse_tindakan REAL DEFAULT 0
       )
     `);
+
+    try {
+      await runQuery(`ALTER TABLE tindakan_medis ADD COLUMN kategori_petugas TEXT DEFAULT 'NURSE'`);
+    } catch (e) {}
 
     // 11. Transactions
     await runQuery(`
@@ -334,9 +344,13 @@ async function initDb() {
         pasien_id TEXT NOT NULL,
         petugas_id TEXT NOT NULL,
         role_petugas TEXT NOT NULL,
+        kategori_layanan TEXT DEFAULT 'Facial (Beautician)',
         tindakan_id TEXT,
         nama_tindakan TEXT NOT NULL,
+        status_pengerjaan TEXT DEFAULT 'IN_PROGRESS',
         status_doingan TEXT,
+        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        completed_at DATETIME,
         nominal_dp REAL DEFAULT 0,
         nominal_membership REAL DEFAULT 0,
         komisi REAL DEFAULT 0,
@@ -346,6 +360,19 @@ async function initDb() {
         FOREIGN KEY(petugas_id) REFERENCES users(id)
       )
     `);
+
+    try {
+      await runQuery(`ALTER TABLE doingan ADD COLUMN kategori_layanan TEXT DEFAULT 'Facial (Beautician)'`);
+    } catch (e) {}
+    try {
+      await runQuery(`ALTER TABLE doingan ADD COLUMN status_pengerjaan TEXT DEFAULT 'IN_PROGRESS'`);
+    } catch (e) {}
+    try {
+      await runQuery(`ALTER TABLE doingan ADD COLUMN started_at DATETIME DEFAULT CURRENT_TIMESTAMP`);
+    } catch (e) {}
+    try {
+      await runQuery(`ALTER TABLE doingan ADD COLUMN completed_at DATETIME`);
+    } catch (e) {}
 
     // Migration: Fix any negative sisa_stok in stok_produk
     try {
@@ -502,29 +529,41 @@ async function seedDefaultData() {
     }
   }
 
-  // Seed the 15 requested treatments from user prompt
+  // Seed the 19 Nurse treatments & 3 Beautician treatments requested
   const requestedTreatments = [
-    ['tnd-1', 'Platelet-Rich Plasma (PRP)', 150000, 1200000, 17000, 5, 20, 15000],
-    ['tnd-2', 'DNA Salmon', 150000, 1500000, 17000, 5, 20, 15000],
-    ['tnd-3', 'Laser Pico', 150000, 1000000, 17000, 5, 20, 15000],
-    ['tnd-4', 'Laser DPL', 0, 800000, 17000, 5, 15, 15000],
-    ['tnd-5', 'Laser Blackdoll4', 0, 850000, 17000, 5, 15, 15000],
-    ['tnd-6', 'Laser Underarmd', 0, 450000, 17000, 5, 15, 13000],
-    ['tnd-7', 'Peeling Acne', 0, 350000, 17000, 5, 10, 13000],
-    ['tnd-8', 'Peeling Baru', 0, 400000, 17000, 5, 10, 13000],
-    ['tnd-9', 'Vittaran Poly Booster', 150000, 1800000, 17000, 5, 20, 15000],
-    ['tnd-10', 'JuveLook', 150000, 2500000, 17000, 5, 20, 15000],
-    ['tnd-11', 'Cauter', 100000, 500000, 17000, 5, 15, 13000],
-    ['tnd-12', 'Benang Hidung', 200000, 2000000, 17000, 5, 25, 20000],
-    ['tnd-13', 'Benang Pipi', 200000, 3000000, 17000, 5, 25, 20000],
-    ['tnd-14', 'Infus Whitening', 0, 600000, 17000, 5, 15, 13000],
-    ['tnd-15', 'Infus Choromosome', 0, 1200000, 17000, 5, 20, 15000]
+    // Nurse Treatments (19)
+    ['tnd-1', 'Platelet-Rich Plasma (PRP)', 'NURSE', 150000, 1200000, 17000, 5, 20, 15000],
+    ['tnd-2', 'DNA Salmon', 'NURSE', 150000, 1500000, 17000, 5, 20, 15000],
+    ['tnd-3', 'Laser Pico', 'NURSE', 150000, 1000000, 17000, 5, 20, 15000],
+    ['tnd-4', 'Laser DPL', 'NURSE', 0, 800000, 17000, 5, 15, 15000],
+    ['tnd-5', 'Laser Blackdoll4', 'NURSE', 0, 850000, 17000, 5, 15, 15000],
+    ['tnd-6', 'Laser Underarmd', 'NURSE', 0, 450000, 17000, 5, 15, 13000],
+    ['tnd-7', 'Peeling Acne', 'NURSE', 0, 350000, 17000, 5, 10, 13000],
+    ['tnd-8', 'Peeling Baru', 'NURSE', 0, 400000, 17000, 5, 10, 13000],
+    ['tnd-9', 'Vittaran Poly Booster', 'NURSE', 150000, 1800000, 17000, 5, 20, 15000],
+    ['tnd-10', 'JuveLook', 'NURSE', 150000, 2500000, 17000, 5, 20, 15000],
+    ['tnd-11', 'Cauter', 'NURSE', 100000, 500000, 17000, 5, 15, 13000],
+    ['tnd-12', 'Benang Hidung', 'NURSE', 200000, 2000000, 17000, 5, 25, 20000],
+    ['tnd-13', 'Benang Pipi', 'NURSE', 200000, 3000000, 17000, 5, 25, 20000],
+    ['tnd-14', 'Infus Whitening', 'NURSE', 0, 600000, 17000, 5, 15, 13000],
+    ['tnd-15', 'Infus Choromosome', 'NURSE', 0, 1200000, 17000, 5, 20, 15000],
+    ['tnd-16', 'Botox', 'NURSE', 150000, 1800000, 17000, 5, 20, 15000],
+    ['tnd-17', 'Messo', 'NURSE', 100000, 750000, 17000, 5, 15, 13000],
+    ['tnd-18', 'Filter Dagu', 'NURSE', 200000, 2500000, 17000, 5, 20, 15000],
+    ['tnd-19', 'Filter Hidung', 'NURSE', 200000, 2500000, 17000, 5, 20, 15000],
+
+    // Beautician Treatments (3)
+    ['tnd-20', 'Oxy & PDT', 'BEAUTICIAN', 0, 250000, 17000, 5, 0, 0],
+    ['tnd-21', 'Oxy,pdt,micro,organic,detox,Hf', 'BEAUTICIAN', 0, 450000, 17000, 5, 0, 0],
+    ['tnd-22', 'RF', 'BEAUTICIAN', 0, 300000, 17000, 5, 0, 0]
   ];
 
   for (const t of requestedTreatments) {
     const existing = await getQuery('SELECT id FROM tindakan_medis WHERE id = ? OR nama_tindakan = ?', [t[0], t[1]]);
     if (!existing) {
-      await runQuery('INSERT INTO tindakan_medis (id, nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', t);
+      await runQuery('INSERT INTO tindakan_medis (id, nama_tindakan, kategori_petugas, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', t);
+    } else {
+      await runQuery('UPDATE tindakan_medis SET kategori_petugas = ? WHERE id = ?', [t[2], existing.id]);
     }
   }
 

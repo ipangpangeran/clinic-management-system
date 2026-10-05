@@ -1,35 +1,147 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { Sparkles, User, FileCheck, DollarSign, Award, Plus, Trash2, CheckCircle2, ShieldAlert } from 'lucide-react';
+import StaffMobilePortal from './StaffMobilePortal';
+import { 
+  Sparkles, User, FileCheck, DollarSign, Award, Plus, Trash2, CheckCircle2, ShieldAlert,
+  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck
+} from 'lucide-react';
 
 export default function DoinganActivity() {
   const { user } = useContext(AuthContext);
-  const [doinganList, setDoinganList] = useState([]);
+  const [activeMainTab, setActiveMainTab] = useState('ASSIGNMENT'); // 'ASSIGNMENT', 'STAFF_PORTAL', 'RECAP'
+
+  // Data States
   const [patients, setPatients] = useState([]);
   const [treatments, setTreatments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [staffList, setStaffList] = useState([]);
 
-  // Form State
-  const [pasienId, setPasienId] = useState('');
-  const [tindakanId, setTindakanId] = useState('');
-  const [statusDoingan, setStatusDoingan] = useState('Mbr'); // 'Mbr', 'Trial', 'Membership', 'DP Membership'
-  const [nominalDp, setNominalDp] = useState('');
-  const [nominalMembership, setNominalMembership] = useState('');
-  const [notes, setNotes] = useState('');
+  // Assignment Form State (Admin FO Intake)
+  const [assignPasienId, setAssignPasienId] = useState('');
+  const [serviceCategory, setServiceCategory] = useState('Facial (Beautician)'); // 'Facial (Beautician)' vs 'Tindakan Medis (Nurse)'
+  const [selectedPetugasId, setSelectedPetugasId] = useState('');
+  const [assignNotes, setAssignNotes] = useState('');
+  const [assigning, setAssigning] = useState(false);
 
-  // Quick Treatment Modal State for Super Admin & Admin Klinik
+  // Filtered Recap State (Admin Dashboard)
+  const [recapData, setRecapData] = useState([]);
+  const [recapSummary, setRecapSummary] = useState({ total_count: 0, completed_count: 0, total_komisi: 0 });
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [filterPetugasId, setFilterPetugasId] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [loadingRecap, setLoadingRecap] = useState(false);
+
+  // Messages
+  const [msg, setMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Quick Treatment Modal State
   const [showTreatmentModal, setShowTreatmentModal] = useState(false);
   const [namaTindakan, setNamaTindakan] = useState('');
+  const [kategoriPetugas, setKategoriPetugas] = useState('BEAUTICIAN');
   const [tarifTindakanMedis, setTarifTindakanMedis] = useState(150000);
   const [tarifKonsulDokter, setTarifKonsulDokter] = useState(50000);
   const [komisiFixTherapist, setKomisiFixTherapist] = useState(17000);
   const [nominalNurseTindakan, setNominalNurseTindakan] = useState(15000);
-  const [percentBtcBonus, setPercentBtcBonus] = useState(5);
-  const [percentJasaMedisDokter, setPercentJasaMedisDokter] = useState(20);
   const [submittingTreatment, setSubmittingTreatment] = useState(false);
 
   const canManageTreatments = user?.role === 'Super Admin' || user?.role === 'Admin System' || user?.role === 'Admin Klinik';
+
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
+
+  useEffect(() => {
+    fetchStaffAvailability();
+  }, [serviceCategory]);
+
+  useEffect(() => {
+    if (activeMainTab === 'RECAP') {
+      fetchRecapData();
+    }
+  }, [activeMainTab, startDate, endDate, filterPetugasId, filterCategory, filterStatus]);
+
+  const fetchInitialData = async () => {
+    try {
+      const [pasRes, tndRes] = await Promise.all([
+        axios.get('/api/pasien'),
+        axios.get('/api/tindakan')
+      ]);
+      setPatients(pasRes.data || []);
+      setTreatments(tndRes.data || []);
+      if (pasRes.data.length > 0) setAssignPasienId(pasRes.data[0].id);
+    } catch (err) {
+      console.error('Error fetching initial doingan data', err);
+    }
+  };
+
+  const fetchStaffAvailability = async () => {
+    try {
+      const lini = serviceCategory.includes('Nurse') ? 'Nurse' : 'Beautician';
+      const res = await axios.get(`/api/staff-availability?lini=${lini}`);
+      setStaffList(res.data || []);
+      
+      // Auto select first available staff if any
+      const available = res.data.find(s => !s.is_busy);
+      if (available) setSelectedPetugasId(available.id);
+      else if (res.data.length > 0) setSelectedPetugasId(res.data[0].id);
+    } catch (err) {
+      console.error('Error fetching staff availability', err);
+    }
+  };
+
+  const fetchRecapData = async () => {
+    setLoadingRecap(true);
+    try {
+      const queryParams = new URLSearchParams({
+        start_date: startDate,
+        end_date: endDate
+      });
+      if (filterPetugasId) queryParams.append('petugas_id', filterPetugasId);
+      if (filterCategory) queryParams.append('kategori_layanan', filterCategory);
+      if (filterStatus) queryParams.append('status_pengerjaan', filterStatus);
+
+      const res = await axios.get(`/api/doingan/recap?${queryParams.toString()}`);
+      setRecapData(res.data.data || []);
+      setRecapSummary(res.data.summary || { total_count: 0, completed_count: 0, total_komisi: 0 });
+    } catch (err) {
+      console.error('Error fetching recap data', err);
+    } finally {
+      setLoadingRecap(false);
+    }
+  };
+
+  const handleAssignPatient = async (e) => {
+    e.preventDefault();
+    setAssigning(true);
+    setMsg('');
+    setErrorMsg('');
+
+    if (!assignPasienId || !selectedPetugasId) {
+      setErrorMsg('Pilih nama pasien dan petugas yang akan di-assign.');
+      setAssigning(false);
+      return;
+    }
+
+    try {
+      const res = await axios.post('/api/doingan/assign', {
+        pasien_id: assignPasienId,
+        petugas_id: selectedPetugasId,
+        kategori_layanan: serviceCategory,
+        notes: assignNotes
+      });
+
+      setMsg(`✓ ${res.data.message}`);
+      setAssignNotes('');
+      fetchStaffAvailability();
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Gagal meng-assign pasien ke petugas');
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   const handleSaveQuickTreatment = async (e) => {
     e.preventDefault();
@@ -39,20 +151,16 @@ export default function DoinganActivity() {
     }
     setSubmittingTreatment(true);
     try {
-      const payload = {
+      await axios.post('/api/tindakan', {
         nama_tindakan: namaTindakan,
+        kategori_petugas: kategoriPetugas,
         tarif_tindakan_medis: Number(tarifTindakanMedis) || 0,
         tarif_konsul_dokter: Number(tarifKonsulDokter) || 0,
         komisi_fix_therapist: Number(komisiFixTherapist) || 0,
-        nominal_nurse_tindakan: Number(nominalNurseTindakan) || 0,
-        percent_btc_bonus: Number(percentBtcBonus) || 0,
-        percent_jasa_medis_dokter: Number(percentJasaMedisDokter) || 0
-      };
-      await axios.post('/api/tindakan', payload);
+        nominal_nurse_tindakan: Number(nominalNurseTindakan) || 0
+      });
       const tndRes = await axios.get('/api/tindakan');
       setTreatments(tndRes.data);
-      const newlyAdded = tndRes.data.find(t => t.nama_tindakan.toLowerCase() === namaTindakan.trim().toLowerCase());
-      if (newlyAdded) setTindakanId(newlyAdded.id);
       setShowTreatmentModal(false);
       setNamaTindakan('');
     } catch (err) {
@@ -61,343 +169,424 @@ export default function DoinganActivity() {
       setSubmittingTreatment(false);
     }
   };
-  
-  const [submitting, setSubmitting] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      const [doiRes, pasRes, tndRes] = await Promise.all([
-        axios.get('/api/doingan'),
-        axios.get('/api/pasien'),
-        axios.get('/api/tindakan')
-      ]);
-      setDoinganList(doiRes.data);
-      setPatients(pasRes.data);
-      setTreatments(tndRes.data);
-      if (pasRes.data.length > 0) setPasienId(pasRes.data[0].id);
-      if (tndRes.data.length > 0) setTindakanId(tndRes.data[0].id);
-    } catch (err) {
-      console.error('Error loading doingan data', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveDoingan = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setMsg('');
-    setErrorMsg('');
-
-    if (!pasienId) {
-      setErrorMsg('Pilih nama pasien terlebih dahulu');
-      setSubmitting(false);
-      return;
-    }
-
-    try {
-      const selectedTreatment = treatments.find(t => t.id === tindakanId);
-      const payload = {
-        pasien_id: pasienId,
-        tindakan_id: tindakanId || null,
-        nama_tindakan: selectedTreatment ? selectedTreatment.nama_tindakan : 'Doingan Perawatan',
-        status_doingan: statusDoingan,
-        nominal_dp: Number(nominalDp) || 0,
-        nominal_membership: Number(nominalMembership) || 0,
-        notes: notes
-      };
-
-      const res = await axios.post('/api/doingan', payload);
-      setMsg(`Catatan doingan berhasil disimpan! Estimated Komisi: Rp ${res.data.komisi.toLocaleString('id-ID')}`);
-      setNotes('');
-      setNominalDp('');
-      setNominalMembership('');
-      fetchData();
-    } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Gagal menyimpan catatan doingan');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleDeleteDoingan = async (id) => {
     if (!window.confirm('Hapus catatan doingan ini?')) return;
     try {
       await axios.delete(`/api/doingan/${id}`);
-      fetchData();
+      fetchRecapData();
     } catch (err) {
       alert('Gagal menghapus doingan');
     }
   };
 
-  // Preset Commission Calculations per role for live preview badge
-  const calculatePreviewCommission = () => {
-    if (!user) return 0;
-    if (user.role === 'Beautician') {
-      return statusDoingan === 'Mbr' ? 17000 : 13000;
-    }
-    if (user.role === 'Marketing') {
-      if (statusDoingan === 'Trial') return 10000;
-      const base = Number(nominalMembership) || Number(nominalDp) || 0;
-      return Math.max(50000, Math.round(base * 0.05));
-    }
-    if (user.role === 'Nurse') {
-      const tr = treatments.find(t => t.id === tindakanId);
-      return tr ? (tr.nominal_nurse_tindakan || 15000) : 15000;
-    }
-    return 15000;
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Aktivitas & Catatan Doingan Perawatan</h1>
-          <p className="text-xs text-[#514440]">Formulir input doingan treatment untuk Nurse, Beautician, dan Marketing beserta pencatatan komisi otomatis.</p>
+          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Digital Alur Pasien & Doingan Perawatan</h1>
+          <p className="text-xs text-[#514440]">Digitalisasi pendaftaran pasien FO, assign petugas Beautician/Nurse live status, dan rekapan laporan komisi.</p>
         </div>
-        <div className="px-4 py-2 bg-gradient-to-r from-[#faf3e8] to-[#f4ede3] border border-[#d6c2bd] rounded-xl flex items-center gap-2">
-          <Award className="w-4 h-4 text-[#7d5141]" />
-          <span className="text-xs font-bold text-[#1e1b15]">Role Aktif: <strong className="text-[#7d5141]">{user?.role}</strong></span>
+        <div className="flex items-center gap-2">
+          <div className="px-3.5 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141] flex items-center gap-1.5">
+            <UserCheck className="w-4 h-4" />
+            <span>Role: <strong>{user?.role}</strong></span>
+          </div>
         </div>
       </div>
 
-      {msg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          <span>{msg}</span>
-        </div>
-      )}
+      {/* Main Tabs Navigation */}
+      <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
+        <div className="flex overflow-x-auto gap-2 border-b border-[#e5ded4] pb-3 text-xs whitespace-nowrap">
+          <button
+            onClick={() => setActiveMainTab('ASSIGNMENT')}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeMainTab === 'ASSIGNMENT' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Pendaftaran & Assign Petugas (Admin FO)</span>
+          </button>
 
-      {errorMsg && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-red-600" />
-          <span>{errorMsg}</span>
-        </div>
-      )}
+          <button
+            onClick={() => setActiveMainTab('STAFF_PORTAL')}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeMainTab === 'STAFF_PORTAL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100'
+            }`}
+          >
+            <Smartphone className="w-4 h-4" />
+            <span>Portal Mobile Petugas (Beautician & Nurse)</span>
+          </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Input Form Column (5 cols) */}
-        <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#e5ded4] pb-3">
-            <Plus className="w-4 h-4 text-[#7d5141]" />
-            <h3 className="font-serif font-bold text-base text-[#1e1b15]">Catat Doingan / Perawatan Baru</h3>
+          <button
+            onClick={() => setActiveMainTab('RECAP')}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeMainTab === 'RECAP' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Dashboard Rekapitulasi & Filter Komisi</span>
+          </button>
+        </div>
+
+        {msg && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>{msg}</span>
           </div>
+        )}
 
-          <form onSubmit={handleSaveDoingan} className="space-y-3.5">
-            {/* Nama Pasien */}
-            <div>
-              <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Pasien *</label>
-              <select
-                value={pasienId}
-                onChange={(e) => setPasienId(e.target.value)}
-                required
-                className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-semibold text-[#1e1b15]"
-              >
-                {patients.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.nama_lengkap} ({p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}) - {p.no_hp}
-                  </option>
-                ))}
-              </select>
-            </div>
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-red-600" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
-            {/* Selecting Treatment / Tindakan */}
-            {user?.role !== 'Marketing' && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-[#514440]">Jenis Tindakan / Treatment *</label>
-                  {canManageTreatments && (
-                    <button
-                      type="button"
-                      onClick={() => setShowTreatmentModal(true)}
-                      className="text-[11px] font-bold text-[#7d5141] hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" /> + Tambah Jenis Tindakan Baru
-                    </button>
-                  )}
+        {/* TAB 1: PENDAFTARAN & ASSIGNMENT PASIEN (ADMIN FO) */}
+        {activeMainTab === 'ASSIGNMENT' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-6 bg-[#faf3e8]/40 p-5 rounded-2xl border border-[#d6c2bd] space-y-4">
+              <div className="flex justify-between items-center border-b border-[#d6c2bd] pb-3">
+                <div className="flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-[#7d5141]" />
+                  <h3 className="font-serif font-bold text-base text-[#1e1b15]">Form Intake Pasien Datang</h3>
                 </div>
-                <select
-                  value={tindakanId}
-                  onChange={(e) => setTindakanId(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-semibold text-[#1e1b15]"
-                >
-                  {treatments.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.nama_tindakan} (Tarif: Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')})
-                    </option>
-                  ))}
-                </select>
+                <span className="text-[10px] font-bold text-[#7d5141] bg-white px-2.5 py-1 rounded-full border border-[#d6c2bd]">
+                  Admin FO Flow
+                </span>
               </div>
-            )}
 
-            {/* Status Doingan Pasien */}
-            <div>
-              <label className="block text-xs font-semibold text-[#514440] mb-1">Status Doingan Pasien *</label>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setStatusDoingan('Mbr')}
-                  className={`py-2 px-3 rounded-xl font-bold transition-all cursor-pointer ${statusDoingan === 'Mbr' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
-                >
-                  Mbr / Member (Komisi Rp 17.000)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStatusDoingan('Trial')}
-                  className={`py-2 px-3 rounded-xl font-bold transition-all cursor-pointer ${statusDoingan === 'Trial' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}
-                >
-                  Trial / Free (Komisi Rp 13.000)
-                </button>
-              </div>
-            </div>
-
-            {/* Marketing Specific Options */}
-            {user?.role === 'Marketing' && (
-              <div className="space-y-3">
+              <form onSubmit={handleAssignPatient} className="space-y-4">
+                {/* 1. Pilih Pasien Datang */}
                 <div>
-                  <label className="block text-xs font-semibold text-[#514440] mb-1">Kategori Aktivitas Marketing *</label>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">Pilih Nama Pasien Datang *</label>
                   <select
-                    value={statusDoingan}
-                    onChange={(e) => setStatusDoingan(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-semibold"
+                    value={assignPasienId}
+                    onChange={(e) => setAssignPasienId(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
                   >
-                    <option value="Trial">Pasien Trial (Free - Komisi Rp 10.000)</option>
-                    <option value="Membership">Pembelian Membership Baru</option>
-                    <option value="DP Membership">Pembayaran DP Membership</option>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.nama_lengkap} ({p.tipe_pasien === 'MEMBER' ? 'MEMBER' : 'TRIAL'}) - {p.no_hp}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-                {(statusDoingan === 'Membership' || statusDoingan === 'DP Membership') && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-semibold text-[#514440] mb-1">Nominal Membership (Rp)</label>
-                      <input
-                        type="number"
-                        value={nominalMembership}
-                        onChange={(e) => setNominalMembership(e.target.value)}
-                        placeholder="2500000"
-                        className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-[#514440] mb-1">Nominal DP (Rp)</label>
-                      <input
-                        type="number"
-                        value={nominalDp}
-                        onChange={(e) => setNominalDp(e.target.value)}
-                        placeholder="500000"
-                        className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
-                      />
-                    </div>
+                {/* 2. Pilih Kebutuhan / Layanan Pasien */}
+                <div>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">Kebutuhan Layanan Pasien *</label>
+                  <div className="grid grid-cols-2 gap-3 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setServiceCategory('Facial (Beautician)')}
+                      className={`py-2.5 px-3 rounded-xl transition-all cursor-pointer border ${
+                        serviceCategory === 'Facial (Beautician)'
+                          ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
+                          : 'bg-white text-[#514440] border-[#d6c2bd] hover:bg-[#faf3e8]'
+                      }`}
+                    >
+                      💆‍♀️ Facial / Perawatan (Beautician)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setServiceCategory('Tindakan Medis (Nurse)')}
+                      className={`py-2.5 px-3 rounded-xl transition-all cursor-pointer border ${
+                        serviceCategory === 'Tindakan Medis (Nurse)'
+                          ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
+                          : 'bg-white text-[#514440] border-[#d6c2bd] hover:bg-[#faf3e8]'
+                      }`}
+                    >
+                      🩺 Tindakan Dokter (Nurse)
+                    </button>
                   </div>
-                )}
+                </div>
+
+                {/* 3. Assign Petugas (Dropdown Filtered by Profession & Status) */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-semibold text-[#514440]">
+                      Pilih Petugas {serviceCategory.includes('Nurse') ? 'Nurse' : 'Beautician'} Bertugas *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={fetchStaffAvailability}
+                      className="text-[10px] text-[#7d5141] hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Refresh Status
+                    </button>
+                  </div>
+
+                  <select
+                    value={selectedPetugasId}
+                    onChange={(e) => setSelectedPetugasId(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
+                  >
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id} disabled={s.is_busy}>
+                        {s.full_name} ({s.lini_profesi || s.role}) - {s.is_busy ? `🔴 SEDANG MENANGANI (${s.active_doingan?.pasien_nama})` : '🟢 SENGANG (KOSONG)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">Catatan Pendaftaran FO (Optional)</label>
+                  <textarea
+                    value={assignNotes}
+                    onChange={(e) => setAssignNotes(e.target.value)}
+                    placeholder="misal: Pasien minta facial ruangan atas nomor 3..."
+                    rows="2"
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={assigning}
+                  className="w-full py-3 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  {assigning ? 'Meng-assign Pasien...' : 'ASSIGN PASIEN KE PETUGAS'}
+                </button>
+              </form>
+            </div>
+
+            {/* Availability Monitor Column */}
+            <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
+              <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">
+                  Status Live Petugas ({serviceCategory.includes('Nurse') ? 'Nurse' : 'Beautician'})
+                </h3>
+                <span className="text-xs text-gray-500 font-semibold">{staffList.length} Petugas Available</span>
               </div>
-            )}
 
-            {/* Catatan Perawatan */}
-            <div>
-              <label className="block text-xs font-semibold text-[#514440] mb-1">Catatan / Detail Perawatan</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows="2"
-                placeholder="Detail reaksi kulit, area pengerjaan, atau resep..."
-                className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
-              />
-            </div>
-
-            {/* Commission Preview Card */}
-            <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex items-center justify-between text-xs">
-              <span className="font-bold text-[#514440]">Perkiraan Komisi Diperoleh:</span>
-              <span className="font-bold text-sm text-[#7d5141]">
-                Rp {calculatePreviewCommission().toLocaleString('id-ID')}
-              </span>
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-2.5 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" />
-              {submitting ? 'Simpan Catatan...' : 'Simpan Doingan & Hitung Komisi'}
-            </button>
-          </form>
-        </div>
-
-        {/* History Table Column (7 cols) */}
-        <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
-          <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
-            <h3 className="font-serif font-bold text-base text-[#1e1b15]">Riwayat Doingan & Komisi Petugas</h3>
-            <span className="text-xs font-bold text-[#7d5141] bg-[#faf3e8] px-3 py-1 rounded-full border border-[#d6c2bd]">
-              {doinganList.length} Catatan
-            </span>
-          </div>
-
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-            <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
-              <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase tracking-wider border-b border-[#e5ded4]">
-                <tr>
-                  <th className="py-2.5 px-3">Tanggal</th>
-                  <th className="py-2.5 px-3">Nama Pasien</th>
-                  <th className="py-2.5 px-3">Tindakan / Aktivitas</th>
-                  <th className="py-2.5 px-3">Petugas & Role</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Komisi</th>
-                  <th className="py-2.5 px-3 text-center">Hapus</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e5ded4]">
-                {doinganList.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="text-center py-8 text-gray-400 italic">Belum ada catatan doingan.</td>
-                  </tr>
-                ) : (
-                  doinganList.map(item => (
-                    <tr key={item.id} className="hover:bg-[#fff8f0]">
-                      <td className="py-2.5 px-3 text-[11px] text-[#83746f]">
-                        {new Date(item.created_at).toLocaleString('id-ID')}
-                      </td>
-                      <td className="py-2.5 px-3 font-bold text-[#1e1b15]">{item.pasien_nama}</td>
-                      <td className="py-2.5 px-3 text-[#514440] font-medium">{item.nama_tindakan}</td>
-                      <td className="py-2.5 px-3">
-                        <div className="font-semibold text-[#1e1b15]">{item.petugas_nama}</div>
-                        <div className="text-[10px] font-bold text-[#7d5141] uppercase">{item.role_petugas}</div>
-                      </td>
-                      <td className="py-2.5 px-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          item.status_doingan === 'Mbr' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {item.status_doingan || 'Regular'}
+              <div className="space-y-3 max-h-[420px] overflow-y-auto">
+                {staffList.map(s => (
+                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
+                    s.is_busy 
+                      ? 'bg-red-50/70 border-red-200' 
+                      : 'bg-emerald-50/70 border-emerald-200'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <div className="font-bold text-sm text-[#1e1b15]">{s.full_name}</div>
+                      {s.is_busy ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-100 text-red-800 border border-red-300 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> SEDANG DILAYANI
                         </span>
-                      </td>
-                      <td className="py-2.5 px-3 font-bold text-[#7d5141]">
-                        Rp {item.komisi.toLocaleString('id-ID')}
-                      </td>
-                      <td className="py-2.5 px-3 text-center">
-                        <button
-                          onClick={() => handleDeleteDoingan(item.id)}
-                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> SENGANG / KOSONG
+                        </span>
+                      )}
+                    </div>
+
+                    {s.is_busy && s.active_doingan && (
+                      <div className="bg-white p-3 rounded-xl border border-red-100 text-[11px] text-[#514440] space-y-1">
+                        <div>Pasien: <strong className="text-[#1e1b15]">{s.active_doingan.pasien_nama}</strong> ({s.active_doingan.tipe_pasien})</div>
+                        <div className="flex items-center gap-1 text-gray-500">
+                          <Clock className="w-3 h-3 text-red-600" />
+                          <span>Mulai jam: {new Date(s.active_doingan.started_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* TAB 2: PORTAL MOBILE PETUGAS */}
+        {activeMainTab === 'STAFF_PORTAL' && (
+          <div className="py-2">
+            <StaffMobilePortal />
+          </div>
+        )}
+
+        {/* TAB 3: DASHBOARD REKAPITULASI & FILTER KOMISI (ADMIN SIDE) */}
+        {activeMainTab === 'RECAP' && (
+          <div className="space-y-5">
+            {/* Filter Controls */}
+            <div className="bg-[#faf3e8] p-4 rounded-2xl border border-[#d6c2bd] space-y-3 text-xs">
+              <div className="flex items-center gap-2 font-bold text-[#7d5141] uppercase tracking-wider">
+                <Filter className="w-4 h-4" />
+                <span>Filter Laporan Rekapitulasi Doingan & Komisi Petugas</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Dari Tanggal *</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Sampai Tanggal *</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Filter Nama Petugas</label>
+                  <select
+                    value={filterPetugasId}
+                    onChange={(e) => setFilterPetugasId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
+                  >
+                    <option value="">-- Semua Petugas --</option>
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id}>{s.full_name} ({s.lini_profesi || s.role})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Filter Kategori Service</label>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
+                  >
+                    <option value="">-- Semua Kategori --</option>
+                    <option value="Facial (Beautician)">Facial (Beautician)</option>
+                    <option value="Tindakan Medis (Nurse)">Tindakan Medis (Nurse)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Filter Status Pengerjaan</label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
+                  >
+                    <option value="">-- Semua Status --</option>
+                    <option value="IN_PROGRESS">IN PROGRESS (DILAYANI)</option>
+                    <option value="COMPLETED">COMPLETED (SELESAI)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-1">
+                <span className="text-[11px] text-gray-500 font-semibold uppercase">Total Patient Sessions</span>
+                <div className="text-xl font-serif font-bold text-[#1e1b15]">{recapSummary.total_count} Sesi</div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-1">
+                <span className="text-[11px] text-gray-500 font-semibold uppercase">Pengerjaan Selesai (Completed)</span>
+                <div className="text-xl font-serif font-bold text-emerald-700">{recapSummary.completed_count} Pasien</div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-1">
+                <span className="text-[11px] text-gray-500 font-semibold uppercase">Total Accumulative Komisi</span>
+                <div className="text-xl font-serif font-bold text-[#7d5141]">
+                  Rp {recapSummary.total_komisi?.toLocaleString('id-ID')}
+                </div>
+              </div>
+            </div>
+
+            {/* Recap Table */}
+            <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Tabel Rekapitulasi Detail Activities & Komisi</h3>
+                <button
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+                >
+                  <Printer className="w-4 h-4" /> Cetak / Export Rekapan
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
+                  <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                    <tr>
+                      <th className="py-3 px-4">Waktu Assign / Selesai</th>
+                      <th className="py-3 px-4">Nama Pasien</th>
+                      <th className="py-3 px-4">Petugas & Lini Profesi</th>
+                      <th className="py-3 px-4">Detail Treatment / Actions</th>
+                      <th className="py-3 px-4">Status Layanan</th>
+                      <th className="py-3 px-4">Nominal Komisi</th>
+                      {canManageTreatments && <th className="py-3 px-4 text-center">Hapus</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e5ded4]">
+                    {recapData.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="text-center py-8 text-gray-400 italic">
+                          Belum ada data rekapan pengerjaan pada periode tanggal ini.
+                        </td>
+                      </tr>
+                    ) : (
+                      recapData.map(item => (
+                        <tr key={item.id} className="hover:bg-[#fff8f0]">
+                          <td className="py-3 px-4 text-[#83746f]">
+                            <div>Mulai: {new Date(item.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+                            <div className="text-[10px] text-gray-400">
+                              {item.completed_at ? `Selesai: ${new Date(item.completed_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : '-'}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-bold text-[#1e1b15]">
+                            {item.pasien_nama}
+                            <div className="text-[10px] font-normal text-gray-500">{item.tipe_pasien}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-[#1e1b15]">{item.petugas_nama}</div>
+                            <div className="text-[10px] font-semibold text-[#7d5141] uppercase">{item.lini_profesi || item.role_petugas}</div>
+                          </td>
+                          <td className="py-3 px-4 font-medium text-[#514440]">
+                            {item.nama_tindakan}
+                            {item.notes && <div className="text-[10px] text-gray-400 italic">Notes: {item.notes}</div>}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              item.status_pengerjaan === 'COMPLETED' 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                            }`}>
+                              {item.status_pengerjaan === 'COMPLETED' ? '✓ SELESAI' : '⏳ IN PROGRESS'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-bold text-[#7d5141] text-sm">
+                            Rp {(item.komisi || 0).toLocaleString('id-ID')}
+                          </td>
+                          {canManageTreatments && (
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                onClick={() => handleDeleteDoingan(item.id)}
+                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
       {/* QUICK ADD TREATMENT MODAL FOR SUPER ADMIN & ADMIN KLINIK */}
       {showTreatmentModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
@@ -418,6 +607,18 @@ export default function DoinganActivity() {
                   placeholder="misal: HIFU Full Face Lift & Firming"
                   className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#514440] mb-1">Kategori Petugas *</label>
+                <select
+                  value={kategoriPetugas}
+                  onChange={(e) => setKategoriPetugas(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141]"
+                >
+                  <option value="BEAUTICIAN">BEAUTICIAN (Facial & Skin Care)</option>
+                  <option value="NURSE">NURSE (Tindakan Dokter & Medis)</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -462,24 +663,6 @@ export default function DoinganActivity() {
                       value={nominalNurseTindakan}
                       onChange={(e) => setNominalNurseTindakan(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-blue-800"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-[#514440] mb-1">% Bonus BTC</label>
-                    <input
-                      type="number"
-                      value={percentBtcBonus}
-                      onChange={(e) => setPercentBtcBonus(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-[#514440] mb-1">% Jasa Medis Dokter</label>
-                    <input
-                      type="number"
-                      value={percentJasaMedisDokter}
-                      onChange={(e) => setPercentJasaMedisDokter(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
                     />
                   </div>
                 </div>

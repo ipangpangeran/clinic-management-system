@@ -220,6 +220,210 @@ app.get('/api/doingan', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/staff-availability -> Returns staff users with their active work status
+app.get('/api/staff-availability', authenticateToken, async (req, res) => {
+  try {
+    const { lini } = req.query; // 'Beautician' or 'Nurse'
+    let query = "SELECT id, username, full_name, role, lini_profesi FROM users WHERE role NOT IN ('Super Admin', 'Admin System', 'Admin Klinik')";
+    const params = [];
+    if (lini) {
+      query += " AND (lini_profesi = ? OR role = ?)";
+      params.push(lini, lini);
+    }
+    const staffList = await allQuery(query, params);
+    
+    // Check active doingan for each staff
+    const result = [];
+    for (const s of staffList) {
+      const active = await getQuery(`
+        SELECT d.*, p.nama_lengkap as pasien_nama, p.tipe_pasien
+        FROM doingan d
+        JOIN pasien p ON d.pasien_id = p.id
+        WHERE d.petugas_id = ? AND d.status_pengerjaan = 'IN_PROGRESS'
+        ORDER BY d.created_at DESC LIMIT 1
+      `, [s.id]);
+      
+      result.push({
+        ...s,
+        is_busy: Boolean(active),
+        active_doingan: active || null
+      });
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching staff availability', error: err.message });
+  }
+});
+
+// POST /api/doingan/assign -> Admin FO assigns patient to staff member
+app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
+  try {
+    const { pasien_id, petugas_id, kategori_layanan, notes } = req.body;
+    if (!pasien_id || !petugas_id) {
+      return res.status(400).json({ message: 'Pasien dan Petugas wajib dipilih' });
+    }
+
+    const pasien = await getQuery('SELECT * FROM pasien WHERE id = ?', [pasien_id]);
+    const petugas = await getQuery('SELECT * FROM users WHERE id = ?', [petugas_id]);
+    if (!pasien || !petugas) return res.status(404).json({ message: 'Pasien atau Petugas tidak ditemukan' });
+
+    // Check if staff already has active doingan
+    const active = await getQuery("SELECT id FROM doingan WHERE petugas_id = ? AND status_pengerjaan = 'IN_PROGRESS'", [petugas_id]);
+    if (active) {
+      return res.status(400).json({ message: `Petugas ${petugas.full_name} saat ini sedang menangani pasien lain!` });
+    }
+
+    const id = 'doi-' + Date.now();
+    const statusDoingan = (pasien.tipe_pasien === 'MEMBER' || pasien.tipe_pasien === 'NON-TRIAL' || pasien.tipe_pasien === 'Reguler') ? 'Mbr' : 'Trial';
+
+    await runQuery(`
+      INSERT INTO doingan (
+        id, pasien_id, petugas_id, role_petugas, kategori_layanan, tindakan_id, nama_tindakan,
+        status_pengerjaan, status_doingan, started_at, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, CURRENT_TIMESTAMP, ?)
+    `, [
+      id, pasien_id, petugas_id, petugas.role || 'Staff',
+      kategori_layanan || (petugas.lini_profesi === 'Nurse' ? 'Tindakan Medis (Nurse)' : 'Facial (Beautician)'),
+      null, 'Menunggu Konfirmasi Tindakan', statusDoingan, notes || ''
+    ]);
+
+    res.status(201).json({ message: `Pasien ${pasien.nama_lengkap} berhasil di-assign ke ${petugas.full_name}`, doingan_id: id });
+  } catch (err) {
+    res.status(500).json({ message: 'Error assigning patient', error: err.message });
+  }
+});
+
+// GET /api/doingan/staff/active -> Current logged in staff active session
+app.get('/api/doingan/staff/active', authenticateToken, async (req, res) => {
+  try {
+    const active = await getQuery(`
+      SELECT d.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, p.jenis_kulit, p.riwayat_alergi
+      FROM doingan d
+      JOIN pasien p ON d.pasien_id = p.id
+      WHERE d.petugas_id = ? AND d.status_pengerjaan = 'IN_PROGRESS'
+      ORDER BY d.created_at DESC LIMIT 1
+    `, [req.user.id]);
+
+    const history = await allQuery(`
+      SELECT d.*, p.nama_lengkap as pasien_nama, p.tipe_pasien
+      FROM doingan d
+      JOIN pasien p ON d.pasien_id = p.id
+      WHERE d.petugas_id = ? AND d.status_pengerjaan = 'COMPLETED'
+      ORDER BY d.completed_at DESC LIMIT 10
+    `, [req.user.id]);
+
+    res.json({ active_doingan: active || null, history: history || [] });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching staff active session', error: err.message });
+  }
+});
+
+// POST /api/doingan/:id/complete -> Staff confirms completed treatment items
+app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tindakan_ids, notes } = req.body; // array of treatment IDs or single ID
+
+    const doi = await getQuery('SELECT d.*, p.tipe_pasien FROM doingan d JOIN pasien p ON d.pasien_id = p.id WHERE d.id = ?', [id]);
+    if (!doi) return res.status(404).json({ message: 'Pengerjaan doingan tidak ditemukan' });
+
+    let finalNamaTindakan = 'Perawatan Selesai';
+    let totalKomisi = 0;
+    let mainTindakanId = null;
+
+    if (tindakan_ids && Array.isArray(tindakan_ids) && tindakan_ids.length > 0) {
+      const placeholders = tindakan_ids.map(() => '?').join(',');
+      const selectedTreatments = await allQuery(`SELECT * FROM tindakan_medis WHERE id IN (${placeholders})`, tindakan_ids);
+      
+      finalNamaTindakan = selectedTreatments.map(t => t.nama_tindakan).join(', ');
+      mainTindakanId = selectedTreatments[0]?.id || null;
+
+      selectedTreatments.forEach(t => {
+        if (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') {
+          totalKomisi += (t.komisi_fix_therapist || 17000);
+        } else if (doi.status_doingan === 'Trial') {
+          totalKomisi += (t.nominal_nurse_tindakan || 13000);
+        } else {
+          totalKomisi += (t.komisi_fix_therapist || 15000);
+        }
+      });
+    } else {
+      totalKomisi = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') ? 17000 : 13000;
+    }
+
+    await runQuery(`
+      UPDATE doingan
+      SET status_pengerjaan = 'COMPLETED',
+          tindakan_id = ?,
+          nama_tindakan = ?,
+          komisi = ?,
+          notes = ?,
+          completed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [mainTindakanId, finalNamaTindakan, totalKomisi, notes || doi.notes || '', id]);
+
+    res.json({ message: 'Pengerjaan tindakan berhasil dikonfirmasi selesai!', komisi: totalKomisi });
+  } catch (err) {
+    res.status(500).json({ message: 'Error completing doingan', error: err.message });
+  }
+});
+
+// GET /api/doingan/recap -> Filtered recap for Admin Dashboard & Commission export
+app.get('/api/doingan/recap', authenticateToken, async (req, res) => {
+  try {
+    const { start_date, end_date, petugas_id, kategori_layanan, status_pengerjaan } = req.query;
+
+    let query = `
+      SELECT d.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, u.full_name as petugas_nama, u.lini_profesi
+      FROM doingan d
+      JOIN pasien p ON d.pasien_id = p.id
+      JOIN users u ON d.petugas_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (start_date) {
+      query += " AND d.created_at >= ?";
+      params.push(`${start_date} 00:00:00`);
+    }
+    if (end_date) {
+      query += " AND d.created_at <= ?";
+      params.push(`${end_date} 23:59:59`);
+    }
+    if (petugas_id) {
+      query += " AND d.petugas_id = ?";
+      params.push(petugas_id);
+    }
+    if (kategori_layanan) {
+      query += " AND d.kategori_layanan = ?";
+      params.push(kategori_layanan);
+    }
+    if (status_pengerjaan) {
+      query += " AND d.status_pengerjaan = ?";
+      params.push(status_pengerjaan);
+    }
+
+    query += " ORDER BY d.created_at DESC";
+
+    const list = await allQuery(query, params);
+
+    const totalCount = list.length;
+    const completedCount = list.filter(item => item.status_pengerjaan === 'COMPLETED').length;
+    const totalKomisi = list.reduce((sum, item) => sum + (item.komisi || 0), 0);
+
+    res.json({
+      summary: {
+        total_count: totalCount,
+        completed_count: completedCount,
+        total_komisi: totalKomisi
+      },
+      data: list
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching doingan recap', error: err.message });
+  }
+});
+
 app.post('/api/doingan', authenticateToken, async (req, res) => {
   try {
     const { pasien_id, tindakan_id, nama_tindakan, status_doingan, nominal_dp, nominal_membership, notes } = req.body;

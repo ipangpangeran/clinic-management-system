@@ -33,7 +33,8 @@ export default function ClinicSettingsAcl() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('Nurse');
+  const [role, setRole] = useState('Manager');
+  const [liniProfesi, setLiniProfesi] = useState('Beautician');
   const [gajiPokok, setGajiPokok] = useState(0);
 
   // ACL Matrix State
@@ -105,6 +106,7 @@ export default function ClinicSettingsAcl() {
     setFullName('');
     setPhone('');
     setRole('Manager');
+    setLiniProfesi('Beautician');
     setGajiPokok(5000000);
     setMsg('');
     setErrorMsg('');
@@ -119,6 +121,7 @@ export default function ClinicSettingsAcl() {
     setFullName(u.full_name);
     setPhone(u.phone || '');
     setRole(u.role);
+    setLiniProfesi(u.lini_profesi || 'Beautician');
     setGajiPokok(u.gaji_pokok || 0);
     setMsg('');
     setErrorMsg('');
@@ -141,7 +144,7 @@ export default function ClinicSettingsAcl() {
     }
 
     try {
-      const payload = { username, password, full_name: fullName, role, phone, gaji_pokok: Number(gajiPokok) };
+      const payload = { username, password, full_name: fullName, role, lini_profesi: liniProfesi, phone, gaji_pokok: Number(gajiPokok) };
       if (editUserMode && selectedUserId) {
         await axios.put(`/api/users/${selectedUserId}`, payload);
         setMsg('User berhasil diperbarui!');
@@ -591,6 +594,21 @@ export default function ClinicSettingsAcl() {
                   {rolesList.map(r => (
                     <option key={r} value={r}>{r}</option>
                   ))}
+                </select>
+              </div>
+
+              {/* Form Field 5b: Lini Profesi Petugas */}
+              <div>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Lini Profesi Petugas *</label>
+                <select
+                  value={liniProfesi}
+                  onChange={(e) => setLiniProfesi(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
+                >
+                  <option value="Beautician">Beautician (Terapis & Skin Care)</option>
+                  <option value="Nurse">Nurse (Tindakan Medis & Dokter)</option>
+                  <option value="Admin FO">Admin FO / Kasir</option>
+                  <option value="Management">Management / Klinik</option>
                 </select>
               </div>
 
