@@ -171,19 +171,10 @@ export default function StaffMobilePortal() {
           </div>
 
           <div className="bg-[#faf3e8] p-4 rounded-2xl border border-[#d6c2bd] space-y-2">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] text-gray-500 uppercase font-semibold">Nama Pasien</span>
-                <h4 className="font-serif font-bold text-lg text-[#1e1b15]">{activeSession.pasien_nama}</h4>
-                <p className="text-xs text-[#7d5141] font-mono">{activeSession.pasien_hp}</p>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] text-gray-500 uppercase font-semibold">Durasi Layanan</span>
-                <div className="flex items-center gap-1 text-xs font-extrabold text-[#7d5141]">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>{calculateDuration(activeSession.started_at)}</span>
-                </div>
-              </div>
+            <div>
+              <span className="text-[10px] text-gray-500 uppercase font-semibold">Nama Pasien</span>
+              <h4 className="font-serif font-bold text-lg text-[#1e1b15]">{activeSession.pasien_nama}</h4>
+              <p className="text-xs text-[#7d5141] font-mono">{activeSession.pasien_hp}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-[#d6c2bd]/60 text-[#514440]">

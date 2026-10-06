@@ -384,6 +384,9 @@ async function initDb() {
 
     try {
       await runQuery(`UPDATE doingan SET started_at = created_at WHERE started_at IS NULL`);
+      await runQuery("UPDATE doingan SET created_at = datetime(created_at, '+7 hours') WHERE created_at < '2026-10-06 00:00:00' AND strftime('%H', created_at) >= '17'");
+      await runQuery("UPDATE doingan SET started_at = datetime(started_at, '+7 hours') WHERE started_at < '2026-10-06 00:00:00' AND strftime('%H', started_at) >= '17'");
+      await runQuery("UPDATE doingan SET completed_at = datetime(completed_at, '+7 hours') WHERE completed_at < '2026-10-06 00:00:00' AND strftime('%H', completed_at) >= '17'");
     } catch (e) { }
 
     // Migration: Fix any negative sisa_stok in stok_produk
@@ -491,40 +494,6 @@ async function seedDefaultData() {
         ON CONFLICT(role, module_key) DO NOTHING
       `, [role, mod, c, r, u, d]);
     }
-  }
-
-  const pRow = await getQuery('SELECT COUNT(*) as count FROM pasien');
-  if (pRow.count === 0) {
-    await runQuery(`
-      INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, total_poin)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, ['pasien-1', '3171012345670001', '081298765432', 'Nia Ramadhani', 'MEMBER', 'Jl. Senopati No. 12, Jakarta', '1995-04-15', 'Tidak ada', 'Kombinasi / Sensitif', 120]);
-
-    await runQuery(`
-      INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, total_poin)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, ['pasien-2', '3171012345670002', '085297532050', 'Budi Santoso', 'TRIAL', 'Jl. Tebet Raya No. 45, Jakarta', '1998-08-20', 'Alergi Seafood', 'Berminyak', 0]);
-
-    await runQuery(`
-      INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, total_poin)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, ['pasien-3', '3171012345670003', '087812345678', 'Siti Rahma', 'MEMBER', 'Jl. Kemang Selatan No. 9', '1992-11-03', 'Alergi Debu', 'Kering', 350]);
-
-    await runQuery(`
-      INSERT INTO pasien_paket (id, pasien_id, nama_paket, sisa_kuota, total_kuota, harga_paket)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, ['pkg-1', 'pasien-1', 'Paket Glowing Facial Deluxe (5x)', 3, 5, 2500000]);
-
-    await runQuery(`
-      INSERT INTO pasien_paket (id, pasien_id, nama_paket, sisa_kuota, total_kuota, harga_paket)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, ['pkg-2', 'pasien-3', 'Paket Laser Rejuvenation VIP (3x)', 2, 3, 4500000]);
-
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    await runQuery(`
-      INSERT INTO pasien_reminder (id, pasien_id, tgl_kembali, status, message_text)
-      VALUES (?, ?, ?, ?, ?)
-    `, ['rem-1', 'pasien-2', tomorrow, 'PENDING', `Halo Kak Budi Santoso, kami dari DEFLOW AESTHETIC CLINIC. Menandai kalender Anda, besok tanggal ${tomorrow} ada jadwal perawatan kembali untuk Anda. Konfirmasi kedatangan dengan membalas pesan ini ya Kak. Sampai jumpa!`]);
   }
 
   const prodRow = await getQuery('SELECT COUNT(*) as count FROM stok_produk');

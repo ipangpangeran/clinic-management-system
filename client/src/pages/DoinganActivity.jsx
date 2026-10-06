@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import StaffMobilePortal from './StaffMobilePortal';
 import { 
   Sparkles, User, FileCheck, DollarSign, Award, Plus, Trash2, CheckCircle2, ShieldAlert,
-  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck, UserPlus, FileText
+  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck, UserPlus, FileText, Search
 } from 'lucide-react';
 
 export default function DoinganActivity() {
   const { user } = useContext(AuthContext);
-  const [activeMainTab, setActiveMainTab] = useState('ASSIGNMENT'); // 'ASSIGNMENT', 'STAFF_PORTAL', 'RECAP'
+  const [activeMainTab, setActiveMainTab] = useState('ASSIGNMENT'); // 'ASSIGNMENT', 'RECAP'
 
   // Data States
   const [patients, setPatients] = useState([]);
@@ -23,11 +22,19 @@ export default function DoinganActivity() {
   const [assignNotes, setAssignNotes] = useState('');
   const [assigning, setAssigning] = useState(false);
 
+  const getLocalDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Filtered Recap State (Admin Dashboard)
   const [recapData, setRecapData] = useState([]);
   const [recapSummary, setRecapSummary] = useState({ total_count: 0, completed_count: 0, total_komisi: 0 });
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(getLocalDateString());
+  const [endDate, setEndDate] = useState(getLocalDateString());
   const [filterPetugasId, setFilterPetugasId] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -61,7 +68,7 @@ export default function DoinganActivity() {
     if (activeMainTab === 'RECAP') {
       fetchRecapData();
     }
-  }, [activeMainTab, startDate, endDate, filterPetugasId, filterCategory, filterStatus]);
+  }, [activeMainTab]);
 
   const fetchInitialData = async () => {
     try {
@@ -207,16 +214,6 @@ export default function DoinganActivity() {
           >
             <UserPlus className="w-4 h-4" />
             <span>Pendaftaran & Assign Petugas (Admin FO)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveMainTab('STAFF_PORTAL')}
-            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeMainTab === 'STAFF_PORTAL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-emerald-50 text-emerald-900 border border-emerald-200 hover:bg-emerald-100'
-            }`}
-          >
-            <Smartphone className="w-4 h-4" />
-            <span>Portal Mobile Petugas (Beautician & Nurse)</span>
           </button>
 
           <button
@@ -401,21 +398,25 @@ export default function DoinganActivity() {
           </div>
         )}
 
-        {/* TAB 2: PORTAL MOBILE PETUGAS */}
-        {activeMainTab === 'STAFF_PORTAL' && (
-          <div className="py-2">
-            <StaffMobilePortal />
-          </div>
-        )}
-
-        {/* TAB 3: DASHBOARD REKAPITULASI & FILTER KOMISI (ADMIN SIDE) */}
+        {/* TAB 2: DASHBOARD REKAPITULASI & FILTER KOMISI (ADMIN SIDE) */}
         {activeMainTab === 'RECAP' && (
           <div className="space-y-5">
             {/* Filter Controls */}
             <div className="bg-[#faf3e8] p-4 rounded-2xl border border-[#d6c2bd] space-y-3 text-xs">
-              <div className="flex items-center gap-2 font-bold text-[#7d5141] uppercase tracking-wider">
-                <Filter className="w-4 h-4" />
-                <span>Filter Laporan Rekapitulasi Doingan & Komisi Petugas</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-[#7d5141] uppercase tracking-wider">
+                  <Filter className="w-4 h-4" />
+                  <span>Filter Laporan Rekapitulasi Doingan & Komisi Petugas</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchRecapData}
+                  disabled={loadingRecap}
+                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  {loadingRecap ? 'Memuat Data...' : '🔍 Tampilkan / Filter Data'}
+                </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">

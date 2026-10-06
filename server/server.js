@@ -279,8 +279,8 @@ app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
     await runQuery(`
       INSERT INTO doingan (
         id, pasien_id, petugas_id, role_petugas, kategori_layanan, tindakan_id, nama_tindakan,
-        status_pengerjaan, status_doingan, started_at, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, CURRENT_TIMESTAMP, ?)
+        status_pengerjaan, status_doingan, started_at, created_at, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'), ?)
     `, [
       id, pasien_id, petugas_id, petugas.role || 'Staff',
       kategori_layanan || (petugas.lini_profesi === 'Nurse' ? 'Tindakan Medis (Nurse)' : 'Facial (Beautician)'),
@@ -358,7 +358,7 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
           nama_tindakan = ?,
           komisi = ?,
           notes = ?,
-          completed_at = CURRENT_TIMESTAMP
+          completed_at = datetime('now', '+7 hours')
       WHERE id = ?
     `, [mainTindakanId, finalNamaTindakan, totalKomisi, notes || doi.notes || '', id]);
 
