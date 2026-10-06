@@ -27,9 +27,44 @@ export default function PosBillingCounter() {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // View Mode: 'KASIR' or 'HISTORY'
+  const [posViewMode, setPosViewMode] = useState('KASIR');
+  const [historyTrxList, setHistoryTrxList] = useState([]);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   useEffect(() => {
     fetchInitialPosData();
   }, []);
+
+  const fetchTransactionHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const queryParams = new URLSearchParams();
+      if (historyStartDate) queryParams.append('start_date', historyStartDate);
+      if (historyEndDate) queryParams.append('end_date', historyEndDate);
+      if (historySearch) queryParams.append('search', historySearch);
+
+      const res = await axios.get(`/api/transaksi?${queryParams.toString()}`);
+      setHistoryTrxList(res.data || []);
+    } catch (err) {
+      console.error('Error fetching transaction history', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const handleOpenReceiptModal = async (trxId) => {
+    try {
+      const receiptRes = await axios.get(`/api/transaksi/${trxId}/receipt`);
+      setReceiptData(receiptRes.data);
+      setShowReceiptModal(true);
+    } catch (err) {
+      alert('Gagal memuat detail struk transaksi');
+    }
+  };
 
   const fetchInitialPosData = async () => {
     try {
@@ -199,49 +234,203 @@ export default function PosBillingCounter() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex justify-between items-center">
+      {/* Page Header & View Mode Switcher */}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-[#e5ded4] pb-4">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">POS & Billing Counter</h1>
           <p className="text-xs text-[#514440]">Point of Sale kasir klinik, tagihan otomatis pasien selesai treatment, hitung poin, PPN 11%, dan cetak struk termal.</p>
         </div>
+
+        <div className="flex bg-[#faf3e8] p-1 border border-[#d6c2bd] rounded-2xl text-xs font-bold self-start sm:self-auto shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setPosViewMode('KASIR')}
+            className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+              posViewMode === 'KASIR' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+            }`}
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>Terminal Kasir POS</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setPosViewMode('HISTORY');
+              fetchTransactionHistory();
+            }}
+            className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+              posViewMode === 'HISTORY' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            <span>Riwayat Transaksi & Struk Kasir</span>
+          </button>
+        </div>
       </div>
 
-      {/* AUTO BILLING QUEUE BANNER */}
-      {unbilledList.length > 0 && (
-        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-300 shadow-xs space-y-3">
-          <div className="flex items-center justify-between text-xs font-bold text-amber-900">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-700 animate-pulse" />
-              <span>Antrian Tagihan Pasien Selesai Treatment ({unbilledList.length})</span>
-            </div>
-            <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full uppercase font-bold">Auto POS Billing Queue</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {unbilledList.map(doi => (
-              <div key={doi.id} className="bg-white p-3 rounded-xl border border-amber-200 text-xs space-y-1.5 shadow-2xs">
-                <div className="flex justify-between items-start">
-                  <div className="font-bold text-[#1e1b15]">{doi.pasien_nama}</div>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">{doi.tipe_pasien}</span>
-                </div>
-                <div className="text-[11px] text-[#514440]">
-                  <strong>Tindakan:</strong> {doi.nama_tindakan}
-                </div>
-                <div className="text-[11px] text-emerald-800 font-semibold">
-                  <strong>Petugas:</strong> {doi.petugas_nama} ({doi.lini_profesi || doi.petugas_role})
-                </div>
-                <button
-                  onClick={() => handleProcessUnbilledDoingan(doi)}
-                  className="w-full mt-1 py-1.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-[11px] rounded-lg cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
-                >
-                  <ShoppingCart className="w-3.5 h-3.5" />
-                  <span>Proses Tagihan ini ke Kasir</span>
-                </button>
+      {posViewMode === 'HISTORY' ? (
+        /* TRANSACTION HISTORY VIEW */
+        <div className="space-y-5">
+          {/* History Filter Card */}
+          <div className="bg-[#faf3e8] p-4 rounded-2xl border border-[#d6c2bd] space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="font-bold text-[#7d5141] uppercase tracking-wider flex items-center gap-1.5">
+                <Receipt className="w-4 h-4" />
+                <span>Filter Historical Transaksi Pasien & Struk</span>
               </div>
-            ))}
+              <button
+                type="button"
+                onClick={fetchTransactionHistory}
+                disabled={loadingHistory}
+                className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Search className="w-3.5 h-3.5" />
+                {loadingHistory ? 'Memuat...' : 'Cari Transaksi'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#514440] mb-1">Cari Nota / Nama / HP Pasien</label>
+                <input
+                  type="text"
+                  placeholder="No. Nota (INV/...), nama, HP..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[#514440] mb-1">Dari Tanggal</label>
+                <input
+                  type="date"
+                  value={historyStartDate}
+                  onChange={(e) => setHistoryStartDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[#514440] mb-1">Sampai Tanggal</label>
+                <input
+                  type="date"
+                  value={historyEndDate}
+                  onChange={(e) => setHistoryEndDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* History Table */}
+          <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Riwayat Transaksi Penjualan</h3>
+              <span className="text-xs text-[#7d5141] font-bold">{historyTrxList.length} Transaksi Ditemukan</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-3 px-4">Waktu & No. Nota</th>
+                    <th className="py-3 px-4">Nama Pasien</th>
+                    <th className="py-3 px-4">Kasir & Petugas</th>
+                    <th className="py-3 px-4">Rincian Bayar</th>
+                    <th className="py-3 px-4">Total Akhir</th>
+                    <th className="py-3 px-4 text-center">Struk / Thermal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {historyTrxList.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="text-center py-8 text-gray-400 italic">
+                        Belum ada riwayat transaksi yang cocok.
+                      </td>
+                    </tr>
+                  ) : (
+                    historyTrxList.map(trx => (
+                      <tr key={trx.id} className="hover:bg-[#fff8f0]">
+                        <td className="py-3.5 px-4 text-[#83746f]">
+                          <div className="font-bold text-[#1e1b15] text-xs">{trx.no_nota}</div>
+                          <div className="text-[10px] text-gray-400">
+                            {new Date(trx.created_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-[#1e1b15]">
+                          {trx.pasien_nama}
+                          <div className="text-[10px] font-normal text-gray-500">HP: {trx.pasien_hp} ({trx.tipe_pasien})</div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-[#1e1b15]">Kasir: {trx.kasir_nama}</div>
+                          {trx.therapist_nama && <div className="text-[10px] text-[#7d5141]">Petugas: {trx.therapist_nama}</div>}
+                        </td>
+                        <td className="py-3.5 px-4 text-[11px] text-[#514440]">
+                          <div>Subtotal: Rp {trx.subtotal?.toLocaleString('id-ID')}</div>
+                          {trx.discount > 0 && <div className="text-red-600">Diskon: -Rp {trx.discount?.toLocaleString('id-ID')}</div>}
+                          <div className="text-gray-400 text-[10px]">PPN 11%: Rp {trx.tax_amount?.toLocaleString('id-ID')}</div>
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-emerald-800 text-sm">
+                          Rp {trx.grand_total?.toLocaleString('id-ID')}
+                          <div className="text-[10px] font-normal text-gray-400">+{trx.earned_points || 0} Poin</div>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <button
+                            onClick={() => handleOpenReceiptModal(trx.id)}
+                            className="px-3 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#7d5141] font-bold rounded-lg text-xs cursor-pointer flex items-center gap-1 mx-auto"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-[#7d5141]" />
+                            <span>Struk</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      )}
+      ) : (
+        /* KASIR POS VIEW MODE */
+        <>
+          {/* AUTO BILLING QUEUE BANNER */}
+          {unbilledList.length > 0 && (
+            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-300 shadow-xs space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-700 animate-pulse" />
+                  <span>Antrian Tagihan Pasien Selesai Treatment ({unbilledList.length})</span>
+                </div>
+                <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full uppercase font-bold">Auto POS Billing Queue</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {unbilledList.map(doi => (
+                  <div key={doi.id} className="bg-white p-3 rounded-xl border border-amber-200 text-xs space-y-1.5 shadow-2xs">
+                    <div className="flex justify-between items-start">
+                      <div className="font-bold text-[#1e1b15]">{doi.pasien_nama}</div>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">{doi.tipe_pasien}</span>
+                    </div>
+                    <div className="text-[11px] text-[#514440]">
+                      <strong>Tindakan:</strong> {doi.nama_tindakan}
+                    </div>
+                    <div className="text-[11px] text-emerald-800 font-semibold">
+                      <strong>Petugas:</strong> {doi.petugas_nama} ({doi.lini_profesi || doi.petugas_role})
+                    </div>
+                    <button
+                      onClick={() => handleProcessUnbilledDoingan(doi)}
+                      className="w-full mt-1 py-1.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-[11px] rounded-lg cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
+                    >
+                      <ShoppingCart className="w-3.5 h-3.5" />
+                      <span>Proses Tagihan ini ke Kasir</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Product & Service Catalog (7 Cols) */}
@@ -472,6 +661,8 @@ export default function PosBillingCounter() {
           </div>
         </div>
       </div>
+    </>
+  )}
 
       {/* DYNAMIC POS THERMAL RECEIPT MODAL (58mm/80mm Wireframe) */}
       {showReceiptModal && receiptData && (

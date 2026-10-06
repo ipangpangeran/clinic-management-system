@@ -1131,6 +1131,42 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/transaksi', authenticateToken, async (req, res) => {
+  try {
+    const { start_date, end_date, search } = req.query;
+    let query = `
+      SELECT t.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, u.full_name as kasir_nama,
+             therapist.full_name as therapist_nama
+      FROM transaksi t
+      JOIN pasien p ON t.pasien_id = p.id
+      JOIN users u ON t.kasir_id = u.id
+      LEFT JOIN users therapist ON t.therapist_id = therapist.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (start_date) {
+      query += ` AND t.created_at >= ?`;
+      params.push(`${start_date} 00:00:00`);
+    }
+    if (end_date) {
+      query += ` AND t.created_at <= ?`;
+      params.push(`${end_date} 23:59:59`);
+    }
+    if (search) {
+      query += ` AND (t.no_nota LIKE ? OR p.nama_lengkap LIKE ? OR p.no_hp LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    query += ` ORDER BY t.created_at DESC`;
+
+    const list = await allQuery(query, params);
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching transaction history', error: err.message });
+  }
+});
+
 app.get('/api/transaksi/:id/receipt', async (req, res) => {
   try {
     const { id } = req.params;

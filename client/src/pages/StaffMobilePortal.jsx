@@ -126,7 +126,7 @@ export default function StaffMobilePortal() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-2xl bg-[#7d5141] flex items-center justify-center font-bold text-sm text-white shadow-xs">
-              {user?.full_name?.substring(0,2).toUpperCase()}
+              {user?.full_name?.substring(0, 2).toUpperCase()}
             </div>
             <div>
               <h2 className="font-serif font-bold text-base leading-tight">{user?.full_name}</h2>
@@ -148,12 +148,12 @@ export default function StaffMobilePortal() {
           {activeSession ? (
             <span className="px-3 py-1 bg-red-500/20 text-red-200 border border-red-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5 animate-pulse">
               <span className="w-2 h-2 rounded-full bg-red-400"></span>
-              🔴 SEDANG MENANGANI PASIEN
+              SEDANG MENANGANI PASIEN
             </span>
           ) : (
             <span className="px-3 py-1 bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              🟢 KOSONG
+              AVAILABLE
             </span>
           )}
         </div>
@@ -223,11 +223,10 @@ export default function StaffMobilePortal() {
                       key={t.id}
                       type="button"
                       onClick={() => toggleTreatmentSelect(t.id)}
-                      className={`w-full text-left p-3 rounded-2xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${
-                        isSelected 
-                          ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs' 
+                      className={`w-full text-left p-3 rounded-2xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${isSelected
+                          ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
                           : 'bg-[#faf3e8]/60 text-[#1e1b15] border-[#d6c2bd] hover:bg-[#faf3e8]'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2.5">
                         {isSelected ? (
