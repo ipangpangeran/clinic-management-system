@@ -63,6 +63,10 @@ export default function DoinganActivity() {
 
   useEffect(() => {
     fetchStaffAvailability();
+    const interval = setInterval(() => {
+      fetchStaffAvailability();
+    }, 4000);
+    return () => clearInterval(interval);
   }, [serviceCategory]);
 
   useEffect(() => {

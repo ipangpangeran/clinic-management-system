@@ -16,18 +16,34 @@ export default function StaffMobilePortal() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    fetchSessionData();
+    fetchSessionData(true);
+
+    // Auto live polling every 3 seconds for immediate assignment update
+    const pollInterval = setInterval(() => {
+      fetchSessionData(false);
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
   }, []);
 
-  const fetchSessionData = async () => {
-    setLoading(true);
+  const fetchSessionData = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const [sessRes, tndRes] = await Promise.all([
         axios.get('/api/doingan/staff/active'),
         axios.get('/api/tindakan')
       ]);
 
-      setActiveSession(sessRes.data.active_doingan);
+      const newActive = sessRes.data.active_doingan;
+
+      // Show alert message if a new session was just assigned to staff
+      setActiveSession(prev => {
+        if (!prev && newActive) {
+          setMsg(`🔔 Pasien baru "${newActive.pasien_nama}" telah di-assign ke Anda!`);
+        }
+        return newActive;
+      });
+
       setHistory(sessRes.data.history || []);
 
       // Filter treatments based on staff profession / category (BEAUTICIAN vs NURSE)
@@ -42,7 +58,7 @@ export default function StaffMobilePortal() {
     } catch (err) {
       console.error('Error fetching staff session data', err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
