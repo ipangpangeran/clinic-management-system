@@ -148,7 +148,7 @@ function MainApp() {
           setActiveTab={setActiveTab} 
           setIsMobileMenuOpen={setIsMobileMenuOpen}
         />
-        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto flex-1 min-w-0">
+        <main className="p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto flex-1 min-w-0">
           {renderTabContent()}
         </main>
       </div>

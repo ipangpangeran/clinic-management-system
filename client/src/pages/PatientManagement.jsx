@@ -485,13 +485,13 @@ export default function PatientManagement() {
           <table className="w-full text-left text-xs">
             <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase tracking-wider border-b border-[#e5ded4]">
               <tr>
-                <th className="py-3 px-4">Tgl Terdaftar</th>
-                <th className="py-3 px-4">Nama Pasien</th>
-                <th className="py-3 px-4">Kontak (HP & NIK)</th>
-                <th className="py-3 px-4">Tipe Pasien</th>
-                <th className="py-3 px-4">Detail Medis (Member)</th>
-                <th className="py-3 px-4">Poin</th>
-                <th className="py-3 px-4 text-center">Aksi / Kelola</th>
+                <th className="py-3 px-4 whitespace-nowrap">Tgl Terdaftar</th>
+                <th className="py-3 px-4 min-w-[140px]">Nama Pasien</th>
+                <th className="py-3 px-4 min-w-[130px]">Kontak (HP & NIK)</th>
+                <th className="py-3 px-4 whitespace-nowrap">Tipe Pasien</th>
+                <th className="py-3 px-4 min-w-[150px]">Detail Medis (Member)</th>
+                <th className="py-3 px-4 whitespace-nowrap">Poin</th>
+                <th className="py-3 px-4 text-center min-w-[360px] whitespace-nowrap">Aksi / Kelola</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e5ded4]">
@@ -502,7 +502,7 @@ export default function PatientManagement() {
               ) : (
                 filteredPatients.map(p => (
                   <tr key={p.id} className="hover:bg-[#fff8f0]">
-                    <td className="py-3.5 px-4 text-[#83746f] text-[11px]">
+                    <td className="py-3.5 px-4 text-[#83746f] text-[11px] whitespace-nowrap">
                       <div className="font-bold text-[#1e1b15]">
                         {p.created_at ? new Date(p.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                       </div>
@@ -514,11 +514,11 @@ export default function PatientManagement() {
                       <div className="font-bold text-[#1e1b15] text-sm">{p.nama_lengkap}</div>
                       <div className="text-[10px] text-[#83746f]">ID: {p.id}</div>
                     </td>
-                    <td className="py-3.5 px-4 space-y-0.5">
+                    <td className="py-3.5 px-4 space-y-0.5 whitespace-nowrap">
                       <div className="font-semibold text-[#1e1b15]">HP: {p.no_hp}</div>
                       <div className="text-[11px] text-[#83746f]">NIK: {p.no_ktp || '-'}</div>
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
                         p.tipe_pasien === 'TRIAL' 
                           ? 'bg-amber-100 text-amber-900 border border-amber-300' 
@@ -537,11 +537,11 @@ export default function PatientManagement() {
                         <span className="text-amber-700 italic">Form Trial (Minimalis)</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-[#7d5141] text-sm">
+                    <td className="py-3.5 px-4 font-bold text-[#7d5141] text-sm whitespace-nowrap">
                       +{p.total_poin} Poin
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                      <div className="flex items-center justify-center gap-1.5 flex-nowrap whitespace-nowrap">
                         <button
                           onClick={() => openIntakeForExisting(p)}
                           className="p-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-900 rounded-lg font-medium text-[11px] flex items-center gap-1 cursor-pointer shadow-2xs"
