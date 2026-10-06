@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export default function PosBillingCounter() {
   const [patients, setPatients] = useState([]);
@@ -54,6 +55,61 @@ export default function PosBillingCounter() {
     } finally {
       setLoadingHistory(false);
     }
+  };
+
+  const handleExportExcel = () => {
+    if (historyTrxList.length === 0) {
+      alert('Tidak ada data transaksi yang cocok dengan filter untuk diexport!');
+      return;
+    }
+
+    const exportData = historyTrxList.map((trx, index) => ({
+      'No.': index + 1,
+      'No. Nota': trx.no_nota || '-',
+      'Tanggal & Waktu': trx.created_at ? new Date(trx.created_at).toLocaleString('id-ID') : '-',
+      'Nama Pasien': trx.pasien_nama || '-',
+      'No. HP Pasien': trx.pasien_hp || '-',
+      'Tipe Pasien': trx.tipe_pasien || '-',
+      'Kasir': trx.kasir_nama || '-',
+      'Petugas / Terapis': trx.therapist_nama || '-',
+      'Subtotal (Rp)': trx.subtotal || 0,
+      'Diskon (Rp)': trx.discount || 0,
+      'Pajak PPN 11% (Rp)': trx.tax_amount || 0,
+      'Total Akhir (Rp)': trx.grand_total || 0,
+      'Jumlah Bayar (Rp)': trx.payment_amount || 0,
+      'Kembalian (Rp)': trx.change_amount || 0,
+      'Poin Diperoleh': trx.earned_points || 0
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+    worksheet['!cols'] = [
+      { wch: 5 },   // No.
+      { wch: 22 },  // No. Nota
+      { wch: 20 },  // Tanggal & Waktu
+      { wch: 25 },  // Nama Pasien
+      { wch: 16 },  // No. HP Pasien
+      { wch: 14 },  // Tipe Pasien
+      { wch: 20 },  // Kasir
+      { wch: 20 },  // Petugas / Terapis
+      { wch: 15 },  // Subtotal
+      { wch: 15 },  // Diskon
+      { wch: 18 },  // Pajak PPN 11%
+      { wch: 18 },  // Total Akhir
+      { wch: 18 },  // Jumlah Bayar
+      { wch: 15 },  // Kembalian
+      { wch: 14 }   // Poin Diperoleh
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Riwayat Transaksi');
+
+    const dateSuffix = historyStartDate || historyEndDate
+      ? `_${historyStartDate || 'Awal'}_s.d_${historyEndDate || 'Kini'}`
+      : `_${new Date().toISOString().split('T')[0]}`;
+
+    const fileName = `Laporan_Transaksi_DEFLOW${dateSuffix}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
   };
 
   const handleOpenReceiptModal = async (trxId) => {
@@ -279,15 +335,26 @@ export default function PosBillingCounter() {
                 <Receipt className="w-4 h-4" />
                 <span>Filter Historical Transaksi Pasien & Struk</span>
               </div>
-              <button
-                type="button"
-                onClick={fetchTransactionHistory}
-                disabled={loadingHistory}
-                className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <Search className="w-3.5 h-3.5" />
-                {loadingHistory ? 'Memuat...' : 'Cari Transaksi'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  disabled={historyTrxList.length === 0}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Export Excel (.xlsx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={fetchTransactionHistory}
+                  disabled={loadingHistory}
+                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  {loadingHistory ? 'Memuat...' : 'Cari Transaksi'}
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -328,7 +395,18 @@ export default function PosBillingCounter() {
           <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
             <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
               <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Riwayat Transaksi Penjualan</h3>
-              <span className="text-xs text-[#7d5141] font-bold">{historyTrxList.length} Transaksi Ditemukan</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[#7d5141] font-bold">{historyTrxList.length} Transaksi Ditemukan</span>
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  disabled={historyTrxList.length === 0}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 disabled:opacity-50 font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Download Excel (.xlsx)</span>
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -686,11 +764,22 @@ export default function PosBillingCounter() {
                 ========================================
               </div>
 
-              <div>
-                No. Nota : {receiptData.transaction.no_nota}<br/>
-                Tanggal  : {new Date(receiptData.transaction.created_at).toLocaleString('id-ID')}<br/>
-                Kasir    : {receiptData.transaction.kasir_nama}<br/>
-                Pelanggan: {receiptData.transaction.pasien_nama} ({receiptData.transaction.tipe_pasien === 'NON-TRIAL' || receiptData.transaction.tipe_pasien === 'Reguler' ? 'MEMBER' : receiptData.transaction.tipe_pasien})
+              <div className="grid grid-cols-[75px_auto_1fr] gap-x-1.5 leading-tight">
+                <span>No. Nota</span>
+                <span>:</span>
+                <span className="font-bold">{receiptData.transaction.no_nota}</span>
+
+                <span>Tanggal</span>
+                <span>:</span>
+                <span>{new Date(receiptData.transaction.created_at).toLocaleString('id-ID')}</span>
+
+                <span>Kasir</span>
+                <span>:</span>
+                <span>{receiptData.transaction.kasir_nama}</span>
+
+                <span>Pelanggan</span>
+                <span>:</span>
+                <span>{receiptData.transaction.pasien_nama} ({receiptData.transaction.tipe_pasien === 'NON-TRIAL' || receiptData.transaction.tipe_pasien === 'Reguler' ? 'MEMBER' : receiptData.transaction.tipe_pasien})</span>
               </div>
 
               <div className="border-t border-b border-dashed border-gray-400 py-1 space-y-1">
