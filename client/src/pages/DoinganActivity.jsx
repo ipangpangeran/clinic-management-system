@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { AuthContext } from '../context/AuthContext';
 import { 
   Sparkles, User, FileCheck, DollarSign, Award, Plus, Trash2, CheckCircle2, ShieldAlert,
-  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck, UserPlus, FileText, Search
+  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck, UserPlus, FileText, Search, FileSpreadsheet
 } from 'lucide-react';
 
 export default function DoinganActivity() {
@@ -185,6 +186,77 @@ export default function DoinganActivity() {
     } catch (err) {
       alert('Gagal menghapus doingan');
     }
+  };
+
+  const handleExportExcel = () => {
+    if (recapData.length === 0) {
+      alert('Belum ada data rekapan pengerjaan pada periode tanggal ini untuk di-export.');
+      return;
+    }
+
+    const monthNames = [
+      "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI", 
+      "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
+    ];
+    const d = new Date();
+    const monthYearStr = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+
+    const rows = [
+      ["DEFLOW AESTHETIC CLINIC", "", "", "", `DATA DEFLOW AESTHETIC CLINIC ${monthYearStr}`],
+      ["", "", "", "", `Periode Laporan: ${startDate} s/d ${endDate}`],
+      [], // Spacing row
+      [
+        "No",
+        "Waktu Mulai",
+        "Waktu Selesai",
+        "Nama Pasien",
+        "Tipe Pasien",
+        "Petugas Bertugas",
+        "Lini Profesi / Role",
+        "Detail Treatment / Actions",
+        "Status Layanan",
+        "Nominal Komisi (Rp)"
+      ]
+    ];
+
+    recapData.forEach((item, index) => {
+      rows.push([
+        index + 1,
+        item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
+        item.completed_at ? new Date(item.completed_at).toLocaleString('id-ID') : '-',
+        item.pasien_nama || '-',
+        item.tipe_pasien || '-',
+        item.petugas_nama || '-',
+        item.lini_profesi || item.role_petugas || '-',
+        item.nama_tindakan || '-',
+        item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : 'IN PROGRESS',
+        item.komisi || 0
+      ]);
+    });
+
+    rows.push([]);
+    rows.push(["", "", "", "", "", "", "", "TOTAL SESI", `${recapSummary.total_count} Sesi`, ""]);
+    rows.push(["", "", "", "", "", "", "", "TOTAL SELESAI", `${recapSummary.completed_count} Pasien`, ""]);
+    rows.push(["", "", "", "", "", "", "", "TOTAL KOMISI", "", recapSummary.total_komisi || 0]);
+
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+
+    worksheet['!cols'] = [
+      { wch: 5 },   // No
+      { wch: 20 },  // Waktu Mulai
+      { wch: 20 },  // Waktu Selesai
+      { wch: 24 },  // Nama Pasien
+      { wch: 12 },  // Tipe Pasien
+      { wch: 22 },  // Petugas Bertugas
+      { wch: 18 },  // Lini Profesi
+      { wch: 32 },  // Actions
+      { wch: 16 },  // Status
+      { wch: 20 }   // Nominal Komisi
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Doingan");
+    XLSX.writeFile(workbook, `Rekap_Doingan_Deflow_${startDate}_to_${endDate}.xlsx`);
   };
 
   return (
@@ -507,10 +579,10 @@ export default function DoinganActivity() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
                 <h3 className="font-serif font-bold text-base text-[#1e1b15]">Tabel Rekapitulasi Detail Activities & Komisi</h3>
                 <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+                  onClick={handleExportExcel}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
                 >
-                  <Printer className="w-4 h-4" /> Cetak / Export Rekapan
+                  <FileSpreadsheet className="w-4 h-4" /> Export Excel Rekapan
                 </button>
               </div>
 

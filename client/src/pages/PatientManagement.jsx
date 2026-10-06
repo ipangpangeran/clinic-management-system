@@ -357,12 +357,29 @@ export default function PatientManagement() {
     }
   };
 
+  const [dateFilter, setDateFilter] = useState('');
+
+  const getLocalDateString = (dStr) => {
+    const d = dStr ? new Date(dStr) : new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = getLocalDateString();
+
   const filteredPatients = patients.filter(p => {
     const matchSearch = p.nama_lengkap.toLowerCase().includes(search.toLowerCase()) ||
                         p.no_hp.includes(search) ||
                         (p.no_ktp && p.no_ktp.includes(search));
     const matchFilter = filterType === 'ALL' || p.tipe_pasien === filterType;
-    return matchSearch && matchFilter;
+    let matchDate = true;
+    if (dateFilter) {
+      const pDate = p.created_at ? getLocalDateString(p.created_at) : '';
+      matchDate = pDate === dateFilter;
+    }
+    return matchSearch && matchFilter && matchDate;
   });
 
   return (
@@ -395,8 +412,8 @@ export default function PatientManagement() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative w-full sm:w-80">
+      <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="relative w-full md:w-72">
           <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#83746f]">
             <Search className="w-4 h-4" />
           </span>
@@ -409,8 +426,38 @@ export default function PatientManagement() {
           />
         </div>
 
-        <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
-          <span className="text-[#83746f] font-semibold">Tipe:</span>
+        {/* Date & Type Filters */}
+        <div className="flex flex-wrap items-center gap-2 text-xs w-full md:w-auto">
+          {/* Quick Date Filter Buttons */}
+          <div className="flex items-center gap-1.5 bg-[#faf3e8] p-1 border border-[#d6c2bd] rounded-xl">
+            <button
+              type="button"
+              onClick={() => setDateFilter(todayStr)}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                dateFilter === todayStr ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Hari Ini (Today)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateFilter('')}
+              className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                dateFilter === '' ? 'bg-white text-[#7d5141] font-bold shadow-2xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+              }`}
+            >
+              Semua Tgl
+            </button>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="px-2 py-1 bg-white border border-[#d6c2bd] rounded-lg text-xs font-semibold text-[#1e1b15]"
+            />
+          </div>
+
+          <span className="text-[#83746f] font-semibold ml-1">Tipe:</span>
           <button
             onClick={() => setFilterType('ALL')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'ALL' ? 'bg-[#7d5141] text-white' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
@@ -438,6 +485,7 @@ export default function PatientManagement() {
           <table className="w-full text-left text-xs">
             <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase tracking-wider border-b border-[#e5ded4]">
               <tr>
+                <th className="py-3 px-4">Tgl Terdaftar</th>
                 <th className="py-3 px-4">Nama Pasien</th>
                 <th className="py-3 px-4">Kontak (HP & NIK)</th>
                 <th className="py-3 px-4">Tipe Pasien</th>
@@ -449,11 +497,19 @@ export default function PatientManagement() {
             <tbody className="divide-y divide-[#e5ded4]">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-8 text-[#83746f] italic">Tidak ada data pasien yang cocok.</td>
+                  <td colSpan="7" className="text-center py-8 text-[#83746f] italic">Tidak ada data pasien yang cocok dengan filter.</td>
                 </tr>
               ) : (
                 filteredPatients.map(p => (
                   <tr key={p.id} className="hover:bg-[#fff8f0]">
+                    <td className="py-3.5 px-4 text-[#83746f] text-[11px]">
+                      <div className="font-bold text-[#1e1b15]">
+                        {p.created_at ? new Date(p.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                      </div>
+                      <div className="text-[10px] text-gray-400">
+                        {p.created_at ? new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </div>
+                    </td>
                     <td className="py-3.5 px-4">
                       <div className="font-bold text-[#1e1b15] text-sm">{p.nama_lengkap}</div>
                       <div className="text-[10px] text-[#83746f]">ID: {p.id}</div>

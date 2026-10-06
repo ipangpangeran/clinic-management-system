@@ -44,20 +44,29 @@ export default function PosBillingCounter() {
       setProducts(prodRes.data.filter(p => p.tipe_stok === 'RETAIL'));
       setTreatments(tRes.data);
       setUsers(uRes.data);
-      setUnbilledList(unbilledRes.data || []);
+      const unbilled = unbilledRes.data || [];
+      setUnbilledList(unbilled);
 
-      if (pRes.data.length > 0) setSelectedPatientId(pRes.data[0].id);
+      const activeUnbilledPatients = pRes.data.filter(p => unbilled.some(doi => doi.pasien_id === p.id));
+      if (activeUnbilledPatients.length > 0) {
+        setSelectedPatientId(activeUnbilledPatients[0].id);
+        const doi = unbilled.find(d => d.pasien_id === activeUnbilledPatients[0].id);
+        if (doi) handleProcessUnbilledDoingan(doi, tRes.data);
+      } else {
+        setSelectedPatientId('');
+        setCart([]);
+      }
     } catch (err) {
       console.error('Error fetching POS data', err);
     }
   };
 
-  const handleProcessUnbilledDoingan = (doi) => {
+  const handleProcessUnbilledDoingan = (doi, tList = treatments) => {
     setSelectedPatientId(doi.pasien_id);
     setSelectedTherapistId(doi.petugas_id);
     setActiveDoinganId(doi.id);
 
-    const matchingTreatment = treatments.find(t => t.id === doi.tindakan_id) || treatments.find(t => t.nama_tindakan === doi.nama_tindakan);
+    const matchingTreatment = tList.find(t => t.id === doi.tindakan_id) || tList.find(t => t.nama_tindakan === doi.nama_tindakan);
     const finalPrice = matchingTreatment ? (matchingTreatment.tarif_tindakan_medis || matchingTreatment.tarif_konsul_dokter || 150000) : 150000;
 
     const newItem = {
@@ -71,6 +80,15 @@ export default function PosBillingCounter() {
     };
 
     setCart([newItem]);
+  };
+
+  const handlePatientSelectChange = (e) => {
+    const pid = e.target.value;
+    setSelectedPatientId(pid);
+    const doi = unbilledList.find(d => d.pasien_id === pid);
+    if (doi) {
+      handleProcessUnbilledDoingan(doi);
+    }
   };
 
   const addToCart = (item, type) => {
@@ -164,7 +182,10 @@ export default function PosBillingCounter() {
     }
   };
 
-  const filteredPatients = patients.filter(p => 
+  // Only patients who have completed treatment today and are not yet billed
+  const activePosPatients = patients.filter(p => unbilledList.some(doi => doi.pasien_id === p.id));
+
+  const filteredPatients = activePosPatients.filter(p => 
     p.nama_lengkap.toLowerCase().includes(patientSearch.toLowerCase()) || p.no_hp.includes(patientSearch)
   );
 
@@ -243,14 +264,18 @@ export default function PosBillingCounter() {
               </div>
               <select
                 value={selectedPatientId}
-                onChange={(e) => setSelectedPatientId(e.target.value)}
+                onChange={handlePatientSelectChange}
                 className="flex-1 py-2 px-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-semibold text-[#1e1b15]"
               >
-                {filteredPatients.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.nama_lengkap} ({p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}) - {p.no_hp}
-                  </option>
-                ))}
+                {filteredPatients.length === 0 ? (
+                  <option value="">-- Tidak Ada Pasien Aktif (Belum Ditagih) --</option>
+                ) : (
+                  filteredPatients.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nama_lengkap} ({p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}) - {p.no_hp}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
             {selectedPatient && (
