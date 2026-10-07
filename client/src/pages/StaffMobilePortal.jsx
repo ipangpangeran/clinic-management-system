@@ -198,7 +198,7 @@ export default function StaffMobilePortal() {
             <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-[#d6c2bd]/60 text-[#514440]">
               <div>
                 <span className="text-gray-500 block text-[10px]">Waktu Di-Assign:</span>
-                <strong className="text-[#1e1b15]">{new Date(activeSession.started_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</strong>
+                <strong className="text-[#1e1b15]">{new Date(activeSession.started_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
               </div>
               <div>
                 <span className="text-gray-500 block text-[10px]">Kategori Service:</span>
@@ -320,7 +320,7 @@ export default function StaffMobilePortal() {
                 <div className="text-[11px] text-[#7d5141] font-semibold">{item.nama_tindakan}</div>
                 <div className="flex justify-between items-center text-[10px] text-gray-500 pt-1 border-t border-gray-200">
                   <span>Status: {item.status_doingan}</span>
-                  <span>Selesai: {item.completed_at ? new Date(item.completed_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
+                  <span>Selesai: {item.completed_at ? new Date(item.completed_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                 </div>
               </div>
             ))}

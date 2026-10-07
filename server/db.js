@@ -494,8 +494,7 @@ async function seedDefaultData() {
       } else if (role === 'Manager') {
         c = 1; r = 1; u = 1; d = 1;
       } else if (role === 'Admin FO') {
-        if (['patient_intake', 'patient_packages', 'reminders', 'doingan'].includes(mod)) { c = 1; r = 1; u = 1; d = 1; }
-        else if (['patient_management'].includes(mod)) { c = 1; r = 1; u = 0; d = 0; }
+        if (['patient_intake', 'patient_packages', 'reminders', 'doingan', 'patient_management'].includes(mod)) { c = 1; r = 1; u = 1; d = 1; }
         else if (['clinic_profile', 'pricing'].includes(mod)) { r = 1; }
       } else if (role === 'Beautician' || role === 'Nurse') {
         if (['doingan'].includes(mod)) { c = 1; r = 1; u = 1; d = 0; }

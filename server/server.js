@@ -675,11 +675,11 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
       riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id 
     } = req.body;
 
-    const canEdit = (req.user.role === 'Super Admin' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik');
+    const canEdit = (req.user.role === 'Super Admin' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik' || req.user.role === 'Admin FO');
     if (!canEdit) {
-      const perm = await getQuery('SELECT can_update FROM role_permissions WHERE role = ? AND module_key = "patient_management"', [req.user.role]);
+      const perm = await getQuery('SELECT can_update FROM role_permissions WHERE role = ? AND (module_key = "patient_management" OR module_key = "patient_intake")', [req.user.role]);
       if (!perm || !perm.can_update) {
-        return res.status(403).json({ message: 'Hanya Super Admin dan Admin Klinik yang diizinkan mengedit data pasien' });
+        return res.status(403).json({ message: 'Hanya Super Admin, Admin Klinik, dan Admin FO yang diizinkan mengedit data pasien' });
       }
     }
 

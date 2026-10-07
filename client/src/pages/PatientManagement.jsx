@@ -33,7 +33,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const [packages, setPackages] = useState([]);
 
   // Permissions check
-  const isSuperOrAdmin = user?.role === 'Super Admin' || user?.role === 'Admin System' || user?.role === 'Admin Klinik';
+  const isSuperOrAdmin = user?.role === 'Super Admin' || user?.role === 'Admin System' || user?.role === 'Admin Klinik' || user?.role === 'Admin FO';
   const canEditPatient = isSuperOrAdmin || hasPermission('patient_management', 'can_update') || hasPermission('patient_intake', 'can_update');
   const canDeletePatient = isSuperOrAdmin || hasPermission('patient_management', 'can_delete');
   const canExportExcel = isSuperOrAdmin || hasPermission('patient_management', 'can_read');
@@ -196,7 +196,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
 
   const openEditModal = (p) => {
     if (!canEditPatient) {
-      alert('Akses Terbatas: Hanya Super Admin dan Admin Klinik yang berhak mengedit data pasien.');
+      alert('Akses Terbatas: Anda tidak memiliki wewenang untuk mengedit data pasien.');
       return;
     }
     setEditMode(true);
@@ -222,6 +222,25 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     setSuccessMessage('');
     setShowModal(true);
     fetchStaffAvailability('Beautician');
+  };
+
+  const handleUpgradeToMember = async (patient) => {
+    if (!canEditPatient) {
+      alert('Akses Terbatas: Anda tidak memiliki wewenang untuk mengedit data pasien.');
+      return;
+    }
+    if (!window.confirm(`Ubah status pasien "${patient.nama_lengkap}" dari TRIAL menjadi MEMBER?`)) return;
+    try {
+      await axios.put(`/api/pasien/${patient.id}`, {
+        ...patient,
+        tipe_pasien: 'MEMBER'
+      });
+      alert(`Status pasien "${patient.nama_lengkap}" berhasil diubah menjadi MEMBER!`);
+      fetchPatients();
+      fetchTodayDoingan();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal mengubah status pasien');
+    }
   };
 
   const handleDeletePatient = async (patientId, patientName) => {
@@ -350,7 +369,15 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
         }
         patientIdToAssign = selectedExistingPatientId;
         const found = patients.find(p => p.id === selectedExistingPatientId);
-        if (found) targetPatientName = found.nama_lengkap;
+        if (found) {
+          targetPatientName = found.nama_lengkap;
+          if (found.tipe_pasien !== formType) {
+            await axios.put(`/api/pasien/${found.id}`, {
+              ...found,
+              tipe_pasien: formType
+            });
+          }
+        }
       }
 
       // Live Assignment process if staff selected
@@ -823,6 +850,17 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                               <Edit className="w-3.5 h-3.5" />
                               <span>Edit</span>
                             </button>
+
+                            {!isMember && canEditPatient && (
+                              <button
+                                onClick={() => handleUpgradeToMember(p)}
+                                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
+                                title="Ubah Status ke Member"
+                              >
+                                <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                                <span>Ubah ke Member</span>
+                              </button>
+                            )}
 
                             <button
                               onClick={() => openPackageModal(p)}

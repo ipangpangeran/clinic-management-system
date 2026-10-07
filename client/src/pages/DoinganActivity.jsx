@@ -182,6 +182,20 @@ export default function DoinganActivity() {
     }
   };
 
+  const handleUpgradePatientToMember = async (patient) => {
+    if (!window.confirm(`Apakah Anda yakin ingin mengubah status pasien "${patient.nama_lengkap}" dari TRIAL menjadi MEMBER?`)) return;
+    try {
+      await axios.put(`/api/pasien/${patient.id}`, {
+        ...patient,
+        tipe_pasien: 'MEMBER'
+      });
+      alert(`Status pasien "${patient.nama_lengkap}" berhasil diubah menjadi MEMBER!`);
+      fetchInitialData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal mengubah status pasien menjadi Member');
+    }
+  };
+
   const handleDeleteDoingan = async (id) => {
     if (!window.confirm('Hapus catatan doingan ini?')) return;
     try {
@@ -347,6 +361,25 @@ export default function DoinganActivity() {
                       </option>
                     ))}
                   </select>
+                  {(() => {
+                    const selectedP = patients.find(p => p.id === assignPasienId);
+                    if (selectedP && (selectedP.tipe_pasien === 'TRIAL' || selectedP.tipe_pasien === 'Trial')) {
+                      return (
+                        <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900 shadow-2xs">
+                          <span>Status Pasien: <strong className="text-amber-800">TRIAL</strong></span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpgradePatientToMember(selectedP)}
+                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-[11px] cursor-pointer shadow-2xs transition-all flex items-center gap-1"
+                          >
+                            <UserCheck className="w-3.5 h-3.5" />
+                            <span>Ubah ke MEMBER</span>
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 {/* 2. Pilih Kebutuhan / Layanan Pasien */}
@@ -463,7 +496,7 @@ export default function DoinganActivity() {
                         <div>Pasien: <strong className="text-[#1e1b15]">{s.active_doingan.pasien_nama}</strong> ({s.active_doingan.tipe_pasien})</div>
                         <div className="flex items-center gap-1 text-gray-500">
                           <Clock className="w-3 h-3 text-red-600" />
-                          <span>Mulai jam: {new Date(s.active_doingan.started_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>Mulai: {new Date(s.active_doingan.started_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                       </div>
                     )}
@@ -614,9 +647,9 @@ export default function DoinganActivity() {
                       recapData.map(item => (
                         <tr key={item.id} className="hover:bg-[#fff8f0]">
                           <td className="py-3 px-4 text-[#83746f]">
-                            <div>Mulai: {new Date(item.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</div>
+                            <div>Mulai: {new Date(item.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                             <div className="text-[10px] text-gray-400">
-                              {item.completed_at ? `Selesai: ${new Date(item.completed_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}` : '-'}
+                              {item.completed_at ? `Selesai: ${new Date(item.completed_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '-'}
                             </div>
                           </td>
                           <td className="py-3 px-4 font-bold text-[#1e1b15]">
