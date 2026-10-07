@@ -288,20 +288,6 @@ app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
       null, 'Menunggu Konfirmasi Tindakan', statusDoingan, notes || '', finalMarketingId
     ]);
 
-    // Auto-create Marketing 10K commission log if Trial patient has Marketing assigned
-    if (finalMarketingId && statusDoingan === 'Trial') {
-      const mktUser = await getQuery('SELECT * FROM users WHERE id = ?', [finalMarketingId]);
-      if (mktUser) {
-        const mktDoiId = 'doi-mkt-' + Date.now();
-        await runQuery(`
-          INSERT INTO doingan (
-            id, pasien_id, petugas_id, role_petugas, kategori_layanan, tindakan_id, nama_tindakan,
-            status_pengerjaan, status_doingan, komisi, started_at, completed_at, created_at, notes, marketing_id
-          ) VALUES (?, ?, ?, 'Marketing', 'Marketing Referral', null, 'Pasien Trial Marketing', 'COMPLETED', 'Trial', 10000, datetime('now', '+7 hours'), datetime('now', '+7 hours'), datetime('now', '+7 hours'), ?, ?)
-        `, [mktDoiId, pasien_id, finalMarketingId, `Referral Marketing 10K: ${mktUser.full_name}`, finalMarketingId]);
-      }
-    }
-
     res.status(201).json({ message: `Pasien ${pasien.nama_lengkap} berhasil di-assign ke ${petugas.full_name}`, doingan_id: id });
   } catch (err) {
     res.status(500).json({ message: 'Error assigning patient', error: err.message });
@@ -478,6 +464,9 @@ app.get('/api/doingan/today', authenticateToken, async (req, res) => {
          OR DATE(d.created_at) = DATE('now', '+7 hours')
          OR d.status_pengerjaan = 'IN_PROGRESS'
          OR (d.status_pengerjaan = 'COMPLETED' AND (d.is_billed IS NULL OR d.is_billed = 0)))
+        AND (u.role IS NULL OR u.role != 'Marketing')
+        AND (d.role_petugas IS NULL OR d.role_petugas != 'Marketing')
+        AND (d.kategori_layanan IS NULL OR d.kategori_layanan != 'Marketing Referral')
       ORDER BY d.created_at DESC
     `);
     res.json(list || []);

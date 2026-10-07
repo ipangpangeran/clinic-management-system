@@ -2,15 +2,15 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { AuthContext } from '../context/AuthContext';
-import { 
-  UserPlus, Search, Edit, Trash2, Download, Package, Calendar, 
-  AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet, UserCheck, 
+import {
+  UserPlus, Search, Edit, Trash2, Download, Package, Calendar,
+  AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet, UserCheck,
   Clock, RefreshCw, Sparkles, Stethoscope, Users, CheckCircle2, UserPlus2, History
 } from 'lucide-react';
 
 export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const { user, hasPermission } = useContext(AuthContext);
-  
+
   // Current view mode: 'INTAKE' (Pendaftaran Pasien & Treatment) or 'MASTER' (Database Data Pelanggan)
   const [viewMode, setViewMode] = useState(mode);
 
@@ -23,7 +23,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const [loadingToday, setLoadingToday] = useState(false);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('ALL');
-  
+
   // Modals
   const [showModal, setShowModal] = useState(false);
   const [showRepeatVisitModal, setShowRepeatVisitModal] = useState(false);
@@ -180,8 +180,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     try {
       const res = await axios.get('/api/users');
       // Only include users whose role or lini_profesi is Marketing
-      const marketingOnly = (res.data || []).filter(u => 
-        (u.role || '').toLowerCase() === 'marketing' || 
+      const marketingOnly = (res.data || []).filter(u =>
+        (u.role || '').toLowerCase() === 'marketing' ||
         (u.lini_profesi || '').toLowerCase() === 'marketing'
       );
       setMarketingList(marketingOnly);
@@ -360,7 +360,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
-    
+
     worksheet['!cols'] = [
       { wch: 5 },
       { wch: 15 },
@@ -670,8 +670,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   // Filter master patients for Database view & search modal
   const filteredPatients = patients.filter(p => {
     const matchSearch = (p.nama_lengkap || '').toLowerCase().includes(search.toLowerCase()) ||
-                        (p.no_hp || '').includes(search) ||
-                        (p.no_ktp && p.no_ktp.includes(search));
+      (p.no_hp || '').includes(search) ||
+      (p.no_ktp && p.no_ktp.includes(search));
     const matchFilter = filterType === 'ALL' || p.tipe_pasien === filterType || (filterType === 'MEMBER' && (p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler'));
     let matchDate = true;
     if (dateFilter) {
@@ -686,12 +686,16 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     if (!repeatSearch.trim()) return true;
     const term = repeatSearch.toLowerCase();
     return (p.nama_lengkap || '').toLowerCase().includes(term) ||
-           (p.no_hp || '').includes(term) ||
-           (p.no_ktp && p.no_ktp.includes(term));
+      (p.no_hp || '').includes(term) ||
+      (p.no_ktp && p.no_ktp.includes(term));
   });
 
-  // Active intake queue today (exclude patients whose treatment is completed AND billing finished)
-  const activeTodayQueue = todayDoinganList.filter(d => !(d.status_pengerjaan === 'COMPLETED' && d.is_billed === 1));
+  // Active intake queue today (exclude patients whose treatment is completed AND billing finished, and exclude Marketing referral records)
+  const activeTodayQueue = todayDoinganList.filter(d => 
+    !(d.status_pengerjaan === 'COMPLETED' && d.is_billed === 1) && 
+    d.petugas_role !== 'Marketing' && 
+    d.kategori_layanan !== 'Marketing Referral'
+  );
 
   const formatDateTime = (dateStr) => {
     if (!dateStr) return '-';
@@ -718,8 +722,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
             {viewMode === 'INTAKE' ? 'Pendaftaran Pasien & Treatment Hari Ini' : 'Database Data Pelanggan'}
           </h1>
           <p className="text-xs text-[#514440]">
-            {viewMode === 'INTAKE' 
-              ? 'Menu pendaftaran pasien baru, intake kunjungan berulang pasien lama, serta antrean treatment aktif hari ini.' 
+            {viewMode === 'INTAKE'
+              ? 'Menu pendaftaran pasien baru, intake kunjungan berulang pasien lama, serta antrean treatment aktif hari ini.'
               : 'Master database seluruh pelanggan terdaftar, riwayat poin, data medis, edit profil, dan export Excel.'}
           </p>
         </div>
@@ -728,9 +732,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
           <button
             type="button"
             onClick={() => setViewMode('INTAKE')}
-            className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-              viewMode === 'INTAKE' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
-            }`}
+            className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${viewMode === 'INTAKE' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+              }`}
           >
             <UserPlus className="w-4 h-4" />
             <span>Pendaftaran & Intake Hari Ini</span>
@@ -738,9 +741,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
           <button
             type="button"
             onClick={() => setViewMode('MASTER')}
-            className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-              viewMode === 'MASTER' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
-            }`}
+            className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${viewMode === 'MASTER' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+              }`}
           >
             <Users className="w-4 h-4" />
             <span>Database Data Pelanggan</span>
@@ -841,9 +843,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                           </td>
                           <td className="py-3.5 px-4">
                             <div className="font-semibold text-[#514440]">{d.pasien_hp}</div>
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 ${
-                              d.tipe_pasien === 'TRIAL' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                            }`}>
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 ${d.tipe_pasien === 'TRIAL' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                              }`}>
                               {d.tipe_pasien === 'NON-TRIAL' || d.tipe_pasien === 'Reguler' ? 'MEMBER' : d.tipe_pasien}
                             </span>
                           </td>
@@ -913,9 +914,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 <button
                   type="button"
                   onClick={() => setDateFilter(todayStr)}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                    dateFilter === todayStr ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${dateFilter === todayStr ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+                    }`}
                 >
                   <Calendar className="w-3.5 h-3.5" />
                   <span>Terdaftar Hari Ini</span>
@@ -923,9 +923,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 <button
                   type="button"
                   onClick={() => setDateFilter('')}
-                  className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                    dateFilter === '' ? 'bg-white text-[#7d5141] font-bold shadow-2xs' : 'text-[#514440] hover:bg-[#eee7dd]'
-                  }`}
+                  className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${dateFilter === '' ? 'bg-white text-[#7d5141] font-bold shadow-2xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+                    }`}
                 >
                   Semua Tgl
                 </button>
@@ -1035,11 +1034,10 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                             {p.no_ktp && <div className="text-[10px] text-[#83746f]">NIK: {p.no_ktp}</div>}
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                              isMember 
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isMember
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                 : 'bg-amber-100 text-amber-800 border border-amber-300'
-                            }`}>
+                              }`}>
                               {isMember ? 'MEMBER' : 'TRIAL'}
                             </span>
                           </td>
@@ -1148,9 +1146,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                     <div>
                       <div className="font-bold text-sm text-[#1e1b15]">{p.nama_lengkap}</div>
                       <div className="text-xs text-[#514440] font-medium">HP: {p.no_hp} {p.no_ktp ? `| NIK: ${p.no_ktp}` : ''}</div>
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${
-                        p.tipe_pasien === 'TRIAL' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                      }`}>
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${p.tipe_pasien === 'TRIAL' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
                         {p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}
                       </span>
                     </div>
@@ -1365,7 +1362,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                         <option value="">-- {loadingStaff ? 'Memuat Staff...' : 'Pilih Petugas Staff'} --</option>
                         {staffList.map(s => (
                           <option key={s.id} value={s.id} disabled={s.is_busy}>
-                            {s.full_name} ({s.role}) {s.is_busy ? '[SEDANG DITANGANI PASIEN LAIN]' : '[KOSONG / READY]'}
+                            {s.full_name} ({s.role}) {s.is_busy ? '[SEDANG DITANGANI PASIEN LAIN]' : '[READY]'}
                           </option>
                         ))}
                       </select>

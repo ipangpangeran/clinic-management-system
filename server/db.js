@@ -470,7 +470,7 @@ async function initDb() {
       // ignore
     }
 
-    // Migration: Fix any negative sisa_stok in stok_produk
+    // Migration: Fix any negative sisa_stok in stok_produk & remove Marketing dummy doingan records
     try {
       await runQuery(`UPDATE stok_produk SET sisa_stok = 1 WHERE sisa_stok < 0 OR id = 'prod-5'`);
       await runQuery(`UPDATE doingan SET komisi = 17000 WHERE (komisi IS NULL OR komisi = 0) AND (status_doingan = 'Mbr' OR status_doingan = 'Member')`);
@@ -478,6 +478,7 @@ async function initDb() {
       await runQuery(`UPDATE doingan SET komisi = 10000 WHERE (komisi IS NULL OR komisi = 0) AND status_doingan = 'Trial' AND role_petugas = 'Marketing'`);
       await runQuery(`UPDATE doingan SET komisi = 15000 WHERE (komisi IS NULL OR komisi = 0)`);
       await runQuery(`UPDATE pasien SET tipe_pasien = 'MEMBER' WHERE tipe_pasien = 'NON-TRIAL' OR tipe_pasien = 'Reguler'`);
+      await runQuery(`DELETE FROM doingan WHERE role_petugas = 'Marketing' OR kategori_layanan = 'Marketing Referral' OR id LIKE 'doi-mkt-%'`);
     } catch (e) {
       // ignore
     }
