@@ -794,7 +794,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                     <th className="py-3 px-4 whitespace-nowrap">Tipe Pasien</th>
                     <th className="py-3 px-4 min-w-[150px]">Detail Medis (Member)</th>
                     <th className="py-3 px-4 whitespace-nowrap">Poin</th>
-                    <th className="py-3 px-4 text-center min-w-[360px] whitespace-nowrap">Aksi / Kelola Master Data</th>
+                    <th className="py-3 px-4 text-right min-w-[360px] whitespace-nowrap">AKSI / KELOLA MASTER DATA</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
@@ -841,7 +841,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                           <td className="py-3.5 px-4 font-bold text-[#7d5141] whitespace-nowrap">
                             +{p.total_poin || 0} Poin
                           </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap space-x-1.5">
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
                             <button
                               onClick={() => openEditModal(p)}
                               className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] text-[#7d5141] border border-[#d6c2bd] font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
