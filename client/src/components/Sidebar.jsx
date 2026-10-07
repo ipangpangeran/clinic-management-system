@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { 
   LayoutDashboard, UserPlus, ShoppingBag, PackageCheck, 
-  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles, X
+  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles, X, Users
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, setIsMobileMenuOpen }) {
@@ -10,7 +10,8 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
 
   const navItems = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, module: null },
-    { id: 'patients', label: 'Pendaftaran Pasien (Admin FO)', icon: UserPlus, module: 'patient_intake' },
+    { id: 'patients', label: 'Pendaftaran Pasien & Treatment', icon: UserPlus, module: 'patient_intake' },
+    { id: 'customer_database', label: 'Database Data Pelanggan', icon: Users, module: 'patient_management' },
     { id: 'doingan', label: 'Doingan & Aktivitas Perawatan', icon: Sparkles, module: 'doingan' },
     { id: 'pos', label: 'POS & Billing Counter', icon: ShoppingBag, module: 'patient_packages' },
     { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'] },

@@ -28,6 +28,7 @@ function MainApp() {
 
     const navModules = {
       patients: 'patient_intake',
+      customer_database: 'patient_management',
       doingan: 'doingan',
       pos: 'patient_packages',
       inventory: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'],
@@ -113,7 +114,9 @@ function MainApp() {
       case 'overview':
         return <DashboardOverview setActiveTab={setActiveTab} />;
       case 'patients':
-        return <PatientManagement />;
+        return <PatientManagement mode="INTAKE" setActiveTab={setActiveTab} />;
+      case 'customer_database':
+        return <PatientManagement mode="MASTER" setActiveTab={setActiveTab} />;
       case 'doingan':
         return <DoinganActivity />;
       case 'pos':

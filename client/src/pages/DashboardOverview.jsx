@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, ShoppingBag, PackageCheck, MessageSquare, AlertCircle } from 'lucide-react';
+import { Users, ShoppingBag, PackageCheck, MessageSquare, AlertCircle, Clock, CheckCircle2, UserPlus } from 'lucide-react';
 
 export default function DashboardOverview({ setActiveTab }) {
-  const [patients, setPatients] = useState([]);
+  const [todayPatients, setTodayPatients] = useState([]);
   const [products, setProducts] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,14 +14,14 @@ export default function DashboardOverview({ setActiveTab }) {
 
   const fetchDashboardData = async () => {
     try {
-      const [pRes, prodRes, rRes] = await Promise.all([
-        axios.get('/api/pasien'),
+      const [todayRes, prodRes, rRes] = await Promise.all([
+        axios.get('/api/doingan/today'),
         axios.get('/api/stok'),
         axios.get('/api/reminders')
       ]);
-      setPatients(pRes.data);
-      setProducts(prodRes.data);
-      setReminders(rRes.data);
+      setTodayPatients(todayRes.data || []);
+      setProducts(prodRes.data || []);
+      setReminders(rRes.data || []);
     } catch (err) {
       console.error('Error fetching dashboard data', err);
     } finally {
@@ -29,10 +29,26 @@ export default function DashboardOverview({ setActiveTab }) {
     }
   };
 
-  const trialCount = patients.filter(p => p.tipe_pasien === 'TRIAL').length;
-  const regulerCount = patients.filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL').length;
+  const inProgressCount = todayPatients.filter(p => p.status_pengerjaan === 'IN_PROGRESS').length;
+  const completedCount = todayPatients.filter(p => p.status_pengerjaan === 'COMPLETED').length;
   const lowStockCount = products.filter(p => p.sisa_stok <= p.minimum_stok).length;
   const pendingRemindersList = reminders.filter(r => r.status === 'PENDING');
+
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('id-ID', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -47,14 +63,16 @@ export default function DashboardOverview({ setActiveTab }) {
         <div className="hidden md:flex gap-3">
           <button
             onClick={() => setActiveTab('patients')}
-            className="px-4 py-2.5 bg-white text-[#7d5141] font-semibold text-xs rounded-xl shadow-xs hover:bg-[#fff8f0] transition-all cursor-pointer"
+            className="px-4 py-2.5 bg-white text-[#7d5141] font-semibold text-xs rounded-xl shadow-xs hover:bg-[#fff8f0] transition-all cursor-pointer flex items-center gap-1.5"
           >
-            + Intake Pasien Baru
+            <UserPlus className="w-4 h-4" />
+            + Pendaftaran Pasien
           </button>
           <button
             onClick={() => setActiveTab('pos')}
-            className="px-4 py-2.5 bg-[#514440] hover:bg-[#333029] text-white font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+            className="px-4 py-2.5 bg-[#514440] hover:bg-[#333029] text-white font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
           >
+            <ShoppingBag className="w-4 h-4" />
             Buka Kasir POS
           </button>
         </div>
@@ -64,10 +82,10 @@ export default function DashboardOverview({ setActiveTab }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs flex items-center justify-between">
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-[#83746f] uppercase tracking-wider">Total Pasien</p>
-            <h3 className="text-2xl font-bold text-[#1e1b15] font-serif">{patients.length}</h3>
+            <p className="text-xs font-semibold text-[#83746f] uppercase tracking-wider">Pasien Ditangani Hari Ini</p>
+            <h3 className="text-2xl font-bold text-[#1e1b15] font-serif">{todayPatients.length} Pasien</h3>
             <div className="text-[11px] text-[#514440]">
-              <span className="text-amber-700 font-semibold">{trialCount} Trial</span> • <span className="text-emerald-700 font-semibold">{regulerCount} Member</span>
+              <span className="text-red-600 font-bold">{inProgressCount} Sedang Ditangani</span> • <span className="text-emerald-700 font-bold">{completedCount} Selesai</span>
             </div>
           </div>
           <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] text-[#7d5141] rounded-xl">
@@ -118,55 +136,96 @@ export default function DashboardOverview({ setActiveTab }) {
 
       {/* Grid Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pasien Terdaftar Terbaru */}
+        {/* Pasien Ditangani Hari Ini Table */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-[#e5ded4] p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Pasien Terdaftar Terbaru</h3>
+          <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
+            <div>
+              <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Daftar Pasien Ditangani Hari Ini</h3>
+              <p className="text-xs text-[#83746f]">Menampilkan status pengerjaan, petugas penanggung jawab, serta waktu mulai & selesai.</p>
+            </div>
             <button
               onClick={() => setActiveTab('patients')}
-              className="text-xs font-semibold text-[#7d5141] hover:underline cursor-pointer"
+              className="text-xs font-bold text-[#7d5141] hover:underline cursor-pointer bg-[#faf3e8] px-3 py-1.5 rounded-xl border border-[#d6c2bd]"
             >
-              Lihat Semua Pasien →
+              + Intake Pasien Baru →
             </button>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#faf3e8] text-[#514440] font-semibold border-b border-[#e5ded4]">
+              <thead className="bg-[#faf3e8] text-[#514440] font-semibold border-b border-[#e5ded4] uppercase tracking-wider">
                 <tr>
-                  <th className="py-2.5 px-3">Nama Pasien</th>
-                  <th className="py-2.5 px-3">No. HP</th>
-                  <th className="py-2.5 px-3">Status Tipe</th>
-                  <th className="py-2.5 px-3">Poin Pasien</th>
-                  <th className="py-2.5 px-3">Tanggal Terdaftar</th>
+                  <th className="py-3 px-3">Nama Pasien</th>
+                  <th className="py-3 px-3">No. HP</th>
+                  <th className="py-3 px-3">Tipe Pelanggan</th>
+                  <th className="py-3 px-3">Waktu Ditangani</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">Nama Petugas</th>
+                  <th className="py-3 px-3">Waktu Selesai</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e5ded4]">
-                {patients.slice(0, 5).map(p => (
-                  <tr key={p.id} className="hover:bg-[#fff8f0]">
-                    <td className="py-3 px-3 font-semibold text-[#1e1b15]">{p.nama_lengkap}</td>
-                    <td className="py-3 px-3 text-[#514440]">{p.no_hp}</td>
-                    <td className="py-3 px-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        p.tipe_pasien === 'TRIAL' 
-                          ? 'bg-amber-100 text-amber-800' 
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        {p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}
-                      </span>
+                {todayPatients.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="py-8 text-center text-gray-400 italic font-medium">
+                      Belum ada data pasien yang sedang atau sudah ditangani hari ini.
                     </td>
-                    <td className="py-3 px-3 font-medium text-[#7d5141]">+{p.total_poin} Poin</td>
-                    <td className="py-3 px-3 text-[#83746f]">{new Date(p.created_at).toLocaleDateString('id-ID')}</td>
                   </tr>
-                ))}
+                ) : (
+                  todayPatients.map(p => {
+                    const isInProgress = p.status_pengerjaan === 'IN_PROGRESS';
+                    return (
+                      <tr key={p.doingan_id} className="hover:bg-[#fff8f0] transition-colors">
+                        <td className="py-3 px-3 font-bold text-[#1e1b15]">{p.pasien_nama}</td>
+                        <td className="py-3 px-3 text-[#514440]">{p.pasien_hp}</td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            p.tipe_pasien === 'TRIAL' 
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300' 
+                              : 'bg-blue-100 text-blue-800 border border-blue-300'
+                          }`}>
+                            {p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-[#514440] font-medium">
+                          {formatDateTime(p.started_at || p.created_at)}
+                        </td>
+                        <td className="py-3 px-3">
+                          {isInProgress ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-300">
+                              <Clock className="w-3 h-3 animate-spin" />
+                              Sedang Ditangani
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Sudah Selesai
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-[#7d5141]">
+                          {p.petugas_nama || '-'}
+                          <div className="text-[10px] font-normal text-gray-400">{p.lini_profesi || p.petugas_role}</div>
+                        </td>
+                        <td className="py-3 px-3 text-[#514440] font-medium">
+                          {isInProgress ? (
+                            <span className="text-gray-400 italic">-</span>
+                          ) : (
+                            formatDateTime(p.completed_at)
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Reminders Control Upcoming (Synced PENDING list) */}
+        {/* Reminders Control Upcoming */}
         <div className="bg-white rounded-2xl border border-[#e5ded4] p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
             <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Jadwal Kontrol Besok</h3>
             <button
               onClick={() => setActiveTab('wa')}
@@ -198,3 +257,4 @@ export default function DashboardOverview({ setActiveTab }) {
     </div>
   );
 }
+

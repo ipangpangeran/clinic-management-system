@@ -424,22 +424,45 @@ app.get('/api/doingan/recap', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/doingan/unbilled -> Returns completed treatment sessions waiting for POS billing
-app.get('/api/doingan/unbilled', authenticateToken, async (req, res) => {
+// GET /api/doingan/today -> Today's treatment sessions for Dashboard & Intake Queue
+app.get('/api/doingan/today', authenticateToken, async (req, res) => {
   try {
     const list = await allQuery(`
-      SELECT d.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, u.full_name as petugas_nama, u.role as petugas_role, u.lini_profesi
+      SELECT 
+        d.id as doingan_id,
+        d.pasien_id,
+        p.nama_lengkap as pasien_nama,
+        p.no_hp as pasien_hp,
+        p.no_ktp as pasien_ktp,
+        p.tipe_pasien,
+        d.petugas_id,
+        u.full_name as petugas_nama,
+        u.role as petugas_role,
+        u.lini_profesi,
+        d.kategori_layanan,
+        d.nama_tindakan,
+        d.status_pengerjaan,
+        d.status_doingan,
+        d.started_at,
+        d.completed_at,
+        d.created_at,
+        d.is_billed
       FROM doingan d
       JOIN pasien p ON d.pasien_id = p.id
       JOIN users u ON d.petugas_id = u.id
-      WHERE d.status_pengerjaan = 'COMPLETED' AND (d.is_billed IS NULL OR d.is_billed = 0)
-      ORDER BY d.completed_at DESC
+      WHERE (DATE(d.started_at) = DATE('now', '+7 hours') 
+         OR DATE(d.created_at) = DATE('now', '+7 hours')
+         OR d.status_pengerjaan = 'IN_PROGRESS'
+         OR (d.status_pengerjaan = 'COMPLETED' AND (d.is_billed IS NULL OR d.is_billed = 0)))
+      ORDER BY d.created_at DESC
     `);
-    res.json(list);
+    res.json(list || []);
   } catch (err) {
-    res.status(500).json({ message: 'Error fetching unbilled doingan sessions', error: err.message });
+    res.status(500).json({ message: "Error fetching today's doingan list", error: err.message });
   }
 });
+
+
 
 app.post('/api/doingan', authenticateToken, async (req, res) => {
   try {
