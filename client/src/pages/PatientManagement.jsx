@@ -968,16 +968,6 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 <span>Histori Klaim Paket ({packageLogs.length})</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setShowMarketingModal(true)}
-                className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
-                title="Rekap Data Pasien Trial & Komisi Marketing (10K)"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Rekap Marketing (10K)</span>
-              </button>
-
               {canExportExcel && (
                 <button
                   onClick={handleExportExcel}

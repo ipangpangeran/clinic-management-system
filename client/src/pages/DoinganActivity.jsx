@@ -413,10 +413,20 @@ export default function DoinganActivity() {
                     onChange={(e) => setFilterPetugasId(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
                   >
-                    <option value="">-- Semua Staff & Marketing --</option>
-                    {allUsersList.map(s => (
-                      <option key={s.id} value={s.id}>{s.full_name} ({s.role})</option>
-                    ))}
+                    <option value="">-- Semua Staff (BTC, Nurse & Marketing) --</option>
+                    {allUsersList
+                      .filter(s =>
+                        s.role === 'Beautician' ||
+                        s.role === 'Nurse' ||
+                        s.role === 'Marketing' ||
+                        s.role === 'Therapist / BTC' ||
+                        s.role === 'BTC' ||
+                        s.lini_profesi === 'Beautician' ||
+                        s.lini_profesi === 'Nurse'
+                      )
+                      .map(s => (
+                        <option key={s.id} value={s.id}>{s.full_name} ({s.role})</option>
+                      ))}
                   </select>
                 </div>
 
