@@ -148,12 +148,6 @@ export default function DashboardOverview({ setActiveTab }) {
               <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Daftar Pasien Ditangani Hari Ini</h3>
               <p className="text-xs text-[#83746f]">Menampilkan status pengerjaan, petugas penanggung jawab, serta waktu mulai & selesai.</p>
             </div>
-            <button
-              onClick={() => setActiveTab('patients')}
-              className="text-xs font-bold text-[#7d5141] hover:underline cursor-pointer bg-[#faf3e8] px-3 py-1.5 rounded-xl border border-[#d6c2bd]"
-            >
-              + Intake Pasien Baru →
-            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -184,11 +178,10 @@ export default function DashboardOverview({ setActiveTab }) {
                         <td className="py-3 px-3 font-bold text-[#1e1b15]">{p.pasien_nama}</td>
                         <td className="py-3 px-3 text-[#514440]">{p.pasien_hp}</td>
                         <td className="py-3 px-3">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            p.tipe_pasien === 'TRIAL' 
-                              ? 'bg-amber-100 text-amber-800 border border-amber-300' 
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${p.tipe_pasien === 'TRIAL'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
                               : 'bg-blue-100 text-blue-800 border border-blue-300'
-                          }`}>
+                            }`}>
                             {p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}
                           </span>
                         </td>

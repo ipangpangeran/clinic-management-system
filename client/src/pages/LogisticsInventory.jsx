@@ -1,14 +1,25 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { AlertTriangle, Plus, Edit, RefreshCw, FileText, CheckCircle2, XCircle, ArrowRight } from 'lucide-react';
+import { AlertTriangle, Plus, Edit, RefreshCw, FileText, CheckCircle2, XCircle, ArrowRight, Package, Trash2 } from 'lucide-react';
 
 export default function LogisticsInventory() {
   const { user } = useContext(AuthContext);
   const [products, setProducts] = useState([]);
   const [mutations, setMutations] = useState([]);
   const [productApprovals, setProductApprovals] = useState([]);
-  const [activeTab, setActiveTab] = useState('RETAIL'); // 'RETAIL', 'THERAPIST_BTC', 'KLINIK_NON_MEDIS', 'PRODUCT_APPROVALS', 'MUTASI'
+  const [masterPakets, setMasterPakets] = useState([]);
+  const [activeTab, setActiveTab] = useState('RETAIL'); // 'RETAIL', 'THERAPIST_BTC', 'KLINIK_NON_MEDIS', 'PRODUCT_APPROVALS', 'MUTASI', 'MASTER_PAKET'
+
+  // Master Paket Modal State
+  const [showMasterPaketModal, setShowMasterPaketModal] = useState(false);
+  const [editingMasterPaket, setEditingMasterPaket] = useState(null);
+  const [mpNama, setMpNama] = useState('');
+  const [mpItemAName, setMpItemAName] = useState('');
+  const [mpItemAKuota, setMpItemAKuota] = useState(3);
+  const [mpItemBName, setMpItemBName] = useState('');
+  const [mpItemBKuota, setMpItemBKuota] = useState(2);
+  const [mpHarga, setMpHarga] = useState(0);
 
   // Add Product Form State
   const [showProductModal, setShowProductModal] = useState(false);
@@ -43,16 +54,81 @@ export default function LogisticsInventory() {
 
   const fetchInventoryData = async () => {
     try {
-      const [prodRes, mutRes, approvalRes] = await Promise.all([
+      const [prodRes, mutRes, approvalRes, mpRes] = await Promise.all([
         axios.get('/api/stok'),
         axios.get('/api/stok/mutasi'),
-        axios.get('/api/stok/product-approvals')
+        axios.get('/api/stok/product-approvals'),
+        axios.get('/api/master-paket')
       ]);
       setProducts(prodRes.data);
       setMutations(mutRes.data);
       setProductApprovals(approvalRes.data);
+      setMasterPakets(mpRes.data);
     } catch (err) {
       console.error('Error fetching inventory data', err);
+    }
+  };
+
+  const openNewMasterPaketModal = () => {
+    setEditingMasterPaket(null);
+    setMpNama('');
+    setMpItemAName('');
+    setMpItemAKuota(3);
+    setMpItemBName('');
+    setMpItemBKuota(2);
+    setMpHarga(0);
+    setShowMasterPaketModal(true);
+  };
+
+  const openEditMasterPaketModal = (mp) => {
+    setEditingMasterPaket(mp);
+    setMpNama(mp.nama_paket);
+    setMpItemAName(mp.item_a_name);
+    setMpItemAKuota(mp.item_a_kuota);
+    setMpItemBName(mp.item_b_name || '');
+    setMpItemBKuota(mp.item_b_kuota || 0);
+    setMpHarga(mp.harga_paket);
+    setShowMasterPaketModal(true);
+  };
+
+  const handleSaveMasterPaket = async (e) => {
+    e.preventDefault();
+    if (!mpNama || !mpItemAName) {
+      alert('Nama Paket dan Nama Item A wajib diisi!');
+      return;
+    }
+    try {
+      const payload = {
+        nama_paket: mpNama,
+        item_a_name: mpItemAName,
+        item_a_kuota: Number(mpItemAKuota) || 1,
+        item_b_name: mpItemBName || null,
+        item_b_kuota: Number(mpItemBKuota) || 0,
+        harga_paket: Number(mpHarga) || 0
+      };
+
+      if (editingMasterPaket) {
+        await axios.put(`/api/master-paket/${editingMasterPaket.id}`, payload);
+        alert('Master Template Paket berhasil diperbarui!');
+      } else {
+        await axios.post('/api/master-paket', payload);
+        alert('Master Template Paket baru berhasil ditambahkan!');
+      }
+      setShowMasterPaketModal(false);
+      fetchInventoryData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyimpan master template paket');
+    }
+  };
+
+  const handleDeleteMasterPaket = async (id, nama) => {
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus master template paket "${nama}"?`)) return;
+    try {
+      await axios.delete(`/api/master-paket/${id}`);
+      alert('Master Template Paket berhasil dihapus');
+      fetchInventoryData();
+    } catch (err) {
+      alert('Gagal menghapus master template paket');
     }
   };
 
@@ -156,7 +232,7 @@ export default function LogisticsInventory() {
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Logistik & Stok Inventori (ASM)</h1>
+          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Logistik & Stok Inventori</h1>
           <p className="text-xs text-[#514440]">Kelola stok produk retail skin care, bahan medis BTC terapis, operasional klinik non-medis, dan pengajuan perubahan produk & stok.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5 sm:justify-end">
@@ -231,6 +307,13 @@ export default function LogisticsInventory() {
             className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'MUTASI' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'}`}
           >
             Riwayat Mutasi & Approval Stok ({mutations.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('MASTER_PAKET')}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'MASTER_PAKET' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>Master Template Paket ({masterPakets.length})</span>
           </button>
         </div>
 
@@ -310,10 +393,9 @@ export default function LogisticsInventory() {
                         <div className="text-[10px] text-gray-400">{req.notes}</div>
                       </td>
                       <td className="py-3 px-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
-                          req.status === 'REJECTED' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
-                        }`}>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                            req.status === 'REJECTED' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                          }`}>
                           {req.status === 'PENDING' ? 'MENUNGGU APPROVAL' : req.status}
                         </span>
                         {req.approver_name && (
@@ -372,10 +454,9 @@ export default function LogisticsInventory() {
                     <td className="py-3 px-4 font-bold">{m.jumlah} {m.satuan}</td>
                     <td className="py-3 px-4 text-[#514440]">{m.requester_name || 'Staff'}</td>
                     <td className="py-3 px-4">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        m.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                        m.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${m.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
+                          m.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
                         {m.status}
                       </span>
                     </td>
@@ -401,6 +482,93 @@ export default function LogisticsInventory() {
                 ))}
               </tbody>
             </table>
+          </div>
+        ) : activeTab === 'MASTER_PAKET' ? (
+          /* MASTER TEMPLATE PAKET TABLE */
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+              <div>
+                <strong>Master Template Paket Treatment:</strong>
+                <span className="ml-1">Kelola master template paket bundling tindakan/perawatan. Penambahan dan perubahan template langsung tersimpan <strong>tanpa memerlukan approval</strong>.</span>
+              </div>
+              <button
+                onClick={openNewMasterPaketModal}
+                className="px-3.5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" /> + Tambah Master Paket Baru
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-3 px-4">Nama Template Paket</th>
+                    <th className="py-3 px-4">Tindakan / Item Utama (A)</th>
+                    <th className="py-3 px-4">Tindakan / Item Tambahan (B)</th>
+                    <th className="py-3 px-4">Harga Paket</th>
+                    <th className="py-3 px-4 text-center">Aksi (Langsung / No Approval)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {masterPakets.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="text-center py-6 text-gray-400 italic">
+                        Belum ada template paket. Klik "+ Tambah Master Paket Baru" untuk membuat.
+                      </td>
+                    </tr>
+                  ) : (
+                    masterPakets.map(mp => (
+                      <tr key={mp.id} className="hover:bg-[#fff8f0]">
+                        <td className="py-3 px-4 font-bold text-[#1e1b15]">
+                          <div className="flex items-center gap-2">
+                            <Package className="w-4 h-4 text-[#7d5141]" />
+                            <span>{mp.nama_paket}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-semibold text-emerald-800">{mp.item_a_name}</span>
+                          <span className="ml-1.5 text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
+                            {mp.item_a_kuota} Sesi
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {mp.item_b_name ? (
+                            <>
+                              <span className="font-semibold text-indigo-800">{mp.item_b_name}</span>
+                              <span className="ml-1.5 text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-md">
+                                {mp.item_b_kuota} Sesi
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">- Tidak Ada -</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-gray-900">
+                          Rp {(mp.harga_paket || 0).toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => openEditMasterPaketModal(mp)}
+                              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <Edit className="w-3 h-3" /> Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteMasterPaket(mp.id, mp.nama_paket)}
+                              className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[11px] rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3 h-3" /> Hapus
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           /* PRODUCT LIST TABLES (RETAIL, THERAPIST_BTC, KLINIK_NON_MEDIS) */
@@ -429,11 +597,10 @@ export default function LogisticsInventory() {
 
                       <td className="py-3 px-4 text-[#83746f]">{p.minimum_stok} {p.satuan}</td>
                       <td className="py-3 px-4">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          isLow 
-                            ? 'bg-red-100 text-red-800 border border-red-300 animate-pulse' 
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isLow
+                            ? 'bg-red-100 text-red-800 border border-red-300 animate-pulse'
                             : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        }`}>
+                          }`}>
                           {isLow ? 'ALERT: MENIPIS' : 'AMANKAN'}
                         </span>
                       </td>
@@ -539,9 +706,8 @@ export default function LogisticsInventory() {
 
               <button
                 type="submit"
-                className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all ${
-                  isDirectRole ? 'bg-indigo-700 hover:bg-indigo-800' : 'bg-amber-700 hover:bg-amber-800'
-                }`}
+                className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all ${isDirectRole ? 'bg-indigo-700 hover:bg-indigo-800' : 'bg-amber-700 hover:bg-amber-800'
+                  }`}
               >
                 {isDirectRole ? 'Simpan Perubahan (Langsung Update)' : 'Kirim Pengajuan Perubahan (Perlu Approval)'}
               </button>
@@ -644,6 +810,108 @@ export default function LogisticsInventory() {
 
               <button type="submit" className="w-full py-2.5 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer">
                 Kirim Mutasi / Request
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL TAMBAH / EDIT MASTER TEMPLATE PAKET */}
+      {showMasterPaketModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#e5ded4] space-y-4">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <h3 className="font-serif font-bold text-base text-[#1e1b15]">
+                {editingMasterPaket ? 'Edit Master Template Paket' : '+ Tambah Master Template Paket Baru'}
+              </h3>
+              <button onClick={() => setShowMasterPaketModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">×</button>
+            </div>
+
+            <form onSubmit={handleSaveMasterPaket} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Template Paket *</label>
+                <input
+                  type="text"
+                  value={mpNama}
+                  onChange={(e) => setMpNama(e.target.value)}
+                  placeholder="Misal: Paket Glowing Skin 5x Sesi"
+                  required
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-medium"
+                />
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2">
+                <label className="block text-xs font-bold text-emerald-900">Item Tindakan / Perawatan Utama (A) *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      value={mpItemAName}
+                      onChange={(e) => setMpItemAName(e.target.value)}
+                      placeholder="Nama Tindakan A (mis. Facial Detox)"
+                      required
+                      className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      value={mpItemAKuota}
+                      onChange={(e) => setMpItemAKuota(e.target.value)}
+                      placeholder="Kuota Sesi"
+                      min="1"
+                      required
+                      className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
+                <label className="block text-xs font-bold text-indigo-900">Item Tindakan / Perawatan Tambahan (B) (Opsional)</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      value={mpItemBName}
+                      onChange={(e) => setMpItemBName(e.target.value)}
+                      placeholder="Nama Tindakan B (mis. Masker Gold)"
+                      className="w-full px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      value={mpItemBKuota}
+                      onChange={(e) => setMpItemBKuota(e.target.value)}
+                      placeholder="Kuota Sesi"
+                      min="0"
+                      className="w-full px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-bold text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Harga Paket Total (Rp)</label>
+                <input
+                  type="number"
+                  value={mpHarga}
+                  onChange={(e) => setMpHarga(e.target.value)}
+                  placeholder="Harga Paket (Rp)"
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-emerald-800"
+                />
+              </div>
+
+              <div className="text-[11px] text-gray-500 italic bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+                ⚡ Catatan: Perubahan/penambahan template paket langsung disimpan ke database <strong>tanpa perlu proses approval</strong>.
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer transition-all"
+              >
+                {editingMasterPaket ? 'Simpan Perubahan Master Paket' : 'Tambah Master Template Paket Baru'}
               </button>
             </form>
           </div>

@@ -475,6 +475,40 @@ app.get('/api/doingan/today', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/doingan/unbilled -> Unbilled completed treatment sessions for POS cashier
+app.get('/api/doingan/unbilled', authenticateToken, async (req, res) => {
+  try {
+    const list = await allQuery(`
+      SELECT 
+        d.id,
+        d.pasien_id,
+        d.petugas_id,
+        d.role_petugas,
+        d.kategori_layanan,
+        d.tindakan_id,
+        d.nama_tindakan,
+        d.status_pengerjaan,
+        d.status_doingan,
+        d.komisi,
+        d.marketing_id,
+        p.nama_lengkap as pasien_nama,
+        p.no_hp as pasien_hp,
+        p.tipe_pasien,
+        u.full_name as petugas_nama
+      FROM doingan d
+      JOIN pasien p ON d.pasien_id = p.id
+      JOIN users u ON d.petugas_id = u.id
+      WHERE (d.is_billed IS NULL OR d.is_billed = 0)
+        AND d.status_pengerjaan = 'COMPLETED'
+        AND (u.role IS NULL OR u.role != 'Marketing')
+      ORDER BY d.created_at DESC
+    `);
+    res.json(list || []);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching unbilled doingan list', error: err.message });
+  }
+});
+
 
 
 app.post('/api/doingan', authenticateToken, async (req, res) => {
@@ -638,15 +672,16 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
     }
 
     const id = 'pasien-' + Date.now();
+    const hasTrial = normalizedTipe === 'TRIAL' ? 1 : 0;
     await runQuery(`
       INSERT INTO pasien (
         id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, 
-        riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id, has_trial_history
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id, no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, 
       riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, 
-      referrer_pasien_id || null, marketing_id || null
+      referrer_pasien_id || null, marketing_id || null, hasTrial
     ]);
 
     const newPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
@@ -683,15 +718,20 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
       if (existingHp) return res.status(400).json({ message: 'data sudah terdaftar (No. HP sudah digunakan oleh pasien lain)' });
     }
 
+    const currentPatient = await getQuery('SELECT has_trial_history, tipe_pasien FROM pasien WHERE id = ?', [id]);
+    const wasTrial = (currentPatient && (currentPatient.tipe_pasien === 'TRIAL' || currentPatient.has_trial_history === 1));
+    const hasTrial = (normalizedTipe === 'TRIAL' || wasTrial) ? 1 : 0;
+
     await runQuery(`
       UPDATE pasien
       SET no_ktp = ?, no_hp = ?, nama_lengkap = ?, tipe_pasien = ?, alamat = ?, tgl_lahir = ?, 
-          riwayat_alergi = ?, jenis_kulit = ?, rekomendasi_dokter = ?, referrer_pasien_id = ?, marketing_id = ?
+          riwayat_alergi = ?, jenis_kulit = ?, rekomendasi_dokter = ?, referrer_pasien_id = ?, marketing_id = ?,
+          has_trial_history = ?
       WHERE id = ?
     `, [
       no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, 
       riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, 
-      referrer_pasien_id || null, marketing_id || null, id
+      referrer_pasien_id || null, marketing_id || null, hasTrial, id
     ]);
 
     const updated = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);

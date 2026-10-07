@@ -168,6 +168,10 @@ async function initDb() {
       await runQuery(`ALTER TABLE pasien ADD COLUMN marketing_id TEXT`);
     } catch (e) { }
 
+    try {
+      await runQuery(`ALTER TABLE pasien ADD COLUMN has_trial_history INTEGER DEFAULT 0`);
+    } catch (e) { }
+
     // 5a. Master Paket Templates
     await runQuery(`
       CREATE TABLE IF NOT EXISTS master_paket (
@@ -478,6 +482,7 @@ async function initDb() {
       await runQuery(`UPDATE doingan SET komisi = 10000 WHERE (komisi IS NULL OR komisi = 0) AND status_doingan = 'Trial' AND role_petugas = 'Marketing'`);
       await runQuery(`UPDATE doingan SET komisi = 15000 WHERE (komisi IS NULL OR komisi = 0)`);
       await runQuery(`UPDATE pasien SET tipe_pasien = 'MEMBER' WHERE tipe_pasien = 'NON-TRIAL' OR tipe_pasien = 'Reguler'`);
+      await runQuery(`UPDATE pasien SET has_trial_history = 1 WHERE tipe_pasien = 'TRIAL' OR tipe_pasien = 'Trial'`);
       await runQuery(`DELETE FROM doingan WHERE role_petugas = 'Marketing' OR kategori_layanan = 'Marketing Referral' OR id LIKE 'doi-mkt-%'`);
     } catch (e) {
       // ignore

@@ -672,7 +672,9 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     const matchSearch = (p.nama_lengkap || '').toLowerCase().includes(search.toLowerCase()) ||
       (p.no_hp || '').includes(search) ||
       (p.no_ktp && p.no_ktp.includes(search));
-    const matchFilter = filterType === 'ALL' || p.tipe_pasien === filterType || (filterType === 'MEMBER' && (p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler'));
+    const matchFilter = filterType === 'ALL' || 
+      (filterType === 'TRIAL' && (p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1)) || 
+      (filterType === 'MEMBER' && (p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler'));
     let matchDate = true;
     if (dateFilter) {
       const pDate = p.created_at ? getLocalDateString(p.created_at) : '';
@@ -947,23 +949,13 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 onClick={() => setFilterType('TRIAL')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'TRIAL' ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}
               >
-                Trial ({patients.filter(p => p.tipe_pasien === 'TRIAL').length})
+                Trial & Riwayat ({patients.filter(p => p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1).length})
               </button>
               <button
                 onClick={() => setFilterType('MEMBER')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'MEMBER' || filterType === 'NON-TRIAL' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
               >
                 Member ({patients.filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler').length})
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowMasterPkgModal(true)}
-                className="px-3 py-1.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
-                title="Kelola Master Template Paket Treatment"
-              >
-                <Package className="w-3.5 h-3.5" />
-                <span>Master Template Paket</span>
               </button>
 
               <button
@@ -1034,12 +1026,19 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                             {p.no_ktp && <div className="text-[10px] text-[#83746f]">NIK: {p.no_ktp}</div>}
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isMember
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-amber-100 text-amber-800 border border-amber-300'
-                              }`}>
-                              {isMember ? 'MEMBER' : 'TRIAL'}
-                            </span>
+                            {isMember && p.has_trial_history === 1 ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300">
+                                MEMBER (MIGRASI DARI TRIAL)
+                              </span>
+                            ) : isMember ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                MEMBER
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                TRIAL
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-[#7d5141] whitespace-nowrap">
                             +{p.total_poin || 0} Poin

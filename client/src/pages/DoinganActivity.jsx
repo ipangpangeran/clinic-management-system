@@ -9,19 +9,14 @@ import {
 
 export default function DoinganActivity() {
   const { user } = useContext(AuthContext);
-  const [activeMainTab, setActiveMainTab] = useState('ASSIGNMENT'); // 'ASSIGNMENT', 'RECAP'
+  const [activeMainTab, setActiveMainTab] = useState('LIVE_STATUS'); // 'LIVE_STATUS', 'RECAP'
 
   // Data States
   const [patients, setPatients] = useState([]);
   const [treatments, setTreatments] = useState([]);
   const [staffList, setStaffList] = useState([]);
-
-  // Assignment Form State (Admin FO Intake)
-  const [assignPasienId, setAssignPasienId] = useState('');
-  const [serviceCategory, setServiceCategory] = useState('Facial (Beautician)'); // 'Facial (Beautician)' vs 'Tindakan Medis (Nurse)'
-  const [selectedPetugasId, setSelectedPetugasId] = useState('');
-  const [assignNotes, setAssignNotes] = useState('');
-  const [assigning, setAssigning] = useState(false);
+  const [allUsersList, setAllUsersList] = useState([]);
+  const [marketingRecap, setMarketingRecap] = useState([]);
 
   const getLocalDateString = () => {
     const d = new Date();
@@ -40,10 +35,6 @@ export default function DoinganActivity() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [loadingRecap, setLoadingRecap] = useState(false);
-
-  // Messages
-  const [msg, setMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
 
   // Quick Treatment Modal State
   const [showTreatmentModal, setShowTreatmentModal] = useState(false);
@@ -67,7 +58,7 @@ export default function DoinganActivity() {
       fetchStaffAvailability();
     }, 4000);
     return () => clearInterval(interval);
-  }, [serviceCategory]);
+  }, []);
 
   useEffect(() => {
     if (activeMainTab === 'RECAP') {
@@ -77,13 +68,16 @@ export default function DoinganActivity() {
 
   const fetchInitialData = async () => {
     try {
-      const [pasRes, tndRes] = await Promise.all([
+      const [pasRes, tndRes, usrRes, mktRes] = await Promise.all([
         axios.get('/api/pasien'),
-        axios.get('/api/tindakan')
+        axios.get('/api/tindakan'),
+        axios.get('/api/users'),
+        axios.get('/api/marketing/recap')
       ]);
       setPatients(pasRes.data || []);
       setTreatments(tndRes.data || []);
-      if (pasRes.data.length > 0) setAssignPasienId(pasRes.data[0].id);
+      setAllUsersList(usrRes.data || []);
+      setMarketingRecap(mktRes.data || []);
     } catch (err) {
       console.error('Error fetching initial doingan data', err);
     }
@@ -91,14 +85,8 @@ export default function DoinganActivity() {
 
   const fetchStaffAvailability = async () => {
     try {
-      const lini = serviceCategory.includes('Nurse') ? 'Nurse' : 'Beautician';
-      const res = await axios.get(`/api/staff-availability?lini=${lini}`);
+      const res = await axios.get('/api/staff-availability');
       setStaffList(res.data || []);
-      
-      // Auto select first available staff if any
-      const available = res.data.find(s => !s.is_busy);
-      if (available) setSelectedPetugasId(available.id);
-      else if (res.data.length > 0) setSelectedPetugasId(res.data[0].id);
     } catch (err) {
       console.error('Error fetching staff availability', err);
     }
@@ -115,43 +103,17 @@ export default function DoinganActivity() {
       if (filterCategory) queryParams.append('kategori_layanan', filterCategory);
       if (filterStatus) queryParams.append('status_pengerjaan', filterStatus);
 
-      const res = await axios.get(`/api/doingan/recap?${queryParams.toString()}`);
-      setRecapData(res.data.data || []);
-      setRecapSummary(res.data.summary || { total_count: 0, completed_count: 0, total_komisi: 0 });
+      const [recapRes, mktRes] = await Promise.all([
+        axios.get(`/api/doingan/recap?${queryParams.toString()}`),
+        axios.get('/api/marketing/recap')
+      ]);
+      setRecapData(recapRes.data.data || []);
+      setRecapSummary(recapRes.data.summary || { total_count: 0, completed_count: 0, total_komisi: 0 });
+      setMarketingRecap(mktRes.data || []);
     } catch (err) {
       console.error('Error fetching recap data', err);
     } finally {
       setLoadingRecap(false);
-    }
-  };
-
-  const handleAssignPatient = async (e) => {
-    e.preventDefault();
-    setAssigning(true);
-    setMsg('');
-    setErrorMsg('');
-
-    if (!assignPasienId || !selectedPetugasId) {
-      setErrorMsg('Pilih nama pasien dan petugas yang akan di-assign.');
-      setAssigning(false);
-      return;
-    }
-
-    try {
-      const res = await axios.post('/api/doingan/assign', {
-        pasien_id: assignPasienId,
-        petugas_id: selectedPetugasId,
-        kategori_layanan: serviceCategory,
-        notes: assignNotes
-      });
-
-      setMsg(`✓ ${res.data.message}`);
-      setAssignNotes('');
-      fetchStaffAvailability();
-    } catch (err) {
-      setErrorMsg(err.response?.data?.message || 'Gagal meng-assign pasien ke petugas');
-    } finally {
-      setAssigning(false);
     }
   };
 
@@ -182,20 +144,6 @@ export default function DoinganActivity() {
     }
   };
 
-  const handleUpgradePatientToMember = async (patient) => {
-    if (!window.confirm(`Apakah Anda yakin ingin mengubah status pasien "${patient.nama_lengkap}" dari TRIAL menjadi MEMBER?`)) return;
-    try {
-      await axios.put(`/api/pasien/${patient.id}`, {
-        ...patient,
-        tipe_pasien: 'MEMBER'
-      });
-      alert(`Status pasien "${patient.nama_lengkap}" berhasil diubah menjadi MEMBER!`);
-      fetchInitialData();
-    } catch (err) {
-      alert(err.response?.data?.message || 'Gagal mengubah status pasien menjadi Member');
-    }
-  };
-
   const handleDeleteDoingan = async (id) => {
     if (!window.confirm('Hapus catatan doingan ini?')) return;
     try {
@@ -207,7 +155,7 @@ export default function DoinganActivity() {
   };
 
   const handleExportExcel = () => {
-    if (recapData.length === 0) {
+    if (recapData.length === 0 && marketingRecap.length === 0) {
       alert('Belum ada data rekapan pengerjaan pada periode tanggal ini untuk di-export.');
       return;
     }
@@ -220,9 +168,10 @@ export default function DoinganActivity() {
     const monthYearStr = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
 
     const rows = [
-      ["DEFLOW AESTHETIC CLINIC", "", "", "", `DATA DEFLOW AESTHETIC CLINIC ${monthYearStr}`],
+      ["DEFLOW AESTHETIC CLINIC", "", "", "", `DATA LAPORAN DOINGAN & KOMISI ${monthYearStr}`],
       ["", "", "", "", `Periode Laporan: ${startDate} s/d ${endDate}`],
-      [], // Spacing row
+      [],
+      ["--- DETAIL DOINGAN PETUGAS MEDIS & TERAPIS ---"],
       [
         "No",
         "Waktu Mulai",
@@ -253,29 +202,28 @@ export default function DoinganActivity() {
     });
 
     rows.push([]);
-    rows.push(["", "", "", "", "", "", "", "TOTAL SESI", `${recapSummary.total_count} Sesi`, ""]);
-    rows.push(["", "", "", "", "", "", "", "TOTAL SELESAI", `${recapSummary.completed_count} Pasien`, ""]);
-    rows.push(["", "", "", "", "", "", "", "TOTAL KOMISI", "", recapSummary.total_komisi || 0]);
+    rows.push(["--- REKAPITULASI KOMISI MARKETING (TRIAL ACQUISITION & REFERRAL) ---"]);
+    rows.push(["No", "Nama Marketing", "Role / Lini", "Total Pasien Trial Didapat", "Komisi Per Pasien (Rp)", "Total Komisi Marketing (Rp)"]);
+
+    marketingRecap.forEach((mkt, idx) => {
+      rows.push([
+        idx + 1,
+        mkt.marketing_nama || '-',
+        mkt.marketing_role || 'Marketing',
+        mkt.total_trial_count || 0,
+        10000,
+        mkt.total_komisi_marketing || 0
+      ]);
+    });
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
-
-    worksheet['!cols'] = [
-      { wch: 5 },   // No
-      { wch: 20 },  // Waktu Mulai
-      { wch: 20 },  // Waktu Selesai
-      { wch: 24 },  // Nama Pasien
-      { wch: 12 },  // Tipe Pasien
-      { wch: 22 },  // Petugas Bertugas
-      { wch: 18 },  // Lini Profesi
-      { wch: 32 },  // Actions
-      { wch: 16 },  // Status
-      { wch: 20 }   // Nominal Komisi
-    ];
-
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Doingan");
-    XLSX.writeFile(workbook, `Rekap_Doingan_Deflow_${startDate}_to_${endDate}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Doingan & Marketing");
+    XLSX.writeFile(workbook, `Rekap_Doingan_Marketing_Deflow_${startDate}_to_${endDate}.xlsx`);
   };
+
+  const beauticianList = staffList.filter(s => s.role === 'Beautician' || s.lini_profesi === 'Beautician');
+  const nurseList = staffList.filter(s => s.role === 'Nurse' || s.lini_profesi === 'Nurse' || s.role === 'Dokter');
 
   return (
     <div className="space-y-6">
@@ -283,9 +231,17 @@ export default function DoinganActivity() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Digital Alur Pasien & Doingan Perawatan</h1>
-          <p className="text-xs text-[#514440]">Digitalisasi pendaftaran pasien FO, assign petugas Beautician/Nurse live status, dan rekapan laporan komisi.</p>
+          <p className="text-xs text-[#514440]">Monitoring status live petugas Beautician & Nurse, serta rekapan laporan komisi lengkap termasuk tim Marketing.</p>
         </div>
         <div className="flex items-center gap-2">
+          {canManageTreatments && (
+            <button
+              onClick={() => setShowTreatmentModal(true)}
+              className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" /> + Master Jenis Tindakan Medis
+            </button>
+          )}
           <div className="px-3.5 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141] flex items-center gap-1.5">
             <UserCheck className="w-4 h-4" />
             <span>Role: <strong>{user?.role}</strong></span>
@@ -297,13 +253,13 @@ export default function DoinganActivity() {
       <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
         <div className="flex overflow-x-auto gap-2 border-b border-[#e5ded4] pb-3 text-xs whitespace-nowrap">
           <button
-            onClick={() => setActiveMainTab('ASSIGNMENT')}
+            onClick={() => setActiveMainTab('LIVE_STATUS')}
             className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeMainTab === 'ASSIGNMENT' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+              activeMainTab === 'LIVE_STATUS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
             }`}
           >
-            <UserPlus className="w-4 h-4" />
-            <span>Pendaftaran & Assign Petugas (Admin FO)</span>
+            <Clock className="w-4 h-4" />
+            <span>Monitoring Status Live Petugas (Beautician & Nurse)</span>
           </button>
 
           <button
@@ -317,166 +273,32 @@ export default function DoinganActivity() {
           </button>
         </div>
 
-        {msg && (
-          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>{msg}</span>
-          </div>
-        )}
-
-        {errorMsg && (
-          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl text-xs font-semibold flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-red-600" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
-        {/* TAB 1: PENDAFTARAN & ASSIGNMENT PASIEN (ADMIN FO) */}
-        {activeMainTab === 'ASSIGNMENT' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-6 bg-[#faf3e8]/40 p-5 rounded-2xl border border-[#d6c2bd] space-y-4">
-              <div className="flex justify-between items-center border-b border-[#d6c2bd] pb-3">
-                <div className="flex items-center gap-2">
-                  <UserPlus className="w-5 h-5 text-[#7d5141]" />
-                  <h3 className="font-serif font-bold text-base text-[#1e1b15]">Form Intake Pasien Datang</h3>
-                </div>
-                <span className="text-[10px] font-bold text-[#7d5141] bg-white px-2.5 py-1 rounded-full border border-[#d6c2bd]">
-                  Admin FO Flow
-                </span>
+        {/* TAB 1: MONITORING STATUS LIVE PETUGAS (BEAUTICIAN & NURSE) */}
+        {activeMainTab === 'LIVE_STATUS' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Live Availability & Status Ruangan Petugas</h3>
+                <p className="text-xs text-[#83746f]">Menampilkan status terkini apakah petugas Beautician dan Nurse sedang melayani pasien atau sedang ready (kosong).</p>
               </div>
-
-              <form onSubmit={handleAssignPatient} className="space-y-4">
-                {/* 1. Pilih Pasien Datang */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#514440] mb-1">Pilih Nama Pasien Datang *</label>
-                  <select
-                    value={assignPasienId}
-                    onChange={(e) => setAssignPasienId(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2.5 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
-                  >
-                    {patients.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.nama_lengkap} ({p.tipe_pasien === 'MEMBER' ? 'MEMBER' : 'TRIAL'}) - {p.no_hp}
-                      </option>
-                    ))}
-                  </select>
-                  {(() => {
-                    const selectedP = patients.find(p => p.id === assignPasienId);
-                    if (selectedP && (selectedP.tipe_pasien === 'TRIAL' || selectedP.tipe_pasien === 'Trial')) {
-                      return (
-                        <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900 shadow-2xs">
-                          <span>Status Pasien: <strong className="text-amber-800">TRIAL</strong></span>
-                          <button
-                            type="button"
-                            onClick={() => handleUpgradePatientToMember(selectedP)}
-                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-[11px] cursor-pointer shadow-2xs transition-all flex items-center gap-1"
-                          >
-                            <UserCheck className="w-3.5 h-3.5" />
-                            <span>Ubah ke MEMBER</span>
-                          </button>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
-
-                {/* 2. Pilih Kebutuhan / Layanan Pasien */}
-                <div>
-                  <label className="block text-xs font-semibold text-[#514440] mb-1">Kebutuhan Layanan Pasien *</label>
-                  <div className="grid grid-cols-2 gap-3 text-xs font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setServiceCategory('Facial (Beautician)')}
-                      className={`py-2.5 px-3 rounded-xl transition-all cursor-pointer border ${
-                        serviceCategory === 'Facial (Beautician)'
-                          ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
-                          : 'bg-white text-[#514440] border-[#d6c2bd] hover:bg-[#faf3e8]'
-                      }`}
-                    >
-                      💆‍♀️ Facial / Perawatan (Beautician)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setServiceCategory('Tindakan Medis (Nurse)')}
-                      className={`py-2.5 px-3 rounded-xl transition-all cursor-pointer border ${
-                        serviceCategory === 'Tindakan Medis (Nurse)'
-                          ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
-                          : 'bg-white text-[#514440] border-[#d6c2bd] hover:bg-[#faf3e8]'
-                      }`}
-                    >
-                      🩺 Tindakan Dokter (Nurse)
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3. Assign Petugas (Dropdown Filtered by Profession & Status) */}
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-semibold text-[#514440]">
-                      Pilih Petugas {serviceCategory.includes('Nurse') ? 'Nurse' : 'Beautician'} Bertugas *
-                    </label>
-                    <button
-                      type="button"
-                      onClick={fetchStaffAvailability}
-                      className="text-[10px] text-[#7d5141] hover:underline flex items-center gap-1 cursor-pointer font-bold"
-                    >
-                      <RefreshCw className="w-3 h-3" /> Refresh Status
-                    </button>
-                  </div>
-
-                  <select
-                    value={selectedPetugasId}
-                    onChange={(e) => setSelectedPetugasId(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2.5 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
-                  >
-                    {staffList.map(s => (
-                      <option key={s.id} value={s.id} disabled={s.is_busy}>
-                        {s.full_name} ({s.lini_profesi || s.role}) - {s.is_busy ? `🔴 SEDANG MENANGANI (${s.active_doingan?.pasien_nama})` : '🟢 KOSONG'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[#514440] mb-1">Catatan Pendaftaran FO (Optional)</label>
-                  <textarea
-                    value={assignNotes}
-                    onChange={(e) => setAssignNotes(e.target.value)}
-                    placeholder="misal: Pasien minta facial ruangan atas nomor 3..."
-                    rows="2"
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={assigning}
-                  className="w-full py-3 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  {assigning ? 'Meng-assign Pasien...' : 'ASSIGN PASIEN KE PETUGAS'}
-                </button>
-              </form>
+              <button
+                type="button"
+                onClick={fetchStaffAvailability}
+                className="px-3 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#7d5141] font-bold text-xs rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh Status Live
+              </button>
             </div>
 
-            {/* Availability Monitor Column */}
-            <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
-              <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
-                <h3 className="font-serif font-bold text-base text-[#1e1b15]">
-                  Status Live Petugas ({serviceCategory.includes('Nurse') ? 'Nurse' : 'Beautician'})
-                </h3>
-                <span className="text-xs text-gray-500 font-semibold">{staffList.length} Petugas Available</span>
-              </div>
-
-              <div className="space-y-3 max-h-[420px] overflow-y-auto">
-                {staffList.map(s => (
+            {/* Grid 1: Beautician Staff */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-xs text-[#7d5141] uppercase tracking-wider flex items-center gap-1.5">
+                <span>💆‍♀️ Petugas Beautician ({beauticianList.length} Staff)</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {beauticianList.map(s => (
                   <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
-                    s.is_busy 
-                      ? 'bg-red-50/70 border-red-200' 
-                      : 'bg-emerald-50/70 border-emerald-200'
+                    s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
                   }`}>
                     <div className="flex justify-between items-center">
                       <div className="font-bold text-sm text-[#1e1b15]">{s.full_name}</div>
@@ -486,11 +308,46 @@ export default function DoinganActivity() {
                         </span>
                       ) : (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> KOSONG
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> READY (KOSONG)
                         </span>
                       )}
                     </div>
+                    {s.is_busy && s.active_doingan && (
+                      <div className="bg-white p-3 rounded-xl border border-red-100 text-[11px] text-[#514440] space-y-1">
+                        <div>Pasien: <strong className="text-[#1e1b15]">{s.active_doingan.pasien_nama}</strong> ({s.active_doingan.tipe_pasien})</div>
+                        <div className="flex items-center gap-1 text-gray-500">
+                          <Clock className="w-3 h-3 text-red-600" />
+                          <span>Mulai: {new Date(s.active_doingan.started_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
 
+            {/* Grid 2: Nurse & Doctor Staff */}
+            <div className="space-y-3 pt-2 border-t border-[#e5ded4]">
+              <h4 className="font-bold text-xs text-[#7d5141] uppercase tracking-wider flex items-center gap-1.5">
+                <span>🩺 Petugas Nurse & Dokter ({nurseList.length} Staff)</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {nurseList.map(s => (
+                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
+                    s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <div className="font-bold text-sm text-[#1e1b15]">{s.full_name}</div>
+                      {s.is_busy ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-100 text-red-800 border border-red-300 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> SEDANG DILAYANI
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span> READY (KOSONG)
+                        </span>
+                      )}
+                    </div>
                     {s.is_busy && s.active_doingan && (
                       <div className="bg-white p-3 rounded-xl border border-red-100 text-[11px] text-[#514440] space-y-1">
                         <div>Pasien: <strong className="text-[#1e1b15]">{s.active_doingan.pasien_nama}</strong> ({s.active_doingan.tipe_pasien})</div>
@@ -507,7 +364,7 @@ export default function DoinganActivity() {
           </div>
         )}
 
-        {/* TAB 2: DASHBOARD REKAPITULASI & FILTER KOMISI (ADMIN SIDE) */}
+        {/* TAB 2: DASHBOARD REKAPITULASI & FILTER KOMISI (TERMASUK MARKETING) */}
         {activeMainTab === 'RECAP' && (
           <div className="space-y-5">
             {/* Filter Controls */}
@@ -515,7 +372,7 @@ export default function DoinganActivity() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 font-bold text-[#7d5141] uppercase tracking-wider">
                   <Filter className="w-4 h-4" />
-                  <span>Filter Laporan Rekapitulasi Doingan & Komisi Petugas</span>
+                  <span>Filter Laporan Rekapitulasi Doingan & Komisi Petugas (Beautician, Nurse, Marketing)</span>
                 </div>
                 <button
                   type="button"
@@ -550,15 +407,15 @@ export default function DoinganActivity() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Filter Nama Petugas</label>
+                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Filter Nama Petugas / Marketing</label>
                   <select
                     value={filterPetugasId}
                     onChange={(e) => setFilterPetugasId(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
                   >
-                    <option value="">-- Semua Petugas --</option>
-                    {staffList.map(s => (
-                      <option key={s.id} value={s.id}>{s.full_name} ({s.lini_profesi || s.role})</option>
+                    <option value="">-- Semua Staff & Marketing --</option>
+                    {allUsersList.map(s => (
+                      <option key={s.id} value={s.id}>{s.full_name} ({s.role})</option>
                     ))}
                   </select>
                 </div>
@@ -591,6 +448,29 @@ export default function DoinganActivity() {
               </div>
             </div>
 
+            {/* Marketing Commission Recap Cards */}
+            <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-serif font-bold text-sm text-amber-900 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-700" />
+                  <span>Rekapitulasi Komisi Referral Tim Marketing (Trial Acquisition Rp 10.000 / Pasien)</span>
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {marketingRecap.map(mkt => (
+                  <div key={mkt.marketing_id} className="p-3.5 bg-white border border-amber-200 rounded-xl space-y-1 shadow-2xs">
+                    <div className="font-bold text-xs text-[#1e1b15]">{mkt.marketing_nama}</div>
+                    <div className="text-[11px] text-gray-500">Role: {mkt.marketing_role || 'Marketing'}</div>
+                    <div className="flex justify-between items-center pt-1 border-t border-gray-100 text-xs font-semibold">
+                      <span>Total Pasien Trial: <strong>{mkt.total_trial_count} Pasien</strong></span>
+                      <span className="text-emerald-700 font-bold">Rp {(mkt.total_komisi_marketing || 0).toLocaleString('id-ID')}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-1">
@@ -614,7 +494,7 @@ export default function DoinganActivity() {
             {/* Recap Table */}
             <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
-                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Tabel Rekapitulasi Detail Activities & Komisi</h3>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Tabel Rekapitulasi Detail Activities & Komisi Medis/Terapis</h3>
                 <button
                   onClick={handleExportExcel}
                   className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
@@ -648,41 +528,37 @@ export default function DoinganActivity() {
                         <tr key={item.id} className="hover:bg-[#fff8f0]">
                           <td className="py-3 px-4 text-[#83746f]">
                             <div>Mulai: {new Date(item.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                            <div className="text-[10px] text-gray-400">
-                              {item.completed_at ? `Selesai: ${new Date(item.completed_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '-'}
-                            </div>
+                            {item.completed_at && <div>Selesai: {new Date(item.completed_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>}
                           </td>
                           <td className="py-3 px-4 font-bold text-[#1e1b15]">
-                            {item.pasien_nama}
-                            <div className="text-[10px] font-normal text-gray-500">{item.tipe_pasien}</div>
+                            {item.pasien_nama} ({item.tipe_pasien})
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="font-bold text-[#1e1b15]">{item.petugas_nama}</div>
+                          <td className="py-3 px-4 font-semibold text-[#7d5141]">
+                            {item.petugas_nama}
                             <div className="text-[10px] font-semibold text-[#7d5141] uppercase">{item.lini_profesi || item.role_petugas}</div>
                           </td>
-                          <td className="py-3 px-4 font-medium text-[#514440]">
-                            {item.nama_tindakan}
-                            {item.notes && <div className="text-[10px] text-gray-400 italic">Notes: {item.notes}</div>}
+                          <td className="py-3 px-4">
+                            <span className="font-semibold text-[#1e1b15]">{item.nama_tindakan}</span>
+                            <div className="text-[10px] text-gray-500">{item.kategori_layanan}</div>
                           </td>
                           <td className="py-3 px-4">
                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              item.status_pengerjaan === 'COMPLETED' 
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                                : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                              item.status_pengerjaan === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'
                             }`}>
-                              {item.status_pengerjaan === 'COMPLETED' ? '✓ SELESAI' : '⏳ IN PROGRESS'}
+                              {item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : 'IN PROGRESS'}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-bold text-[#7d5141] text-sm">
+                          <td className="py-3 px-4 font-bold text-[#7d5141]">
                             Rp {(item.komisi || 0).toLocaleString('id-ID')}
                           </td>
                           {canManageTreatments && (
                             <td className="py-3 px-4 text-center">
                               <button
                                 onClick={() => handleDeleteDoingan(item.id)}
-                                className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded cursor-pointer"
+                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-all cursor-pointer"
+                                title="Hapus doingan"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             </td>
                           )}
@@ -697,84 +573,80 @@ export default function DoinganActivity() {
         )}
       </div>
 
-      {/* QUICK ADD TREATMENT MODAL FOR SUPER ADMIN & ADMIN KLINIK */}
+      {/* QUICK ADD TREATMENT MODAL */}
       {showTreatmentModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#e5ded4] space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4]">
             <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
-              <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Form Tambah Jenis Tindakan Baru</h3>
-              <button onClick={() => setShowTreatmentModal(false)} className="text-gray-400 font-bold text-lg cursor-pointer">×</button>
+              <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Tambah Master Jenis Tindakan Medis</h3>
+              <button onClick={() => setShowTreatmentModal(false)} className="text-gray-400 font-bold text-xl hover:text-black">×</button>
             </div>
 
             <form onSubmit={handleSaveQuickTreatment} className="space-y-4 text-xs">
               <div>
-                <label className="block font-semibold text-[#514440] mb-1">Nama Jenis Tindakan / Treatment *</label>
+                <label className="block text-[#514440] font-semibold mb-1">Nama Jenis Tindakan Medis / Perawatan *</label>
                 <input
                   type="text"
                   value={namaTindakan}
                   onChange={(e) => setNamaTindakan(e.target.value)}
+                  placeholder="misal: Laser Whitening, Injection Botox, Premium Facial..."
                   required
-                  placeholder="misal: HIFU Full Face Lift & Firming"
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-[#514440] mb-1">Kategori Petugas *</label>
+                <label className="block text-[#514440] font-semibold mb-1">Kategori Lini Petugas *</label>
                 <select
                   value={kategoriPetugas}
                   onChange={(e) => setKategoriPetugas(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141]"
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                 >
-                  <option value="BEAUTICIAN">BEAUTICIAN (Facial & Skin Care)</option>
-                  <option value="NURSE">NURSE (Tindakan Dokter & Medis)</option>
+                  <option value="BEAUTICIAN">Beautician (Facial & Perawatan)</option>
+                  <option value="NURSE">Nurse (Tindakan Medis Perawat)</option>
+                  <option value="DOKTER">Dokter (Tindakan & Konsultasi Medis)</option>
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-[#514440] mb-1">Tarif Tindakan Medis (Rp) *</label>
+                  <label className="block text-[#514440] font-semibold mb-1">Tarif Tindakan Medis (Rp)</label>
                   <input
                     type="number"
                     value={tarifTindakanMedis}
                     onChange={(e) => setTarifTindakanMedis(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141]"
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-[#514440] mb-1">Tarif Konsul Dokter (Rp)</label>
+                  <label className="block text-[#514440] font-semibold mb-1">Tarif Konsul Dokter (Rp)</label>
                   <input
                     type="number"
                     value={tarifKonsulDokter}
                     onChange={(e) => setTarifKonsulDokter(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                   />
                 </div>
               </div>
 
-              <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-3">
-                <div className="font-bold text-[#7d5141] uppercase tracking-wider text-[11px]">Skema Komisi & Insentif Staff (Per Action)</div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-[#514440] mb-1">Fix Komisi Beautician (Rp)</label>
-                    <input
-                      type="number"
-                      value={komisiFixTherapist}
-                      onChange={(e) => setKomisiFixTherapist(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-emerald-800"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-[#514440] mb-1">Fix Komisi Nurse (Rp)</label>
-                    <input
-                      type="number"
-                      value={nominalNurseTindakan}
-                      onChange={(e) => setNominalNurseTindakan(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-blue-800"
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Fix Komisi Therapist/BTC (Rp)</label>
+                  <input
+                    type="number"
+                    value={komisiFixTherapist}
+                    onChange={(e) => setKomisiFixTherapist(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Fix Komisi Nurse (Rp)</label>
+                  <input
+                    type="number"
+                    value={nominalNurseTindakan}
+                    onChange={(e) => setNominalNurseTindakan(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
                 </div>
               </div>
 
