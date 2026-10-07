@@ -20,8 +20,8 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, module: null },
     { id: 'patients', label: 'Pendaftaran Pasien & Treatment', icon: UserPlus, module: 'patient_intake' },
     { id: 'customer_database', label: 'Detail Data Pelanggan', icon: Users, module: 'patient_management' },
-    { id: 'master_customer', label: 'Master Data Pelanggan', icon: Database, module: 'patient_management' },
     { id: 'doingan', label: 'Doingan & Aktivitas Perawatan', icon: Sparkles, module: 'doingan' },
+    { id: 'master_customer', label: 'Master Data Pelanggan', icon: Database, module: 'patient_management' },
     { id: 'pos', label: 'POS & Billing Counter', icon: ShoppingBag, module: 'patient_packages' },
     { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'] },
     { id: 'financial', label: 'Keuangan & Komisi Gaji', icon: DollarSign, module: ['payroll', 'commission_formulas', 'pricing'] },
@@ -101,8 +101,8 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all cursor-pointer ${isActive
-                    ? 'bg-[#7d5141] text-white shadow-md font-bold'
-                    : 'text-[#514440] hover:bg-[#faf3e8] hover:text-[#1e1b15]'
+                  ? 'bg-[#7d5141] text-white shadow-md font-bold'
+                  : 'text-[#514440] hover:bg-[#faf3e8] hover:text-[#1e1b15]'
                   }`}
               >
                 <div className="flex items-center gap-3">

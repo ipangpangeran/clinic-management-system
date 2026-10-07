@@ -1086,14 +1086,6 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1.5">
                               <button
-                                onClick={() => openIntakeForExisting(p)}
-                                className="px-2.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                                title="Assign Petugas & Masukkan ke Antrean Treatment Hari Ini"
-                              >
-                                <UserCheck className="w-3.5 h-3.5" />
-                                <span>+ Intake Treatment</span>
-                              </button>
-                              <button
                                 onClick={() => openEditModal(p)}
                                 className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] text-[#7d5141] border border-[#d6c2bd] font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
                                 title="Edit Profil Pasien"
@@ -1256,14 +1248,6 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                             +{p.total_poin || 0} Poin
                           </td>
                           <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
-                            <button
-                              onClick={() => openIntakeForExisting(p)}
-                              className="px-2.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1 shadow-2xs"
-                              title="Assign Petugas & Masukkan ke Antrean Treatment Hari Ini"
-                            >
-                              <UserCheck className="w-3.5 h-3.5" />
-                              <span>+ Intake Treatment</span>
-                            </button>
 
                             <button
                               onClick={() => openEditModal(p)}
