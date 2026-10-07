@@ -85,7 +85,7 @@ async function initDb() {
     } catch (e) { }
 
     try {
-      await runQuery(`ALTER TABLE users ADD COLUMN lini_profesi TEXT DEFAULT 'Beautician'`);
+      await runQuery(`ALTER TABLE users ADD COLUMN is_training INTEGER DEFAULT 0`);
     } catch (e) { }
 
     try {
@@ -156,9 +156,13 @@ async function initDb() {
         await runQuery('PRAGMA foreign_keys = ON');
         console.log('[DB Migration] pasien table upgraded successfully!');
       }
-    } catch (e) {
-      console.error('[DB Migration Error pasien]', e);
-    }
+    try {
+      await runQuery(`ALTER TABLE pasien ADD COLUMN referrer_pasien_id TEXT`);
+    } catch (e) { }
+
+    try {
+      await runQuery(`ALTER TABLE pasien ADD COLUMN marketing_id TEXT`);
+    } catch (e) { }
 
     // 5. Patient Packages
     await runQuery(`
@@ -380,6 +384,9 @@ async function initDb() {
     } catch (e) { }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN is_billed INTEGER DEFAULT 0`);
+    } catch (e) { }
+    try {
+      await runQuery(`ALTER TABLE doingan ADD COLUMN marketing_id TEXT`);
     } catch (e) { }
 
     try {

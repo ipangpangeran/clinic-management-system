@@ -54,6 +54,13 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const [successMessage, setSuccessMessage] = useState('');
   const [editMode, setEditMode] = useState(false);
 
+  // Marketing & MGM Referral State
+  const [marketingList, setMarketingList] = useState([]);
+  const [marketingId, setMarketingId] = useState('');
+  const [referrerPasienId, setReferrerPasienId] = useState('');
+  const [mgmSearchInput, setMgmSearchInput] = useState('');
+  const [showMgmDropdown, setShowMgmDropdown] = useState(false);
+
   // Live Staff Assignment State
   const [kebutuhanLayanan, setKebutuhanLayanan] = useState('Beautician');
   const [staffList, setStaffList] = useState([]);
@@ -73,7 +80,18 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   useEffect(() => {
     fetchPatients();
     fetchTodayDoingan();
-  }, []);
+    fetchMarketingUsers();
+
+    // Auto-polling antrean petugas & status pengerjaan setiap 3 detik
+    const interval = setInterval(() => {
+      fetchTodayDoingan();
+      if (kebutuhanLayanan) {
+        fetchStaffAvailability(kebutuhanLayanan);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [kebutuhanLayanan]);
 
   const fetchPatients = async () => {
     try {
@@ -81,6 +99,16 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       setPatients(res.data || []);
     } catch (err) {
       console.error('Error fetching patients', err);
+    }
+  };
+
+  const fetchMarketingUsers = async () => {
+    try {
+      const res = await axios.get('/api/users');
+      // Include all staff so FO admin can assign any marketing user or staff
+      setMarketingList(res.data || []);
+    } catch (err) {
+      console.error('Error fetching users for marketing selection', err);
     }
   };
 
@@ -128,6 +156,10 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     setRiwayatAlergi('');
     setJenisKulit('');
     setRekomendasiDokter('');
+    setMarketingId('');
+    setReferrerPasienId('');
+    setMgmSearchInput('');
+    setShowMgmDropdown(false);
     setKebutuhanLayanan('Beautician');
     setSelectedStaffId('');
     setErrorMessage('');
@@ -144,6 +176,11 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     setFormType(p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien);
     setNamaLengkap(p.nama_lengkap);
     setNoHp(p.no_hp);
+    setMarketingId(p.marketing_id || '');
+    setReferrerPasienId(p.referrer_pasien_id || '');
+    const refP = patients.find(x => x.id === p.referrer_pasien_id);
+    setMgmSearchInput(refP ? `${refP.nama_lengkap} (${refP.no_hp})` : '');
+    setShowMgmDropdown(false);
     setKebutuhanLayanan('Beautician');
     setSelectedStaffId('');
     setErrorMessage('');
@@ -170,6 +207,11 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     setRiwayatAlergi(p.riwayat_alergi || '');
     setJenisKulit(p.jenis_kulit || '');
     setRekomendasiDokter(p.rekomendasi_dokter || '');
+    setMarketingId(p.marketing_id || '');
+    setReferrerPasienId(p.referrer_pasien_id || '');
+    const refP = patients.find(x => x.id === p.referrer_pasien_id);
+    setMgmSearchInput(refP ? `${refP.nama_lengkap} (${refP.no_hp})` : '');
+    setShowMgmDropdown(false);
     setKebutuhanLayanan('Beautician');
     setSelectedStaffId('');
     setErrorMessage('');
@@ -269,6 +311,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
           riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? riwayatAlergi : null,
           jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? jenisKulit : null,
           rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? rekomendasiDokter : null,
+          marketing_id: marketingId || null,
+          referrer_pasien_id: referrerPasienId || null,
         };
         await axios.put(`/api/pasien/${selectedPatient.id}`, payload);
         patientIdToAssign = selectedPatient.id;
@@ -288,6 +332,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
           riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? riwayatAlergi : null,
           jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? jenisKulit : null,
           rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? rekomendasiDokter : null,
+          marketing_id: marketingId || null,
+          referrer_pasien_id: referrerPasienId || null,
         };
         const res = await axios.post('/api/pasien', payload);
         patientIdToAssign = res.data.pasien?.id;
@@ -311,7 +357,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
         await axios.post('/api/doingan/assign', {
           pasien_id: patientIdToAssign,
           petugas_id: selectedStaffId,
-          kategori_layanan: katName
+          kategori_layanan: katName,
+          marketing_id: marketingId || null
         });
 
         setSuccessMessage(`Berhasil! Pasien ${targetPatientName} di-assign ke ${selectedStaffObj?.full_name || 'Petugas'}. Sesi otomatis IN_PROGRESS!`);
@@ -962,26 +1009,79 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 </div>
 
                 <div>
-                  <label className="block text-[#514440] font-semibold mb-1">Tanggal Lahir</label>
-                  <input
-                    type="date"
-                    value={tglLahir}
+                  <label className="block text-[#514440] font-semibold mb-1">Team Marketing (Assigned FO)</label>
+                  <select
+                    value={marketingId}
                     disabled={modePendaftaran === 'EXISTING'}
-                    onChange={(e) => setTglLahir(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-                  />
+                    onChange={(e) => setMarketingId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                  >
+                    <option value="">-- Tanpa Team Marketing --</option>
+                    {marketingList.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.full_name} ({m.role || m.lini_profesi})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-[#83746f] mt-0.5">*Trial mendapat komisi 10K untuk Team Marketing</p>
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-[#514440] font-semibold mb-1">Alamat Lengkap</label>
-                  <input
-                    type="text"
-                    value={alamat}
-                    disabled={modePendaftaran === 'EXISTING'}
-                    onChange={(e) => setAlamat(e.target.value)}
-                    placeholder="Alamat rumah..."
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-                  />
+                <div className="sm:col-span-2 relative">
+                  <label className="block text-[#514440] font-semibold mb-1">MGM (Member Get Member) / Referrer</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      disabled={modePendaftaran === 'EXISTING'}
+                      value={mgmSearchInput}
+                      onFocus={() => setShowMgmDropdown(true)}
+                      onChange={(e) => {
+                        setMgmSearchInput(e.target.value);
+                        setShowMgmDropdown(true);
+                        if (!e.target.value) setReferrerPasienId('');
+                      }}
+                      placeholder="Ketik nama atau No. HP member yang membawa pasien ini..."
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141] pr-16"
+                    />
+                    {referrerPasienId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReferrerPasienId('');
+                          setMgmSearchInput('');
+                        }}
+                        className="absolute right-2 top-2 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-lg hover:bg-red-200 transition-colors"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  {showMgmDropdown && mgmSearchInput && (
+                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-[#d6c2bd] rounded-xl shadow-lg max-h-44 overflow-y-auto divide-y divide-gray-100">
+                      {patients
+                        .filter(p => p.id !== selectedPatient?.id)
+                        .filter(p => (p.nama_lengkap || '').toLowerCase().includes(mgmSearchInput.toLowerCase()) || (p.no_hp || '').includes(mgmSearchInput))
+                        .slice(0, 8)
+                        .map(p => (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              setReferrerPasienId(p.id);
+                              setMgmSearchInput(`${p.nama_lengkap} (HP: ${p.no_hp})`);
+                              setShowMgmDropdown(false);
+                            }}
+                            className="p-2.5 hover:bg-[#faf3e8] cursor-pointer text-xs flex justify-between items-center transition-colors"
+                          >
+                            <div>
+                              <span className="font-bold text-[#1e1b15]">{p.nama_lengkap}</span>
+                              <span className="text-[10px] text-gray-500 ml-2">({p.tipe_pasien === 'TRIAL' ? 'Trial' : 'Member'})</span>
+                            </div>
+                            <span className="text-[#83746f] text-[11px] font-semibold">{p.no_hp}</span>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  )}
+                  <p className="text-[10px] text-[#83746f] mt-0.5">*Member pembuat referral otomatis dapat bonus poin 5% dari total harga paket treatment yang dibeli</p>
                 </div>
               </div>
 

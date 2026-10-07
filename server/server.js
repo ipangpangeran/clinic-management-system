@@ -105,7 +105,7 @@ app.post('/api/users', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Akses ditolak: Menu kelola user hanya untuk Super Admin & Admin Klinik' });
     }
 
-    const { username, password, full_name, role, phone, gaji_pokok } = req.body;
+    const { username, password, full_name, role, phone, gaji_pokok, is_training } = req.body;
     if (!username || !password || !full_name || !role) {
       return res.status(400).json({ message: 'Username, Password, Nama, dan Role wajib diisi' });
     }
@@ -122,11 +122,11 @@ app.post('/api/users', authenticateToken, async (req, res) => {
     const salaryVal = role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik' ? 0 : parseFloat(gaji_pokok || 0);
 
     await runQuery(`
-      INSERT INTO users (id, username, password, full_name, role, phone, gaji_pokok)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [id, username, passwordHash, full_name, role, phone || null, salaryVal]);
+      INSERT INTO users (id, username, password, full_name, role, phone, gaji_pokok, is_training)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, username, passwordHash, full_name, role, phone || null, salaryVal, is_training ? 1 : 0]);
 
-    const newUser = await getQuery('SELECT id, username, full_name, role, phone, gaji_pokok FROM users WHERE id = ?', [id]);
+    const newUser = await getQuery('SELECT id, username, full_name, role, phone, gaji_pokok, is_training FROM users WHERE id = ?', [id]);
     res.status(201).json({ message: 'User baru berhasil dibuat', user: newUser });
   } catch (err) {
     res.status(500).json({ message: 'Error creating user', error: err.message });
@@ -140,7 +140,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { username, password, full_name, role, phone, gaji_pokok } = req.body;
+    const { username, password, full_name, role, phone, gaji_pokok, is_training } = req.body;
 
     const existingUsername = await getQuery('SELECT id FROM users WHERE username = ? AND id != ?', [username, id]);
     if (existingUsername) {
@@ -153,15 +153,15 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       const salt = bcrypt.genSaltSync(10);
       const passwordHash = bcrypt.hashSync(password, salt);
       await runQuery(`
-        UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ? WHERE id = ?
-      `, [username, passwordHash, full_name, role, phone || null, salaryVal, id]);
+        UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ?, is_training = ? WHERE id = ?
+      `, [username, passwordHash, full_name, role, phone || null, salaryVal, is_training ? 1 : 0, id]);
     } else {
       await runQuery(`
-        UPDATE users SET username = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ? WHERE id = ?
-      `, [username, full_name, role, phone || null, salaryVal, id]);
+        UPDATE users SET username = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ?, is_training = ? WHERE id = ?
+      `, [username, full_name, role, phone || null, salaryVal, is_training ? 1 : 0, id]);
     }
 
-    const updated = await getQuery('SELECT id, username, full_name, role, phone, gaji_pokok FROM users WHERE id = ?', [id]);
+    const updated = await getQuery('SELECT id, username, full_name, role, phone, gaji_pokok, is_training FROM users WHERE id = ?', [id]);
     res.json({ message: 'Data user berhasil diperbarui', user: updated });
   } catch (err) {
     res.status(500).json({ message: 'Error updating user', error: err.message });
@@ -258,7 +258,7 @@ app.get('/api/staff-availability', authenticateToken, async (req, res) => {
 // POST /api/doingan/assign -> Admin FO assigns patient to staff member
 app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
   try {
-    const { pasien_id, petugas_id, kategori_layanan, notes } = req.body;
+    const { pasien_id, petugas_id, kategori_layanan, notes, marketing_id } = req.body;
     if (!pasien_id || !petugas_id) {
       return res.status(400).json({ message: 'Pasien dan Petugas wajib dipilih' });
     }
@@ -275,17 +275,32 @@ app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
 
     const id = 'doi-' + Date.now();
     const statusDoingan = (pasien.tipe_pasien === 'MEMBER' || pasien.tipe_pasien === 'NON-TRIAL' || pasien.tipe_pasien === 'Reguler') ? 'Mbr' : 'Trial';
+    const finalMarketingId = marketing_id || pasien.marketing_id || null;
 
     await runQuery(`
       INSERT INTO doingan (
         id, pasien_id, petugas_id, role_petugas, kategori_layanan, tindakan_id, nama_tindakan,
-        status_pengerjaan, status_doingan, started_at, created_at, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'), ?)
+        status_pengerjaan, status_doingan, started_at, created_at, notes, marketing_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'IN_PROGRESS', ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'), ?, ?)
     `, [
       id, pasien_id, petugas_id, petugas.role || 'Staff',
       kategori_layanan || (petugas.lini_profesi === 'Nurse' ? 'Tindakan Medis (Nurse)' : 'Facial (Beautician)'),
-      null, 'Menunggu Konfirmasi Tindakan', statusDoingan, notes || ''
+      null, 'Menunggu Konfirmasi Tindakan', statusDoingan, notes || '', finalMarketingId
     ]);
+
+    // Auto-create Marketing 10K commission log if Trial patient has Marketing assigned
+    if (finalMarketingId && statusDoingan === 'Trial') {
+      const mktUser = await getQuery('SELECT * FROM users WHERE id = ?', [finalMarketingId]);
+      if (mktUser) {
+        const mktDoiId = 'doi-mkt-' + Date.now();
+        await runQuery(`
+          INSERT INTO doingan (
+            id, pasien_id, petugas_id, role_petugas, kategori_layanan, tindakan_id, nama_tindakan,
+            status_pengerjaan, status_doingan, komisi, started_at, completed_at, created_at, notes, marketing_id
+          ) VALUES (?, ?, ?, 'Marketing', 'Marketing Referral', null, 'Pasien Trial Marketing', 'COMPLETED', 'Trial', 10000, datetime('now', '+7 hours'), datetime('now', '+7 hours'), datetime('now', '+7 hours'), ?, ?)
+        `, [mktDoiId, pasien_id, finalMarketingId, `Referral Marketing 10K: ${mktUser.full_name}`, finalMarketingId]);
+      }
+    }
 
     res.status(201).json({ message: `Pasien ${pasien.nama_lengkap} berhasil di-assign ke ${petugas.full_name}`, doingan_id: id });
   } catch (err) {
@@ -322,33 +337,42 @@ app.get('/api/doingan/staff/active', authenticateToken, async (req, res) => {
 app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { tindakan_ids, notes } = req.body; // array of treatment IDs or single ID
+    const { tindakan_ids, notes } = req.body;
 
     const doi = await getQuery('SELECT d.*, p.tipe_pasien FROM doingan d JOIN pasien p ON d.pasien_id = p.id WHERE d.id = ?', [id]);
     if (!doi) return res.status(404).json({ message: 'Pengerjaan doingan tidak ditemukan' });
+
+    const petugas = await getQuery('SELECT * FROM users WHERE id = ?', [doi.petugas_id]);
+    const isTraining = (petugas?.is_training === 1) || (req.user?.is_training === 1);
 
     let finalNamaTindakan = 'Perawatan Selesai';
     let totalKomisi = 0;
     let mainTindakanId = null;
 
-    if (tindakan_ids && Array.isArray(tindakan_ids) && tindakan_ids.length > 0) {
-      const placeholders = tindakan_ids.map(() => '?').join(',');
-      const selectedTreatments = await allQuery(`SELECT * FROM tindakan_medis WHERE id IN (${placeholders})`, tindakan_ids);
-      
-      finalNamaTindakan = selectedTreatments.map(t => t.nama_tindakan).join(', ');
-      mainTindakanId = selectedTreatments[0]?.id || null;
+    const isTrial = (doi.status_doingan === 'Trial' || doi.tipe_pasien === 'TRIAL');
 
-      selectedTreatments.forEach(t => {
-        if (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') {
-          totalKomisi += (t.komisi_fix_therapist || 17000);
-        } else if (doi.status_doingan === 'Trial') {
-          totalKomisi += (t.nominal_nurse_tindakan || 13000);
-        } else {
-          totalKomisi += (t.komisi_fix_therapist || 15000);
-        }
-      });
+    if (isTrial) {
+      finalNamaTindakan = 'Tindakan Treatment Trial';
+      // Commission: 10K if staff is Training, 13K if Regular
+      totalKomisi = isTraining ? 10000 : 13000;
     } else {
-      totalKomisi = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') ? 17000 : 13000;
+      if (tindakan_ids && Array.isArray(tindakan_ids) && tindakan_ids.length > 0) {
+        const placeholders = tindakan_ids.map(() => '?').join(',');
+        const selectedTreatments = await allQuery(`SELECT * FROM tindakan_medis WHERE id IN (${placeholders})`, tindakan_ids);
+        
+        finalNamaTindakan = selectedTreatments.map(t => t.nama_tindakan).join(', ');
+        mainTindakanId = selectedTreatments[0]?.id || null;
+
+        selectedTreatments.forEach(t => {
+          if (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') {
+            totalKomisi += (t.komisi_fix_therapist || 17000);
+          } else {
+            totalKomisi += (t.komisi_fix_therapist || 15000);
+          }
+        });
+      } else {
+        totalKomisi = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') ? 17000 : (isTraining ? 10000 : 13000);
+      }
     }
 
     await runQuery(`
@@ -601,7 +625,10 @@ app.get('/api/pasien', authenticateToken, async (req, res) => {
 
 app.post('/api/pasien', authenticateToken, async (req, res) => {
   try {
-    const { no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter } = req.body;
+    const { 
+      no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, 
+      riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id 
+    } = req.body;
 
     if (!no_hp || !nama_lengkap || !tipe_pasien) {
       return res.status(400).json({ message: 'Nama Lengkap, No. HP, dan Tipe Pasien wajib diisi' });
@@ -623,9 +650,15 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
 
     const id = 'pasien-' + Date.now();
     await runQuery(`
-      INSERT INTO pasien (id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null]);
+      INSERT INTO pasien (
+        id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, 
+        riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      id, no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, 
+      riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, 
+      referrer_pasien_id || null, marketing_id || null
+    ]);
 
     const newPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
     res.status(201).json({ message: 'Pasien berhasil didaftarkan', pasien: newPatient });
@@ -637,7 +670,10 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
 app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, riwayat_alergi, jenis_kulit, rekomendasi_dokter } = req.body;
+    const { 
+      no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, 
+      riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id 
+    } = req.body;
 
     const canEdit = (req.user.role === 'Super Admin' || req.user.role === 'Admin System' || req.user.role === 'Admin Klinik');
     if (!canEdit) {
@@ -660,9 +696,14 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
 
     await runQuery(`
       UPDATE pasien
-      SET no_ktp = ?, no_hp = ?, nama_lengkap = ?, tipe_pasien = ?, alamat = ?, tgl_lahir = ?, riwayat_alergi = ?, jenis_kulit = ?, rekomendasi_dokter = ?
+      SET no_ktp = ?, no_hp = ?, nama_lengkap = ?, tipe_pasien = ?, alamat = ?, tgl_lahir = ?, 
+          riwayat_alergi = ?, jenis_kulit = ?, rekomendasi_dokter = ?, referrer_pasien_id = ?, marketing_id = ?
       WHERE id = ?
-    `, [no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, id]);
+    `, [
+      no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, 
+      riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, 
+      referrer_pasien_id || null, marketing_id || null, id
+    ]);
 
     const updated = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
     res.json({ message: 'Data pasien berhasil diperbarui', pasien: updated });
@@ -724,12 +765,23 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
     const { nama_paket, total_kuota, harga_paket } = req.body;
 
     const paketId = 'pkg-' + Date.now();
+    const pkgPrice = Number(harga_paket) || 0;
     await runQuery(`
       INSERT INTO pasien_paket (id, pasien_id, nama_paket, sisa_kuota, total_kuota, harga_paket)
       VALUES (?, ?, ?, ?, ?, ?)
-    `, [paketId, id, nama_paket, total_kuota, total_kuota, harga_paket || 0]);
+    `, [paketId, id, nama_paket, total_kuota, total_kuota, pkgPrice]);
 
-    res.status(201).json({ message: 'Paket treatment berhasil ditambahkan ke pasien' });
+    // MGM Referral 5% Point Calculation
+    const targetPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
+    let mgmMsg = '';
+    if (targetPatient && targetPatient.referrer_pasien_id && pkgPrice > 0) {
+      const bonusPoints = Math.round(pkgPrice * 0.05); // 5% of package price
+      await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [bonusPoints, targetPatient.referrer_pasien_id]);
+      const referrer = await getQuery('SELECT nama_lengkap FROM pasien WHERE id = ?', [targetPatient.referrer_pasien_id]);
+      mgmMsg = ` [MGM Bonus: +${bonusPoints.toLocaleString('id-ID')} Poin (5%) diberikan ke ${referrer?.nama_lengkap || 'Pereferensi'}]`;
+    }
+
+    res.status(201).json({ message: `Paket treatment berhasil ditambahkan ke pasien!${mgmMsg}` });
   } catch (err) {
     res.status(500).json({ message: 'Error adding package', error: err.message });
   }

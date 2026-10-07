@@ -36,6 +36,7 @@ export default function ClinicSettingsAcl() {
   const [role, setRole] = useState('Manager');
   const [liniProfesi, setLiniProfesi] = useState('Beautician');
   const [gajiPokok, setGajiPokok] = useState(0);
+  const [isTraining, setIsTraining] = useState(false);
 
   // ACL Matrix State
   const [aclMatrix, setAclMatrix] = useState([]);
@@ -108,6 +109,7 @@ export default function ClinicSettingsAcl() {
     setRole('Manager');
     setLiniProfesi('Beautician');
     setGajiPokok(5000000);
+    setIsTraining(false);
     setMsg('');
     setErrorMsg('');
     setShowUserModal(true);
@@ -123,6 +125,7 @@ export default function ClinicSettingsAcl() {
     setRole(u.role);
     setLiniProfesi(u.lini_profesi || 'Beautician');
     setGajiPokok(u.gaji_pokok || 0);
+    setIsTraining(u.is_training === 1);
     setMsg('');
     setErrorMsg('');
     setShowUserModal(true);
@@ -144,7 +147,7 @@ export default function ClinicSettingsAcl() {
     }
 
     try {
-      const payload = { username, password, full_name: fullName, role, lini_profesi: liniProfesi, phone, gaji_pokok: Number(gajiPokok) };
+      const payload = { username, password, full_name: fullName, role, lini_profesi: liniProfesi, phone, gaji_pokok: Number(gajiPokok), is_training: isTraining ? 1 : 0 };
       if (editUserMode && selectedUserId) {
         await axios.put(`/api/users/${selectedUserId}`, payload);
         setMsg('User berhasil diperbarui!');
@@ -415,9 +418,20 @@ export default function ClinicSettingsAcl() {
                       <td className="py-3 px-4 font-bold text-[#1e1b15]">{u.full_name}</td>
                       <td className="py-3 px-4 font-mono font-semibold text-[#7d5141]">{u.username}</td>
                       <td className="py-3 px-4">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#faf3e8] text-[#7d5141] border border-[#d6c2bd]">
-                          {u.role}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#faf3e8] text-[#7d5141] border border-[#d6c2bd]">
+                            {u.role}
+                          </span>
+                          {u.is_training === 1 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                              TRAINING (10K)
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              REGULAR (13K)
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 font-semibold text-[#1e1b15]">
                         {u.role === 'Super Admin' || u.role === 'Admin System' || u.role === 'Admin Klinik' ? (
@@ -629,6 +643,19 @@ export default function ClinicSettingsAcl() {
                     className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
                   />
                 )}
+              </div>
+
+              {/* Form Field 7: Status Training Staff */}
+              <div>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Status Keanggotaan Staff (Terapis/Beautician)</label>
+                <select
+                  value={isTraining ? '1' : '0'}
+                  onChange={(e) => setIsTraining(e.target.value === '1')}
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
+                >
+                  <option value="0">Staff Regular / Senior (Komisi Trial Rp 13.000)</option>
+                  <option value="1">Staff Training / Magang (Komisi Trial Rp 10.000)</option>
+                </select>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-[#e5ded4]">

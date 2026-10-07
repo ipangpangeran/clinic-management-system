@@ -73,7 +73,9 @@ export default function StaffMobilePortal() {
   const handleCompleteTreatment = async (e) => {
     e.preventDefault();
     if (!activeSession) return;
-    if (selectedTreatments.length === 0) {
+    const isTrial = activeSession.tipe_pasien === 'TRIAL' || activeSession.status_doingan === 'Trial';
+
+    if (!isTrial && selectedTreatments.length === 0) {
       setErrorMsg('Pilih minimal 1 detail tindakan yang telah Anda kerjakan pada pasien.');
       return;
     }
@@ -88,7 +90,7 @@ export default function StaffMobilePortal() {
         notes
       });
 
-      setMsg(`✓ ${res.data.message} Est. Komisi: Rp ${res.data.komisi.toLocaleString('id-ID')}`);
+      setMsg(`✓ ${res.data.message} Est. Komisi: Rp ${res.data.komisi?.toLocaleString('id-ID')}`);
       setSelectedTreatments([]);
       setNotes('');
       fetchSessionData();
@@ -207,43 +209,55 @@ export default function StaffMobilePortal() {
 
           {/* CHECKLIST DETAIL TREATMENT FORM */}
           <form onSubmit={handleCompleteTreatment} className="space-y-4 pt-1">
-            <div>
-              <label className="block text-xs font-bold text-[#1e1b15] mb-1.5">
-                Konfirmasi Detail Treatment Yang Dilakukan: *
-              </label>
-              <p className="text-[11px] text-[#514440] mb-2">
-                Pilih atau centang jenis tindakan yang sudah Anda berikan kepada pasien {activeSession.pasien_nama}:
-              </p>
-
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {treatments.map(t => {
-                  const isSelected = selectedTreatments.includes(t.id);
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => toggleTreatmentSelect(t.id)}
-                      className={`w-full text-left p-3 rounded-2xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${isSelected
-                          ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
-                          : 'bg-[#faf3e8]/60 text-[#1e1b15] border-[#d6c2bd] hover:bg-[#faf3e8]'
-                        }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        {isSelected ? (
-                          <CheckSquare className="w-4 h-4 text-white shrink-0" />
-                        ) : (
-                          <Square className="w-4 h-4 text-[#83746f] shrink-0" />
-                        )}
-                        <span>{t.nama_tindakan}</span>
-                      </div>
-                      <span className={`text-[10px] font-bold ${isSelected ? 'text-amber-200' : 'text-[#7d5141]'}`}>
-                        Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}
-                      </span>
-                    </button>
-                  );
-                })}
+            {(activeSession.tipe_pasien === 'TRIAL' || activeSession.status_doingan === 'Trial') ? (
+              <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl space-y-1.5 text-xs text-amber-900 shadow-2xs">
+                <div className="font-bold text-sm flex items-center gap-1.5 text-amber-800">
+                  <Sparkles className="w-4 h-4 text-amber-700" />
+                  <span>Pasien Treatment Trial</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-900/90">
+                  Untuk pasien Trial, Anda tidak perlu memilih rincian tindakan. Cukup langsung klik tombol <strong>SELESAIKAN TINDAKAN</strong> di bawah untuk memproses dan mencatat komisi pengerjaan Anda.
+                </p>
               </div>
-            </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-[#1e1b15] mb-1.5">
+                  Konfirmasi Detail Treatment Yang Dilakukan: *
+                </label>
+                <p className="text-[11px] text-[#514440] mb-2">
+                  Pilih atau centang jenis tindakan yang sudah Anda berikan kepada pasien {activeSession.pasien_nama}:
+                </p>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {treatments.map(t => {
+                    const isSelected = selectedTreatments.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => toggleTreatmentSelect(t.id)}
+                        className={`w-full text-left p-3 rounded-2xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${isSelected
+                            ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
+                            : 'bg-[#faf3e8]/60 text-[#1e1b15] border-[#d6c2bd] hover:bg-[#faf3e8]'
+                          }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-white shrink-0" />
+                          ) : (
+                            <Square className="w-4 h-4 text-[#83746f] shrink-0" />
+                          )}
+                          <span>{t.nama_tindakan}</span>
+                        </div>
+                        <span className={`text-[10px] font-bold ${isSelected ? 'text-amber-200' : 'text-[#7d5141]'}`}>
+                          Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-[#514440] mb-1">Catatan Pengerjaan (Optional)</label>
