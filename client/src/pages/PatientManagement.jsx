@@ -82,16 +82,16 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     fetchTodayDoingan();
     fetchMarketingUsers();
 
-    // Auto-polling antrean petugas & status pengerjaan setiap 3 detik
+    // Auto-polling antrean petugas & status pengerjaan secara silent setiap 3 detik
     const interval = setInterval(() => {
-      fetchTodayDoingan();
-      if (kebutuhanLayanan) {
-        fetchStaffAvailability(kebutuhanLayanan);
+      fetchTodayDoingan(true);
+      if (showModal && kebutuhanLayanan) {
+        fetchStaffAvailability(kebutuhanLayanan, true);
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [kebutuhanLayanan]);
+  }, [kebutuhanLayanan, showModal]);
 
   const fetchPatients = async () => {
     try {
@@ -116,27 +116,27 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     }
   };
 
-  const fetchTodayDoingan = async () => {
-    setLoadingToday(true);
+  const fetchTodayDoingan = async (silent = false) => {
+    if (!silent) setLoadingToday(true);
     try {
       const res = await axios.get('/api/doingan/today');
       setTodayDoinganList(res.data || []);
     } catch (err) {
       console.error('Error fetching today doingan', err);
     } finally {
-      setLoadingToday(false);
+      if (!silent) setLoadingToday(false);
     }
   };
 
-  const fetchStaffAvailability = async (lini) => {
-    setLoadingStaff(true);
+  const fetchStaffAvailability = async (lini, silent = false) => {
+    if (!silent) setLoadingStaff(true);
     try {
       const res = await axios.get(`/api/staff-availability?lini=${lini}`);
       setStaffList(res.data || []);
     } catch (err) {
       console.error('Error fetching staff availability', err);
     } finally {
-      setLoadingStaff(false);
+      if (!silent) setLoadingStaff(false);
     }
   };
 
