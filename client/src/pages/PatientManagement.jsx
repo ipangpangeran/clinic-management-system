@@ -386,33 +386,72 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     XLSX.writeFile(workbook, fileName);
   };
 
-  // Master Data Pelanggan (Raw) Filtering & Export
-  const availableMonths = Array.from(new Set(
-    patients
-      .filter(p => p.created_at)
-      .map(p => p.created_at.slice(0, 7))
-  )).sort().reverse();
+  // Master Data Pelanggan (Raw) Expanded List & Export
+  const rawMasterList = [];
+  patients.forEach(p => {
+    const isMember = p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler';
+    const hadTrial = p.initial_tipe_pasien === 'TRIAL' || p.has_trial_history === 1 || p.tipe_pasien === 'TRIAL';
 
-  const filteredRawPatients = patients.filter(p => {
-    const searchLower = rawSearch.toLowerCase();
-    const matchSearch = !rawSearch ||
-      (p.nama_lengkap && p.nama_lengkap.toLowerCase().includes(searchLower)) ||
-      (p.no_hp && p.no_hp.includes(rawSearch)) ||
-      (p.no_ktp && p.no_ktp.includes(rawSearch)) ||
-      (p.marketing_nama && p.marketing_nama.toLowerCase().includes(searchLower));
-
-    let matchMonth = true;
-    if (rawMonthFilter !== 'ALL' && p.created_at) {
-      const pMonth = p.created_at.slice(0, 7);
-      matchMonth = (pMonth === rawMonthFilter);
+    // 1. Trial History Entry (if patient arrived as Trial or has trial history)
+    if (hadTrial) {
+      rawMasterList.push({
+        raw_id: `${p.id}-trial`,
+        patient_id: p.id,
+        nama_lengkap: p.nama_lengkap,
+        no_hp: p.no_hp,
+        no_ktp: p.no_ktp,
+        created_at: p.created_at,
+        tipe_kedatangan: 'TRIAL',
+        status_saat_ini: isMember ? 'MEMBER (MIGRASI DARI TRIAL)' : 'TRIAL',
+        marketing_nama: p.marketing_nama,
+        referrer_nama: p.referrer_nama,
+        original_patient: p
+      });
     }
 
-    const initialTipe = p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien);
+    // 2. Member Entry (if patient is currently Member)
+    if (isMember) {
+      rawMasterList.push({
+        raw_id: `${p.id}-member`,
+        patient_id: p.id,
+        nama_lengkap: p.nama_lengkap,
+        no_hp: p.no_hp,
+        no_ktp: p.no_ktp,
+        created_at: p.updated_at || p.created_at,
+        tipe_kedatangan: 'MEMBER',
+        status_saat_ini: p.has_trial_history === 1 ? 'MEMBER (MIGRASI DARI TRIAL)' : 'MEMBER',
+        marketing_nama: p.marketing_nama,
+        referrer_nama: p.referrer_nama,
+        original_patient: p
+      });
+    }
+  });
+
+  const availableMonths = Array.from(new Set(
+    rawMasterList
+      .filter(item => item.created_at)
+      .map(item => item.created_at.slice(0, 7))
+  )).sort().reverse();
+
+  const filteredRawPatients = rawMasterList.filter(item => {
+    const searchLower = rawSearch.toLowerCase();
+    const matchSearch = !rawSearch ||
+      (item.nama_lengkap && item.nama_lengkap.toLowerCase().includes(searchLower)) ||
+      (item.no_hp && item.no_hp.includes(rawSearch)) ||
+      (item.no_ktp && item.no_ktp.includes(rawSearch)) ||
+      (item.marketing_nama && item.marketing_nama.toLowerCase().includes(searchLower));
+
+    let matchMonth = true;
+    if (rawMonthFilter !== 'ALL' && item.created_at) {
+      const itemMonth = item.created_at.slice(0, 7);
+      matchMonth = (itemMonth === rawMonthFilter);
+    }
+
     let matchType = true;
     if (rawTypeFilter === 'TRIAL') {
-      matchType = (initialTipe === 'TRIAL');
+      matchType = (item.tipe_kedatangan === 'TRIAL');
     } else if (rawTypeFilter === 'MEMBER') {
-      matchType = (initialTipe === 'MEMBER');
+      matchType = (item.tipe_kedatangan === 'MEMBER');
     }
 
     return matchSearch && matchMonth && matchType;
@@ -423,18 +462,17 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       alert('Akses Terbatas: Anda tidak memiliki wewenang export data.');
       return;
     }
-    const exportData = filteredRawPatients.map((p, index) => {
-      const initialTipe = p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien);
+    const exportData = filteredRawPatients.map((item, index) => {
       return {
         'No.': index + 1,
-        'Tgl Registrasi / Intake': p.created_at ? new Date(p.created_at).toLocaleDateString('id-ID') : '-',
-        'Nama Pasien': p.nama_lengkap,
-        'No. Handphone': p.no_hp,
-        'No. KTP': p.no_ktp || '-',
-        'Tipe Kedatangan Awal': initialTipe,
-        'Status Saat Ini': p.tipe_pasien,
-        'Marketing Intake': p.marketing_nama || '-',
-        'Referrer Pasien': p.referrer_nama || '-'
+        'Tgl Registrasi / Intake': item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-',
+        'Nama Pasien': item.nama_lengkap,
+        'No. Handphone': item.no_hp,
+        'No. KTP': item.no_ktp || '-',
+        'Tipe Kedatangan': item.tipe_kedatangan,
+        'Status Saat Ini': item.status_saat_ini,
+        'Marketing Intake': item.marketing_nama || '-',
+        'Referrer Pasien': item.referrer_nama || '-'
       };
     });
 
@@ -982,24 +1020,24 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 </select>
               </div>
 
-              <span className="text-[#83746f] font-semibold ml-1">Kedatangan Awal:</span>
+              <span className="text-[#83746f] font-semibold ml-1">Kedatangan:</span>
               <button
                 onClick={() => setRawTypeFilter('ALL')}
                 className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${rawTypeFilter === 'ALL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
               >
-                Semua Kedatangan ({patients.length})
+                Semua Kedatangan ({rawMasterList.length})
               </button>
               <button
                 onClick={() => setRawTypeFilter('TRIAL')}
                 className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${rawTypeFilter === 'TRIAL' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}
               >
-                Trial Awal ({patients.filter(p => (p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien)) === 'TRIAL').length})
+                Trial ({rawMasterList.filter(item => item.tipe_kedatangan === 'TRIAL').length})
               </button>
               <button
                 onClick={() => setRawTypeFilter('MEMBER')}
                 className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${rawTypeFilter === 'MEMBER' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
               >
-                Member Direct ({patients.filter(p => (p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien)) === 'MEMBER').length})
+                Member ({rawMasterList.filter(item => item.tipe_kedatangan === 'MEMBER').length})
               </button>
 
               {canExportExcel && (
@@ -1038,66 +1076,58 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                       </td>
                     </tr>
                   ) : (
-                    filteredRawPatients.map(p => {
-                      const initialTipe = p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien);
-                      const isCurrentlyMember = p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler';
-                      return (
-                        <tr key={p.id} className="hover:bg-[#fff8f0] transition-colors">
-                          <td className="py-3.5 px-4 text-[#83746f] font-medium whitespace-nowrap">
-                            {p.created_at ? new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-[#1e1b15] text-sm">
-                            {p.nama_lengkap}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-semibold text-[#1e1b15]">{p.no_hp}</div>
-                            {p.no_ktp && <div className="text-[10px] text-[#83746f]">NIK: {p.no_ktp}</div>}
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            {initialTipe === 'TRIAL' ? (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                TRIAL
-                              </span>
-                            ) : (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                MEMBER
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            {isCurrentlyMember && initialTipe === 'TRIAL' ? (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300">
-                                MEMBER (MIGRASI DARI TRIAL)
-                              </span>
-                            ) : isCurrentlyMember ? (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                MEMBER
-                              </span>
-                            ) : (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                                TRIAL
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-semibold text-[#1e1b15]">{p.marketing_nama || '-'}</div>
-                            {p.referrer_nama && <div className="text-[10px] text-indigo-700 font-medium">Referred by: {p.referrer_nama}</div>}
-                          </td>
-                          <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => openEditModal(p)}
-                                className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] text-[#7d5141] border border-[#d6c2bd] font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
-                                title="Edit Profil Pasien"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                                <span>Edit</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                    filteredRawPatients.map(item => (
+                      <tr key={item.raw_id} className="hover:bg-[#fff8f0] transition-colors">
+                        <td className="py-3.5 px-4 text-[#83746f] font-medium whitespace-nowrap">
+                          {item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-[#1e1b15] text-sm">
+                          {item.nama_lengkap}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-[#1e1b15]">{item.no_hp}</div>
+                          {item.no_ktp && <div className="text-[10px] text-[#83746f]">NIK: {item.no_ktp}</div>}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          {item.tipe_kedatangan === 'TRIAL' ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              TRIAL
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                              MEMBER
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            item.status_saat_ini.includes('MIGRASI')
+                              ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                              : item.status_saat_ini === 'MEMBER'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-amber-100 text-amber-800 border border-amber-300'
+                          }`}>
+                            {item.status_saat_ini}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-[#1e1b15]">{item.marketing_nama || '-'}</div>
+                          {item.referrer_nama && <div className="text-[10px] text-indigo-700 font-medium">Referred by: {item.referrer_nama}</div>}
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => openEditModal(item.original_patient)}
+                              className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] text-[#7d5141] border border-[#d6c2bd] font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
+                              title="Edit Profil Pasien"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
