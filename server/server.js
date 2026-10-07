@@ -748,11 +748,65 @@ app.delete('/api/pasien/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// --- PATIENT PACKAGES & REMINDERS ---
+// --- MASTER PAKET TEMPLATES CRUD ---
+app.get('/api/master-paket', authenticateToken, async (req, res) => {
+  try {
+    const list = await allQuery('SELECT * FROM master_paket ORDER BY created_at ASC');
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching master packages', error: err.message });
+  }
+});
+
+app.post('/api/master-paket', authenticateToken, async (req, res) => {
+  try {
+    const { nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket } = req.body;
+    if (!nama_paket || !item_a_name) {
+      return res.status(400).json({ message: 'Nama Paket dan Minimal 1 Item Tindakan wajib diisi' });
+    }
+    const id = 'mp-' + Date.now();
+    await runQuery(`
+      INSERT INTO master_paket (id, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [id, nama_paket, item_a_name, Number(item_a_kuota)||0, item_b_name||'', Number(item_b_kuota)||0, Number(harga_paket)||0]);
+
+    res.status(201).json({ message: 'Master Paket berhasil dibuat' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error creating master package', error: err.message });
+  }
+});
+
+app.put('/api/master-paket/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket } = req.body;
+    await runQuery(`
+      UPDATE master_paket
+      SET nama_paket = ?, item_a_name = ?, item_a_kuota = ?, item_b_name = ?, item_b_kuota = ?, harga_paket = ?
+      WHERE id = ?
+    `, [nama_paket, item_a_name, Number(item_a_kuota)||0, item_b_name||'', Number(item_b_kuota)||0, Number(harga_paket)||0, id]);
+
+    res.json({ message: 'Master Paket berhasil diperbarui' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating master package', error: err.message });
+  }
+});
+
+app.delete('/api/master-paket/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await runQuery('DELETE FROM master_paket WHERE id = ?', [id]);
+    res.json({ message: 'Master Paket berhasil dihapus' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting master package', error: err.message });
+  }
+});
+
+// --- PATIENT PACKAGES & CLAIM ROUTES ---
 app.get('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const paketList = await allQuery('SELECT * FROM pasien_paket WHERE pasien_id = ?', [id]);
+    const paketList = await allQuery('SELECT * FROM pasien_paket WHERE pasien_id = ? ORDER BY created_at DESC', [id]);
     res.json(paketList);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching patient packages', error: err.message });
@@ -762,48 +816,161 @@ app.get('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
 app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nama_paket, total_kuota, harga_paket } = req.body;
+    const { nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket } = req.body;
 
+    const totalKuota = (Number(item_a_kuota) || 0) + (Number(item_b_kuota) || 0);
     const paketId = 'pkg-' + Date.now();
     const pkgPrice = Number(harga_paket) || 0;
+
     await runQuery(`
-      INSERT INTO pasien_paket (id, pasien_id, nama_paket, sisa_kuota, total_kuota, harga_paket)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [paketId, id, nama_paket, total_kuota, total_kuota, pkgPrice]);
+      INSERT INTO pasien_paket (
+        id, pasien_id, nama_paket, item_a_name, item_a_kuota, item_a_total, 
+        item_b_name, item_b_kuota, item_b_total, sisa_kuota, total_kuota, harga_paket
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      paketId, id, nama_paket, 
+      item_a_name || 'Tindakan A', Number(item_a_kuota)||0, Number(item_a_kuota)||0,
+      item_b_name || '', Number(item_b_kuota)||0, Number(item_b_kuota)||0,
+      totalKuota, totalKuota, pkgPrice
+    ]);
 
     // MGM Referral 5% Point Calculation
     const targetPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
     let mgmMsg = '';
     if (targetPatient && targetPatient.referrer_pasien_id && pkgPrice > 0) {
-      const bonusPoints = Math.round(pkgPrice * 0.05); // 5% of package price
+      const bonusPoints = Math.round(pkgPrice * 0.05);
       await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [bonusPoints, targetPatient.referrer_pasien_id]);
       const referrer = await getQuery('SELECT nama_lengkap FROM pasien WHERE id = ?', [targetPatient.referrer_pasien_id]);
-      mgmMsg = ` [MGM Bonus: +${bonusPoints.toLocaleString('id-ID')} Poin (5%) diberikan ke ${referrer?.nama_lengkap || 'Pereferensi'}]`;
+      mgmMsg = ` [MGM Bonus: +${bonusPoints.toLocaleString('id-ID')} Poin diberikan ke ${referrer?.nama_lengkap || 'Pereferensi'}]`;
     }
 
-    res.status(201).json({ message: `Paket treatment berhasil ditambahkan ke pasien!${mgmMsg}` });
+    res.status(201).json({ message: `Paket ${nama_paket} berhasil ditambahkan ke pasien!${mgmMsg}` });
   } catch (err) {
     res.status(500).json({ message: 'Error adding package', error: err.message });
   }
 });
 
-app.post('/api/pasien/paket/:paketId/use', authenticateToken, async (req, res) => {
+// CLAIM / PROCESS USE OF PATIENT PACKAGE ITEM -> CREATES DOINGAN (GRATIS/MEMOTONG KUOTA)
+app.post('/api/pasien/paket/:paketId/claim', authenticateToken, async (req, res) => {
   try {
     const { paketId } = req.params;
-    const { notes } = req.body;
+    const { item_key, petugas_id, notes } = req.body;
 
     const pkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ?', [paketId]);
-    if (!pkg) return res.status(404).json({ message: 'Paket tidak ditemukan' });
-    if (pkg.sisa_kuota <= 0) return res.status(400).json({ message: 'Kuota paket sudah habis' });
+    if (!pkg) return res.status(404).json({ message: 'Paket pasien tidak ditemukan' });
+    if (pkg.sisa_kuota <= 0) return res.status(400).json({ message: 'Total sisa kuota paket ini sudah habis' });
 
-    await runQuery('UPDATE pasien_paket SET sisa_kuota = sisa_kuota - 1 WHERE id = ?', [paketId]);
-    
+    let itemClaimedName = '';
+    if (item_key === 'B') {
+      if ((pkg.item_b_kuota || 0) <= 0) return res.status(400).json({ message: `Kuota untuk ${pkg.item_b_name || 'Item B'} sudah habis` });
+      itemClaimedName = pkg.item_b_name || 'Facial';
+      await runQuery('UPDATE pasien_paket SET item_b_kuota = item_b_kuota - 1, sisa_kuota = sisa_kuota - 1 WHERE id = ?', [paketId]);
+    } else {
+      if ((pkg.item_a_kuota || 0) <= 0) return res.status(400).json({ message: `Kuota untuk ${pkg.item_a_name || 'Item A'} sudah habis` });
+      itemClaimedName = pkg.item_a_name || 'Tindakan Dokter';
+      await runQuery('UPDATE pasien_paket SET item_a_kuota = item_a_kuota - 1, sisa_kuota = sisa_kuota - 1 WHERE id = ?', [paketId]);
+    }
+
+    const petugas = await getQuery('SELECT * FROM users WHERE id = ?', [petugas_id]);
+    if (!petugas) return res.status(404).json({ message: 'Petugas bertugas wajib dipilih' });
+
+    const kategoriLayanan = (petugas.lini_profesi === 'Nurse' || petugas.role === 'Nurse') ? 'Tindakan Medis (Nurse)' : 'Facial (Beautician)';
+
+    // Create doingan session (is_billed = 1 because package is prepaid, price = 0, marketing_id = null so no marketing commission on package claim)
+    const doinganId = 'doi-' + Date.now();
+    await runQuery(`
+      INSERT INTO doingan (
+        id, pasien_id, petugas_id, role_petugas, kategori_layanan, 
+        nama_tindakan, status_pengerjaan, status_doingan, is_billed, marketing_id, notes
+      )
+      VALUES (?, ?, ?, ?, ?, ?, 'IN_PROGRESS', 'Member', 1, NULL, ?)
+    `, [doinganId, pkg.pasien_id, petugas.id, petugas.role || petugas.lini_profesi, kategoriLayanan, `[Klaim Paket ${pkg.nama_paket}] ${itemClaimedName}`, notes || `Klaim Kuota Paket ${pkg.nama_paket}`]);
+
+    // Record usage log
     const usageId = 'usg-' + Date.now();
-    await runQuery('INSERT INTO pasien_paket_usage (id, pasien_paket_id, used_by_user_id, notes) VALUES (?, ?, ?, ?)', [usageId, paketId, req.user.id, notes || 'Penggunaan paket treatment']);
+    await runQuery(`
+      INSERT INTO pasien_paket_usage (
+        id, pasien_paket_id, pasien_id, item_claimed, doingan_id, petugas_id, petugas_nama, used_by_user_id, notes
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [usageId, paketId, pkg.pasien_id, itemClaimedName, doinganId, petugas.id, petugas.full_name, req.user.id, notes || `Klaim paket ${pkg.nama_paket}`]);
 
-    res.json({ message: 'Penggunaan paket berhasil dicatat. Sisa kuota: ' + (pkg.sisa_kuota - 1) });
+    res.json({ 
+      message: `Klaim paket (${itemClaimedName}) berhasil! Sesi tindakan dibuat untuk ${petugas.full_name}. Pembayaran gratis (motong paket).`,
+      doingan_id: doinganId
+    });
   } catch (err) {
-    res.status(500).json({ message: 'Error using package', error: err.message });
+    res.status(500).json({ message: 'Error claiming package', error: err.message });
+  }
+});
+
+// GET ALL PACKAGE USAGE LOGS FOR REKAP & EXPORT
+app.get('/api/pasien/paket/usage/all', authenticateToken, async (req, res) => {
+  try {
+    const logs = await allQuery(`
+      SELECT pu.*, pp.nama_paket, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, u.full_name as user_fo_nama
+      FROM pasien_paket_usage pu
+      JOIN pasien_paket pp ON pu.pasien_paket_id = pp.id
+      JOIN pasien p ON pp.pasien_id = p.id
+      LEFT JOIN users u ON pu.used_by_user_id = u.id
+      ORDER BY pu.used_at DESC
+    `);
+    res.json(logs);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching package usage history', error: err.message });
+  }
+});
+
+// --- SYSTEM SETTINGS / WA REMINDER TOGGLE ROUTE ---
+app.get('/api/settings', authenticateToken, async (req, res) => {
+  try {
+    const settings = await allQuery('SELECT * FROM system_settings');
+    const settingsObj = {};
+    settings.forEach(s => settingsObj[s.setting_key] = s.setting_value);
+    res.json(settingsObj);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching settings', error: err.message });
+  }
+});
+
+app.post('/api/settings/toggle-wa-reminder', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System') {
+      return res.status(403).json({ message: 'Hanya Super Admin yang diizinkan mengubah pengaturan fitur ini' });
+    }
+    const { enabled } = req.body;
+    const val = enabled ? '1' : '0';
+    await runQuery(`
+      INSERT INTO system_settings (setting_key, setting_value, updated_at)
+      VALUES ('wa_reminder_enabled', ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(setting_key) DO UPDATE SET setting_value = ?, updated_at = CURRENT_TIMESTAMP
+    `, [val, val]);
+
+    res.json({ message: `Fitur WA Reminder berhasil ${enabled ? 'DI-AKTIFKAN (ON)' : 'DI-NONAKTIFKAN (OFF)'}`, wa_reminder_enabled: val });
+  } catch (err) {
+    res.status(500).json({ message: 'Error toggling WA reminder setting', error: err.message });
+  }
+});
+
+// --- MARKETING TRIAL ACQUISITION RECAP ---
+app.get('/api/marketing/recap', authenticateToken, async (req, res) => {
+  try {
+    const recap = await allQuery(`
+      SELECT 
+        u.id as marketing_id,
+        u.full_name as marketing_nama,
+        u.role as marketing_role,
+        COUNT(DISTINCT d.id) as total_trial_count,
+        (COUNT(DISTINCT d.id) * 10000) as total_komisi_marketing
+      FROM users u
+      LEFT JOIN doingan d ON d.marketing_id = u.id AND d.status_pengerjaan = 'COMPLETED' AND (d.status_doingan = 'Trial' OR d.status_doingan = 'TRIAL')
+      WHERE u.role = 'Marketing' OR u.lini_profesi = 'Marketing' OR u.id IN (SELECT DISTINCT marketing_id FROM doingan WHERE marketing_id IS NOT NULL)
+      GROUP BY u.id
+    `);
+    res.json(recap);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching marketing recap', error: err.message });
   }
 });
 

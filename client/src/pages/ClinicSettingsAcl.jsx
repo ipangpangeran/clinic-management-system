@@ -40,10 +40,35 @@ export default function ClinicSettingsAcl() {
 
   // ACL Matrix State
   const [aclMatrix, setAclMatrix] = useState([]);
+  const [waReminderEnabled, setWaReminderEnabled] = useState(false);
   
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await axios.get('/api/settings');
+      setWaReminderEnabled(res.data.wa_reminder_enabled === '1');
+    } catch (err) {
+      console.error('Error fetching settings', err);
+    }
+  };
+
+  const handleToggleWaReminder = async () => {
+    try {
+      const newStatus = !waReminderEnabled;
+      const res = await axios.post('/api/settings/toggle-wa-reminder', { enabled: newStatus });
+      setWaReminderEnabled(newStatus);
+      setMsg(res.data.message);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Gagal mengubah status fitur WA Reminder');
+    }
+  };
 
   const rolesList = ['Super Admin', 'Admin Klinik', 'Manager', 'Admin FO', 'Beautician', 'Nurse', 'Marketing'];
   
@@ -270,7 +295,37 @@ export default function ClinicSettingsAcl() {
 
         {/* TAB 1: PROFIL KLINIK FORM */}
         {activeTab === 'PROFILE' && (
-          <form onSubmit={handleSaveProfile} className="space-y-4 max-w-2xl">
+          <div className="space-y-4 max-w-2xl">
+            {/* WA REMINDER FEATURE TOGGLE (SUPER ADMIN ONLY) */}
+            {isSuperAdmin && (
+              <div className="p-4 bg-amber-50/90 border border-amber-300 rounded-2xl space-y-2 shadow-2xs">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="font-bold text-xs text-amber-900 flex items-center gap-1.5">
+                      <Phone className="w-4 h-4 text-amber-700" />
+                      <span>Pengaturan Fitur WA Reminder Otomatis (Super Admin)</span>
+                    </h4>
+                    <p className="text-[11px] text-amber-800/90 mt-0.5">
+                      Fitur Reminder WA saat ini dibuat <strong>FEATURE OFF</strong> secara bawaan. Hanya Super Admin yang berhak meng-ON kan atau meng-OFF kan fitur ini.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleWaReminder}
+                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+                      waReminderEnabled 
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                        : 'bg-gray-400 hover:bg-gray-500 text-white'
+                    }`}
+                  >
+                    {waReminderEnabled ? '🟢 FITUR ON (AKTIF)' : '🔴 FITUR OFF (NON-AKTIF)'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Utama Klinik *</label>
@@ -381,7 +436,8 @@ export default function ClinicSettingsAcl() {
               {saving ? 'Menyimpan...' : 'Simpan Perubahan Profil'}
             </button>
           </form>
-        )}
+        </div>
+      )}
 
         {/* TAB 2: USER MANAGEMENT (CREATE, EDIT, DELETE USER) */}
         {activeTab === 'USERS' && (

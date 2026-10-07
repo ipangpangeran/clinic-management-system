@@ -168,12 +168,40 @@ async function initDb() {
       await runQuery(`ALTER TABLE pasien ADD COLUMN marketing_id TEXT`);
     } catch (e) { }
 
-    // 5. Patient Packages
+    // 5a. Master Paket Templates
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS master_paket (
+        id TEXT PRIMARY KEY,
+        nama_paket TEXT NOT NULL,
+        item_a_name TEXT NOT NULL,
+        item_a_kuota INTEGER DEFAULT 0,
+        item_b_name TEXT,
+        item_b_kuota INTEGER DEFAULT 0,
+        harga_paket REAL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Seed master_paket if empty
+    const mpCount = await getQuery('SELECT COUNT(*) as count FROM master_paket');
+    if (mpCount.count === 0) {
+      await runQuery(`INSERT INTO master_paket (id, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket) VALUES ('mp-1', 'Ultimate 1', 'Tindakan Dokter A', 3, 'Facial', 2, 2500000)`);
+      await runQuery(`INSERT INTO master_paket (id, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket) VALUES ('mp-2', 'Ultimate 2', 'Tindakan Dokter B', 3, 'Facial', 2, 2800000)`);
+      await runQuery(`INSERT INTO master_paket (id, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket) VALUES ('mp-3', 'Botox', 'Tindakan Dokter C (Botox)', 1, '', 0, 1500000)`);
+    }
+
+    // 5b. Patient Packages
     await runQuery(`
       CREATE TABLE IF NOT EXISTS pasien_paket (
         id TEXT PRIMARY KEY,
         pasien_id TEXT NOT NULL,
         nama_paket TEXT NOT NULL,
+        item_a_name TEXT,
+        item_a_kuota INTEGER DEFAULT 0,
+        item_a_total INTEGER DEFAULT 0,
+        item_b_name TEXT,
+        item_b_kuota INTEGER DEFAULT 0,
+        item_b_total INTEGER DEFAULT 0,
         sisa_kuota INTEGER NOT NULL,
         total_kuota INTEGER NOT NULL,
         harga_paket REAL DEFAULT 0,
@@ -182,17 +210,45 @@ async function initDb() {
       )
     `);
 
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_name TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_kuota INTEGER DEFAULT 0`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_total INTEGER DEFAULT 0`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_name TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_kuota INTEGER DEFAULT 0`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_total INTEGER DEFAULT 0`); } catch(e){}
+
     // 6. Patient Package Usage History
     await runQuery(`
       CREATE TABLE IF NOT EXISTS pasien_paket_usage (
         id TEXT PRIMARY KEY,
         pasien_paket_id TEXT NOT NULL,
+        pasien_id TEXT,
+        item_claimed TEXT,
+        doingan_id TEXT,
+        petugas_id TEXT,
+        petugas_nama TEXT,
         used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         used_by_user_id TEXT,
         notes TEXT,
         FOREIGN KEY(pasien_paket_id) REFERENCES pasien_paket(id) ON DELETE CASCADE
       )
     `);
+
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN pasien_id TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN item_claimed TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN doingan_id TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN petugas_id TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN petugas_nama TEXT`); } catch(e){}
+
+    // 6b. System Settings (Feature Toggles)
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await runQuery(`INSERT OR IGNORE INTO system_settings (setting_key, setting_value) VALUES ('wa_reminder_enabled', '0')`);
 
     // 7. Patient Reminders
     await runQuery(`

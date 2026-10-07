@@ -71,6 +71,38 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const [namaPaket, setNamaPaket] = useState('');
   const [totalKuota, setTotalKuota] = useState(5);
   const [hargaPaket, setHargaPaket] = useState(2500000);
+  const [masterPackages, setMasterPackages] = useState([]);
+  const [showMasterPkgModal, setShowMasterPkgModal] = useState(false);
+  const [selectedMasterPkgId, setSelectedMasterPkgId] = useState('');
+  const [itemAName, setItemAName] = useState('Tindakan Dokter A');
+  const [itemAKuota, setItemAKuota] = useState(3);
+  const [itemBName, setItemBName] = useState('Facial');
+  const [itemBKuota, setItemBKuota] = useState(2);
+
+  // Claim Modal State
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [selectedClaimPkg, setSelectedClaimPkg] = useState(null);
+  const [claimItemKey, setClaimItemKey] = useState('A');
+  const [claimStaffId, setClaimStaffId] = useState('');
+  const [claimNotes, setClaimNotes] = useState('');
+  const [submittingClaim, setSubmittingClaim] = useState(false);
+  const [packageLogs, setPackageLogs] = useState([]);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+
+  // Marketing Recap State
+  const [marketingRecap, setMarketingRecap] = useState([]);
+  const [showMarketingModal, setShowMarketingModal] = useState(false);
+
+  // New Master Package Form State
+  const [newMasterNama, setNewMasterNama] = useState('');
+  const [newMasterItemA, setNewMasterItemA] = useState('');
+  const [newMasterKuotaA, setNewMasterKuotaA] = useState(3);
+  const [newMasterItemB, setNewMasterItemB] = useState('');
+  const [newMasterKuotaB, setNewMasterKuotaB] = useState(2);
+  const [newMasterHarga, setNewMasterHarga] = useState(0);
+
+  // System Settings State (WA Reminder Toggle)
+  const [waReminderEnabled, setWaReminderEnabled] = useState(false);
 
   // Reminder Form State
   const [showReminderModal, setShowReminderModal] = useState(false);
@@ -81,6 +113,10 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     fetchPatients();
     fetchTodayDoingan();
     fetchMarketingUsers();
+    fetchMasterPackages();
+    fetchPackageUsageLogs();
+    fetchMarketingRecap();
+    fetchSettings();
 
     // Auto-polling antrean petugas & status pengerjaan secara silent setiap 3 detik
     const interval = setInterval(() => {
@@ -92,6 +128,44 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
 
     return () => clearInterval(interval);
   }, [kebutuhanLayanan, showModal]);
+
+  const fetchSettings = async () => {
+    try {
+      const res = await axios.get('/api/settings');
+      setWaReminderEnabled(res.data.wa_reminder_enabled === '1');
+    } catch (err) { }
+  };
+
+  const fetchMasterPackages = async () => {
+    try {
+      const res = await axios.get('/api/master-paket');
+      setMasterPackages(res.data || []);
+      if (res.data && res.data.length > 0) {
+        const mp = res.data[0];
+        setSelectedMasterPkgId(mp.id);
+        setNamaPaket(mp.nama_paket);
+        setItemAName(mp.item_a_name);
+        setItemAKuota(mp.item_a_kuota);
+        setItemBName(mp.item_b_name);
+        setItemBKuota(mp.item_b_kuota);
+        setHargaPaket(mp.harga_paket);
+      }
+    } catch (err) { }
+  };
+
+  const fetchPackageUsageLogs = async () => {
+    try {
+      const res = await axios.get('/api/pasien/paket/usage/all');
+      setPackageLogs(res.data || []);
+    } catch (err) { }
+  };
+
+  const fetchMarketingRecap = async () => {
+    try {
+      const res = await axios.get('/api/marketing/recap');
+      setMarketingRecap(res.data || []);
+    } catch (err) { }
+  };
 
   const fetchPatients = async () => {
     try {
@@ -281,10 +355,6 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       'No. Handphone': p.no_hp || '',
       'Tipe Pasien': p.tipe_pasien || '',
       'Alamat': p.alamat || '-',
-      'Tanggal Lahir': p.tgl_lahir || '-',
-      'Riwayat Alergi': p.riwayat_alergi || 'Tidak ada',
-      'Jenis Kulit': p.jenis_kulit || '-',
-      'Rekomendasi Dokter': p.rekomendasi_dokter || '-',
       'Total Poin': p.total_poin || 0,
       'Tanggal Terdaftar': p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : ''
     }));
@@ -299,18 +369,15 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       { wch: 16 },
       { wch: 14 },
       { wch: 35 },
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 25 },
       { wch: 12 },
       { wch: 22 }
     ];
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data Pasien');
+    const sheetName = filterType === 'TRIAL' ? 'Pasien Trial' : filterType === 'MEMBER' ? 'Pasien Member' : 'Semua Pasien';
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-    const fileName = `Data_Pasien_DEFLOW_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const fileName = `Data_Pelanggan_DEFLOW_${filterType}_${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(workbook, fileName);
   };
 
@@ -417,6 +484,20 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     }
   };
 
+  const handleMasterPackageSelect = (e) => {
+    const mpId = e.target.value;
+    setSelectedMasterPkgId(mpId);
+    const mp = masterPackages.find(x => x.id === mpId);
+    if (mp) {
+      setNamaPaket(mp.nama_paket);
+      setItemAName(mp.item_a_name);
+      setItemAKuota(mp.item_a_kuota);
+      setItemBName(mp.item_b_name || '');
+      setItemBKuota(mp.item_b_kuota || 0);
+      setHargaPaket(mp.harga_paket);
+    }
+  };
+
   const handleAddPackage = async (e) => {
     e.preventDefault();
     if (!selectedPatient || !namaPaket) return;
@@ -424,28 +505,135 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     try {
       await axios.post(`/api/pasien/${selectedPatient.id}/paket`, {
         nama_paket: namaPaket,
-        total_kuota: Number(totalKuota),
+        item_a_name: itemAName,
+        item_a_kuota: Number(itemAKuota),
+        item_b_name: itemBName,
+        item_b_kuota: Number(itemBKuota),
         harga_paket: Number(hargaPaket)
       });
       const res = await axios.get(`/api/pasien/${selectedPatient.id}/paket`);
       setPackages(res.data);
-      setNamaPaket('');
-      alert('Paket treatment berhasil ditambahkan!');
+      alert(`Paket treatment ${namaPaket} berhasil ditambahkan ke pasien!`);
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menambahkan paket');
     }
   };
 
-  const handleUsePackage = async (paketId) => {
-    if (!window.confirm('Gunakan 1 kuota paket treatment ini sekarang?')) return;
+  const handleCreateMasterPkg = async (e) => {
+    e.preventDefault();
+    if (!newMasterNama || !newMasterItemA) {
+      alert('Nama Paket dan Nama Item A wajib diisi!');
+      return;
+    }
     try {
-      const res = await axios.post(`/api/pasien/paket/${paketId}/use`, { notes: 'Tindakan klinik' });
+      await axios.post('/api/master-paket', {
+        nama_paket: newMasterNama,
+        item_a_name: newMasterItemA,
+        item_a_kuota: Number(newMasterKuotaA) || 1,
+        item_b_name: newMasterItemB || null,
+        item_b_kuota: Number(newMasterKuotaB) || 0,
+        harga_paket: Number(newMasterHarga) || 0
+      });
+      alert('Master Template Paket berhasil ditambahkan!');
+      fetchMasterPackages();
+      setNewMasterNama('');
+      setNewMasterItemA('');
+      setNewMasterKuotaA(3);
+      setNewMasterItemB('');
+      setNewMasterKuotaB(2);
+      setNewMasterHarga(0);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyimpan template master paket');
+    }
+  };
+
+  const handleDeleteMasterPkg = async (id, nama) => {
+    if (!window.confirm(`Hapus template master paket "${nama}"?`)) return;
+    try {
+      await axios.delete(`/api/master-paket/${id}`);
+      fetchMasterPackages();
+    } catch (err) {
+      alert('Gagal menghapus template master paket');
+    }
+  };
+
+  const openClaimModal = (pkg, itemKey) => {
+    setSelectedClaimPkg(pkg);
+    setClaimItemKey(itemKey);
+    setClaimStaffId('');
+    setClaimNotes('');
+    const targetLini = itemKey === 'B' ? 'Beautician' : 'Nurse';
+    setKebutuhanLayanan(targetLini);
+    fetchStaffAvailability(targetLini);
+    setShowClaimModal(true);
+  };
+
+  const handleProcessClaim = async (e) => {
+    e.preventDefault();
+    if (!selectedClaimPkg || !claimStaffId) {
+      alert('Pilih petugas bertugas!');
+      return;
+    }
+    setSubmittingClaim(true);
+    try {
+      const res = await axios.post(`/api/pasien/paket/${selectedClaimPkg.id}/claim`, {
+        item_key: claimItemKey,
+        petugas_id: claimStaffId,
+        notes: claimNotes
+      });
       alert(res.data.message);
+      setShowClaimModal(false);
       const updated = await axios.get(`/api/pasien/${selectedPatient.id}/paket`);
       setPackages(updated.data);
+      fetchPackageUsageLogs();
+      fetchTodayDoingan();
     } catch (err) {
-      alert(err.response?.data?.message || 'Gagal memproses paket');
+      alert(err.response?.data?.message || 'Gagal memproses klaim paket');
+    } finally {
+      setSubmittingClaim(false);
     }
+  };
+
+  const handleExportPackageLogs = () => {
+    if (packageLogs.length === 0) {
+      alert('Belum ada histori klaim paket untuk diexport');
+      return;
+    }
+    const exportData = packageLogs.map((log, index) => ({
+      'No.': index + 1,
+      'Tanggal & Waktu Klaim': log.used_at ? new Date(log.used_at).toLocaleString('id-ID') : '-',
+      'Nama Pasien': log.pasien_nama || '-',
+      'No. HP Pasien': log.pasien_hp || '-',
+      'Nama Paket': log.nama_paket || '-',
+      'Porsi/Item Diklaim': log.item_claimed || '-',
+      'Petugas Bertugas': log.petugas_nama || '-',
+      'Admin FO Penginput': log.user_fo_nama || '-',
+      'Catatan': log.notes || '-'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Histori Klaim Paket');
+    XLSX.writeFile(workbook, `Histori_Klaim_Paket_DEFLOW_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const handleExportMarketingRecap = () => {
+    if (marketingRecap.length === 0) {
+      alert('Belum ada data rekap marketing untuk diexport');
+      return;
+    }
+    const exportData = marketingRecap.map((m, index) => ({
+      'No.': index + 1,
+      'Nama Marketing': m.marketing_nama || '-',
+      'Role / Lini Profesi': m.marketing_role || 'Marketing',
+      'Jumlah Pasien Trial Didapatkan': m.total_trial_count || 0,
+      'Total Komisi Trial (Rp 10.000 / Pasien)': m.total_komisi_marketing || 0
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Komisi Marketing');
+    XLSX.writeFile(workbook, `Rekap_Komisi_Marketing_Trial_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const openReminderModal = (p) => {
@@ -769,10 +957,40 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 Member ({patients.filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler').length})
               </button>
 
+              <button
+                type="button"
+                onClick={() => setShowMasterPkgModal(true)}
+                className="px-3 py-1.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                title="Kelola Master Template Paket Treatment"
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>Master Template Paket</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowLogsModal(true)}
+                className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                title="Histori Klaim Paket Pasien"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Histori Klaim Paket ({packageLogs.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowMarketingModal(true)}
+                className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                title="Rekap Data Pasien Trial & Komisi Marketing (10K)"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Rekap Marketing (10K)</span>
+              </button>
+
               {canExportExcel && (
                 <button
                   onClick={handleExportExcel}
-                  className="ml-2 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="ml-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   title="Export master data pasien ke Excel"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
@@ -792,7 +1010,6 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                     <th className="py-3 px-4 min-w-[140px]">Nama Pasien</th>
                     <th className="py-3 px-4 min-w-[130px]">Kontak (HP & NIK)</th>
                     <th className="py-3 px-4 whitespace-nowrap">Tipe Pasien</th>
-                    <th className="py-3 px-4 min-w-[150px]">Detail Medis (Member)</th>
                     <th className="py-3 px-4 whitespace-nowrap">Poin</th>
                     <th className="py-3 px-4 text-right min-w-[360px] whitespace-nowrap">AKSI / KELOLA MASTER DATA</th>
                   </tr>
@@ -800,7 +1017,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 <tbody className="divide-y divide-[#e5ded4]">
                   {filteredPatients.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="text-center py-8 text-[#83746f] italic">Tidak ada data pasien yang cocok dengan filter master database.</td>
+                      <td colSpan="6" className="text-center py-8 text-[#83746f] italic">Tidak ada data pasien yang cocok dengan filter master database.</td>
                     </tr>
                   ) : (
                     filteredPatients.map(p => {
@@ -825,18 +1042,6 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                             }`}>
                               {isMember ? 'MEMBER' : 'TRIAL'}
                             </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-[11px] text-[#514440]">
-                            {isMember ? (
-                              <div className="space-y-0.5">
-                                {p.tgl_lahir && <div>Lahir: {p.tgl_lahir}</div>}
-                                {p.jenis_kulit && <div>Kulit: <span className="font-semibold">{p.jenis_kulit}</span></div>}
-                                {p.riwayat_alergi && <div className="text-red-600 font-medium">Alergi: {p.riwayat_alergi}</div>}
-                                {!p.tgl_lahir && !p.jenis_kulit && !p.riwayat_alergi && <div className="text-gray-400 italic">Belum diisi</div>}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 italic">Non-Member (Trial)</span>
-                            )}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-[#7d5141] whitespace-nowrap">
                             +{p.total_poin || 0} Poin
@@ -871,14 +1076,16 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                               <span>Paket</span>
                             </button>
 
-                            <button
-                              onClick={() => openReminderModal(p)}
-                              className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
-                              title="Set Reminder Kontrol WA"
-                            >
-                              <Calendar className="w-3.5 h-3.5" />
-                              <span>Reminder</span>
-                            </button>
+                            {waReminderEnabled && (
+                              <button
+                                onClick={() => openReminderModal(p)}
+                                className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
+                                title="Set Reminder Kontrol WA"
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                                <span>Reminder</span>
+                              </button>
+                            )}
 
                             {canDeletePatient && (
                               <button
@@ -1187,10 +1394,10 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
         </div>
       )}
 
-      {/* MODAL KELOLA PAKET TREATMENT */}
+      {/* MODAL KELOLA PAKET TREATMENT MEMBER */}
       {showPackageModal && selectedPatient && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4]">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4] max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
               <div>
                 <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Kelola Paket Treatment Member</h3>
@@ -1200,27 +1407,60 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
             </div>
 
             {/* List Existing Packages */}
-            <div className="space-y-2">
-              <h4 className="font-bold text-xs text-[#7d5141] uppercase">Daftar Paket Aktif</h4>
+            <div className="space-y-3">
+              <h4 className="font-bold text-xs text-[#7d5141] uppercase">Daftar Paket Treatment Aktif</h4>
               {packages.length === 0 ? (
                 <p className="text-xs text-gray-400 italic">Belum ada paket treatment aktif untuk pasien ini.</p>
               ) : (
                 packages.map(pkg => (
-                  <div key={pkg.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
-                      <div className="text-[11px] text-[#514440]">
-                        Sisa Kuota: <span className="font-bold text-emerald-700">{pkg.sisa_kuota}</span> / {pkg.total_kuota} Sesi
+                  <div key={pkg.id} className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-3 text-xs shadow-2xs">
+                    <div className="flex justify-between items-center border-b border-[#d6c2bd]/60 pb-2">
+                      <div className="font-bold text-sm text-[#1e1b15]">{pkg.nama_paket}</div>
+                      <div className="text-xs font-mono font-bold text-[#7d5141]">
+                        Total Sisa Kuota: <span className="text-emerald-700">{pkg.sisa_kuota}</span> / {pkg.total_kuota} Sesi
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleUsePackage(pkg.id)}
-                      disabled={pkg.sisa_kuota <= 0}
-                      className="px-3 py-1.5 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 text-white font-bold rounded-lg text-xs cursor-pointer shadow-xs"
-                    >
-                      Klaim 1 Sesi
-                    </button>
+                    {/* Sub-item A & B Quotas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {pkg.item_a_name && (
+                        <div className="p-2.5 bg-white rounded-xl border border-[#d6c2bd]/70 flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-[#1e1b15]">{pkg.item_a_name}</div>
+                            <div className="text-[10px] text-gray-500">
+                              Sisa: <strong className="text-emerald-700">{pkg.item_a_kuota || 0}</strong> / {pkg.item_a_total || pkg.total_kuota}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={(pkg.item_a_kuota || 0) <= 0}
+                            onClick={() => openClaimModal(pkg, 'A')}
+                            className="px-2.5 py-1 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 text-white font-bold rounded-lg text-[10px] cursor-pointer shadow-2xs"
+                          >
+                            Klaim Item A
+                          </button>
+                        </div>
+                      )}
+
+                      {pkg.item_b_name && (
+                        <div className="p-2.5 bg-white rounded-xl border border-[#d6c2bd]/70 flex items-center justify-between">
+                          <div>
+                            <div className="font-bold text-[#1e1b15]">{pkg.item_b_name}</div>
+                            <div className="text-[10px] text-gray-500">
+                              Sisa: <strong className="text-emerald-700">{pkg.item_b_kuota || 0}</strong> / {pkg.item_b_total || 0}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={(pkg.item_b_kuota || 0) <= 0}
+                            onClick={() => openClaimModal(pkg, 'B')}
+                            className="px-2.5 py-1 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 text-white font-bold rounded-lg text-[10px] cursor-pointer shadow-2xs"
+                          >
+                            Klaim Item B
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
@@ -1228,7 +1468,22 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
 
             {/* Form Add New Package */}
             <form onSubmit={handleAddPackage} className="pt-3 border-t border-[#e5ded4] space-y-3 text-xs">
-              <h4 className="font-bold text-xs text-[#7d5141] uppercase">+ Tambah Paket Treatment Baru</h4>
+              <div className="flex justify-between items-center">
+                <h4 className="font-bold text-xs text-[#7d5141] uppercase">+ Assign / Tambah Paket Baru ke Pasien</h4>
+                {masterPackages.length > 0 && (
+                  <select
+                    value={selectedMasterPkgId}
+                    onChange={handleMasterPackageSelect}
+                    className="px-2 py-1 bg-[#faf3e8] border border-[#d6c2bd] rounded-lg font-bold text-[11px] text-[#7d5141]"
+                  >
+                    <option value="">-- Pilih Template Master --</option>
+                    {masterPackages.map(mp => (
+                      <option key={mp.id} value={mp.id}>{mp.nama_paket} (Rp {mp.harga_paket?.toLocaleString('id-ID')})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               <div>
                 <label className="block text-[#514440] font-semibold mb-1">Nama Paket *</label>
                 <input
@@ -1236,39 +1491,74 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                   required
                   value={namaPaket}
                   onChange={(e) => setNamaPaket(e.target.value)}
-                  placeholder="Nama Paket (e.g. Paket Laser Salmon 5x)..."
-                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15]"
+                  placeholder="Nama Paket..."
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[#514440] font-semibold mb-1">Total Kuota (Sesi)</label>
+                  <label className="block text-[#514440] font-semibold mb-1">Nama Tindakan 1 (Item A) *</label>
+                  <input
+                    type="text"
+                    required
+                    value={itemAName}
+                    onChange={(e) => setItemAName(e.target.value)}
+                    placeholder="e.g. Tindakan Dokter A..."
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Kuota Item A (Sesi)</label>
                   <input
                     type="number"
                     min="1"
-                    value={totalKuota}
-                    onChange={(e) => setTotalKuota(e.target.value)}
+                    value={itemAKuota}
+                    onChange={(e) => setItemAKuota(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Nama Tindakan 2 (Item B - Opsional)</label>
+                  <input
+                    type="text"
+                    value={itemBName}
+                    onChange={(e) => setItemBName(e.target.value)}
+                    placeholder="e.g. Facial..."
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#514440] font-semibold mb-1">Harga Total Paket (Rp)</label>
+                  <label className="block text-[#514440] font-semibold mb-1">Kuota Item B (Sesi)</label>
                   <input
                     type="number"
                     min="0"
-                    value={hargaPaket}
-                    onChange={(e) => setHargaPaket(e.target.value)}
+                    value={itemBKuota}
+                    onChange={(e) => setItemBKuota(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[#514440] font-semibold mb-1">Harga Paket Total (Rp)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={hargaPaket}
+                  onChange={(e) => setHargaPaket(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
               </div>
 
               <button
                 type="submit"
                 className="w-full py-2.5 bg-[#514440] hover:bg-[#333029] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
               >
-                + Simpan Paket Member
+                + Simpan & Assign Paket Member
               </button>
             </form>
           </div>
@@ -1319,6 +1609,350 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KLAIM PORSI/ITEM PAKET */}
+      {showClaimModal && selectedClaimPkg && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4]">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Klaim Porsi / Item Paket Treatment</h3>
+                <p className="text-xs text-[#83746f]">Paket: <span className="font-bold text-[#7d5141]">{selectedClaimPkg.nama_paket}</span></p>
+              </div>
+              <button onClick={() => setShowClaimModal(false)} className="text-gray-400 font-bold text-xl hover:text-black">×</button>
+            </div>
+
+            <form onSubmit={handleProcessClaim} className="space-y-3 text-xs">
+              <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-1">
+                <div className="font-bold text-[#1e1b15] text-sm">
+                  Item Klaim: <span className="text-[#7d5141]">{claimItemKey === 'A' ? selectedClaimPkg.item_a_name : selectedClaimPkg.item_b_name}</span>
+                </div>
+                <div className="text-xs text-emerald-800 font-semibold">
+                  Sisa Kuota: {claimItemKey === 'A' ? selectedClaimPkg.item_a_kuota : selectedClaimPkg.item_b_kuota} Sesi
+                </div>
+                <div className="text-[10px] text-gray-500 mt-1">
+                  *Klaim paket memotong kuota dan otomatis masuk ke antrean Doingan petugas dengan status Gratis (Prepaid Rp 0). Petugas menerima komisi standar. Marketing tidak mendapat komisi.
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[#514440] font-semibold mb-1">Pilih Petugas Bertugas ({kebutuhanLayanan}) *</label>
+                <select
+                  required
+                  value={claimStaffId}
+                  onChange={(e) => setClaimStaffId(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                >
+                  <option value="">-- Select Petugas Bertugas --</option>
+                  {staffList.map(s => (
+                    <option key={s.id} value={s.id} disabled={s.is_busy}>
+                      {s.full_name} ({s.role}) {s.is_busy ? '[SEDANG DITANGANI PASIEN LAIN]' : '[READY]'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[#514440] font-semibold mb-1">Catatan Pengeklaiman (Opsional)</label>
+                <input
+                  type="text"
+                  value={claimNotes}
+                  onChange={(e) => setClaimNotes(e.target.value)}
+                  placeholder="Catatan pengerjaan / area..."
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15]"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-[#e5ded4]">
+                <button
+                  type="button"
+                  onClick={() => setShowClaimModal(false)}
+                  className="px-4 py-2 bg-gray-100 text-[#514440] font-bold rounded-xl"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingClaim}
+                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  {submittingClaim ? 'Memproses...' : 'Konfirmasi Klaim Paket'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KELOLA MASTER TEMPLATE PAKET */}
+      {showMasterPkgModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4] max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Kelola Master Template Paket</h3>
+                <p className="text-xs text-[#83746f]">Atur template paket default (Ultimate 1, Ultimate 2, Botox, dll) agar dapat dipilih saat penambahan kuota pasien.</p>
+              </div>
+              <button onClick={() => setShowMasterPkgModal(false)} className="text-gray-400 font-bold text-xl hover:text-black">×</button>
+            </div>
+
+            {/* List Existing Master Templates */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-xs text-[#7d5141] uppercase">Daftar Master Template Paket Saat Ini</h4>
+              <div className="space-y-2">
+                {masterPackages.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">Belum ada template master paket.</p>
+                ) : (
+                  masterPackages.map(mp => (
+                    <div key={mp.id} className="p-3.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-sm text-[#1e1b15]">{mp.nama_paket}</div>
+                        <div className="text-[#514440] font-medium">
+                          Item A: <strong className="text-[#7d5141]">{mp.item_a_name}</strong> ({mp.item_a_kuota} Sesi)
+                          {mp.item_b_name && (
+                            <span className="ml-2">| Item B: <strong className="text-[#7d5141]">{mp.item_b_name}</strong> ({mp.item_b_kuota} Sesi)</span>
+                          )}
+                        </div>
+                        <div className="text-[11px] font-bold text-emerald-800 mt-0.5">
+                          Harga Standard: Rp {(mp.harga_paket || 0).toLocaleString('id-ID')}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMasterPkg(mp.id, mp.nama_paket)}
+                        className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-lg text-[11px] cursor-pointer"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Form Add New Master Template */}
+            <form onSubmit={handleCreateMasterPkg} className="pt-3 border-t border-[#e5ded4] space-y-3 text-xs">
+              <h4 className="font-bold text-xs text-[#7d5141] uppercase">+ Tambah Master Template Paket Baru</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Nama Paket *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newMasterNama}
+                    onChange={(e) => setNewMasterNama(e.target.value)}
+                    placeholder="e.g. Ultimate 3 / Botox..."
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Harga Paket Standard (Rp)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newMasterHarga}
+                    onChange={(e) => setNewMasterHarga(e.target.value)}
+                    placeholder="2500000..."
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Nama Item A *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newMasterItemA}
+                    onChange={(e) => setNewMasterItemA(e.target.value)}
+                    placeholder="e.g. Tindakan Dokter A..."
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Kuota Item A (Sesi)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newMasterKuotaA}
+                    onChange={(e) => setNewMasterKuotaA(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Nama Item B (Opsional)</label>
+                  <input
+                    type="text"
+                    value={newMasterItemB}
+                    onChange={(e) => setNewMasterItemB(e.target.value)}
+                    placeholder="e.g. Facial..."
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#514440] font-semibold mb-1">Kuota Item B (Sesi)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newMasterKuotaB}
+                    onChange={(e) => setNewMasterKuotaB(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer"
+              >
+                + Simpan Master Template Paket
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL HISTORI KLAIM PAKET */}
+      {showLogsModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4] max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-lg text-[#1e1b15] flex items-center gap-2">
+                  <History className="w-5 h-5 text-blue-700" />
+                  <span>Historical Klaim Paket Treatment Pasien</span>
+                </h3>
+                <p className="text-xs text-[#83746f]">Rekap riwayat kapan pasien mengambil/ngeklaim paket treatment kuota.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportPackageLogs}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Export Excel</span>
+                </button>
+                <button onClick={() => setShowLogsModal(false)} className="text-gray-400 font-bold text-xl hover:text-black">×</button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-[#e5ded4] overflow-hidden">
+              <div className="overflow-x-auto max-h-96">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                    <tr>
+                      <th className="py-2.5 px-3 whitespace-nowrap">Tanggal & Jam Klaim</th>
+                      <th className="py-2.5 px-3">Nama Pasien</th>
+                      <th className="py-2.5 px-3">Nama Paket</th>
+                      <th className="py-2.5 px-3">Item / Porsi Klaim</th>
+                      <th className="py-2.5 px-3">Petugas Assigned</th>
+                      <th className="py-2.5 px-3">FO Penginput</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e5ded4]">
+                    {packageLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="text-center py-6 text-gray-400 italic">Belum ada riwayat pengeklaiman paket.</td>
+                      </tr>
+                    ) : (
+                      packageLogs.map(log => (
+                        <tr key={log.id} className="hover:bg-[#fff8f0]">
+                          <td className="py-2.5 px-3 font-semibold text-[#1e1b15] whitespace-nowrap">
+                            {log.used_at ? new Date(log.used_at).toLocaleString('id-ID') : '-'}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-[#7d5141]">
+                            {log.pasien_nama} ({log.pasien_hp})
+                          </td>
+                          <td className="py-2.5 px-3 font-medium text-[#1e1b15]">
+                            {log.nama_paket}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-bold text-[10px]">
+                              {log.item_claimed}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-[#514440]">
+                            {log.petugas_nama || '-'}
+                          </td>
+                          <td className="py-2.5 px-3 text-gray-500">
+                            {log.user_fo_nama || '-'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL REKAP MARKETING 10K */}
+      {showMarketingModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4] max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-lg text-[#1e1b15] flex items-center gap-2">
+                  <Users className="w-5 h-5 text-amber-700" />
+                  <span>Rekap Data Pasien Trial & Komisi Marketing (10K / Pasien)</span>
+                </h3>
+                <p className="text-xs text-[#83746f]">Menampilkan berapa data trial yang didapatkan masing-masing user marketing dan total komisinya.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportMarketingRecap}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Export Excel</span>
+                </button>
+                <button onClick={() => setShowMarketingModal(false)} className="text-gray-400 font-bold text-xl hover:text-black">×</button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-[#e5ded4] overflow-hidden">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-2.5 px-3">No.</th>
+                    <th className="py-2.5 px-3">Nama Marketing</th>
+                    <th className="py-2.5 px-3">Role / Lini</th>
+                    <th className="py-2.5 px-3 text-center">Jml Pasien Trial Selesai</th>
+                    <th className="py-2.5 px-3 text-right">Total Komisi (Rp 10.000 / Pasien)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {marketingRecap.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="text-center py-6 text-gray-400 italic">Belum ada data pencapaian marketing.</td>
+                    </tr>
+                  ) : (
+                    marketingRecap.map((m, idx) => (
+                      <tr key={m.marketing_id || idx} className="hover:bg-[#fff8f0]">
+                        <td className="py-2.5 px-3 text-gray-500">{idx + 1}</td>
+                        <td className="py-2.5 px-3 font-bold text-[#1e1b15]">{m.marketing_nama}</td>
+                        <td className="py-2.5 px-3 text-[#83746f]">{m.marketing_role || 'Marketing'}</td>
+                        <td className="py-2.5 px-3 text-center font-bold text-amber-800">{m.total_trial_count || 0} Pasien</td>
+                        <td className="py-2.5 px-3 text-right font-bold text-emerald-700 font-mono text-sm">
+                          Rp {(m.total_komisi_marketing || 0).toLocaleString('id-ID')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

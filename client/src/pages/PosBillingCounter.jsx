@@ -138,14 +138,11 @@ export default function PosBillingCounter() {
       const unbilled = unbilledRes.data || [];
       setUnbilledList(unbilled);
 
-      const activeUnbilledPatients = pRes.data.filter(p => unbilled.some(doi => doi.pasien_id === p.id));
-      if (activeUnbilledPatients.length > 0) {
-        setSelectedPatientId(activeUnbilledPatients[0].id);
-        const doi = unbilled.find(d => d.pasien_id === activeUnbilledPatients[0].id);
-        if (doi) handleProcessUnbilledDoingan(doi, tRes.data);
-      } else {
-        setSelectedPatientId('');
-        setCart([]);
+      if (pRes.data && pRes.data.length > 0) {
+        const activeUnbilled = unbilled.length > 0 ? pRes.data.find(p => p.id === unbilled[0].pasien_id) : null;
+        const defaultId = activeUnbilled ? activeUnbilled.id : pRes.data[0].id;
+        setSelectedPatientId(defaultId);
+        if (unbilled.length > 0) handleProcessUnbilledDoingan(unbilled[0], tRes.data);
       }
     } catch (err) {
       console.error('Error fetching POS data', err);
@@ -227,6 +224,11 @@ export default function PosBillingCounter() {
   const changeAmount = Math.max(0, payment - grandTotal);
   const earnedPoints = Math.floor(grandTotal / 50000);
 
+  const filteredPatients = patients.filter(p => {
+    const q = (patientSearch || '').toLowerCase();
+    return (p.nama_lengkap || '').toLowerCase().includes(q) || (p.no_hp || '').includes(q);
+  });
+
   const selectedPatient = patients.find(p => p.id === selectedPatientId);
   const selectedTherapistUser = users.find(u => u.id === selectedTherapistId);
 
@@ -272,13 +274,6 @@ export default function PosBillingCounter() {
       setSubmitting(false);
     }
   };
-
-  // Only patients who have completed treatment today and are not yet billed
-  const activePosPatients = patients.filter(p => unbilledList.some(doi => doi.pasien_id === p.id));
-
-  const filteredPatients = activePosPatients.filter(p => 
-    p.nama_lengkap.toLowerCase().includes(patientSearch.toLowerCase()) || p.no_hp.includes(patientSearch)
-  );
 
   const filteredProducts = products.filter(p => 
     p.nama_produk.toLowerCase().includes(itemSearch.toLowerCase()) || (p.kode_sku && p.kode_sku.toLowerCase().includes(itemSearch.toLowerCase()))
