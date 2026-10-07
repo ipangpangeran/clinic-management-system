@@ -1,8 +1,8 @@
 import React, { useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { 
-  LayoutDashboard, UserPlus, ShoppingBag, PackageCheck, 
+import {
+  LayoutDashboard, UserPlus, ShoppingBag, PackageCheck,
   DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles, X, Users, Database
 } from 'lucide-react';
 
@@ -19,8 +19,8 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
   const navItems = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, module: null },
     { id: 'patients', label: 'Pendaftaran Pasien & Treatment', icon: UserPlus, module: 'patient_intake' },
-    { id: 'master_customer', label: 'Master Data Pelanggan', icon: Database, module: 'patient_management' },
     { id: 'customer_database', label: 'Detail Data Pelanggan', icon: Users, module: 'patient_management' },
+    { id: 'master_customer', label: 'Master Data Pelanggan', icon: Database, module: 'patient_management' },
     { id: 'doingan', label: 'Doingan & Aktivitas Perawatan', icon: Sparkles, module: 'doingan' },
     { id: 'pos', label: 'POS & Billing Counter', icon: ShoppingBag, module: 'patient_packages' },
     { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'] },
@@ -49,9 +49,9 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
         {/* Brand Logo Header */}
         <div className="px-6 py-5 border-b border-[#e5ded4] relative flex items-center justify-center bg-[#2a241e]">
           <div className="flex items-center justify-center w-full">
-            <img 
-              src="/logo/DEFLOW_LOGO_TAGLINE.png" 
-              alt="DEFLOW Aesthetic Clinic" 
+            <img
+              src="/logo/DEFLOW_LOGO_TAGLINE.png"
+              alt="DEFLOW Aesthetic Clinic"
               className="h-12 sm:h-14 max-w-[85%] object-contain transition-all hover:scale-105 mx-auto"
               onError={(e) => {
                 e.target.onerror = null;
@@ -60,7 +60,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
             />
           </div>
           {setIsMobileMenuOpen && (
-            <button 
+            <button
               onClick={() => setIsMobileMenuOpen(false)}
               className="lg:hidden absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-300 hover:text-white rounded-lg hover:bg-white/10 transition-all cursor-pointer"
             >
@@ -100,11 +100,10 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all cursor-pointer ${
-                  isActive 
-                    ? 'bg-[#7d5141] text-white shadow-md font-bold' 
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all cursor-pointer ${isActive
+                    ? 'bg-[#7d5141] text-white shadow-md font-bold'
                     : 'text-[#514440] hover:bg-[#faf3e8] hover:text-[#1e1b15]'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#83746f]'}`} />
@@ -141,7 +140,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           {/* Backdrop */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={() => setIsMobileMenuOpen(false)}
           />

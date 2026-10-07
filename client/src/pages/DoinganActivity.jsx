@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { AuthContext } from '../context/AuthContext';
-import { 
+import {
   Sparkles, User, FileCheck, DollarSign, Award, Plus, Trash2, CheckCircle2, ShieldAlert,
   Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck, UserPlus, FileText, Search, FileSpreadsheet
 } from 'lucide-react';
@@ -161,7 +161,7 @@ export default function DoinganActivity() {
     }
 
     const monthNames = [
-      "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI", 
+      "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
       "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
     ];
     const d = new Date();
@@ -254,19 +254,17 @@ export default function DoinganActivity() {
         <div className="flex overflow-x-auto gap-2 border-b border-[#e5ded4] pb-3 text-xs whitespace-nowrap">
           <button
             onClick={() => setActiveMainTab('LIVE_STATUS')}
-            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeMainTab === 'LIVE_STATUS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
-            }`}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeMainTab === 'LIVE_STATUS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+              }`}
           >
             <Clock className="w-4 h-4" />
-            <span>Monitoring Status Live Petugas (Beautician & Nurse)</span>
+            <span>Monitoring Status Live Petugas (BTC & Nurse)</span>
           </button>
 
           <button
             onClick={() => setActiveMainTab('RECAP')}
-            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeMainTab === 'RECAP' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
-            }`}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeMainTab === 'RECAP' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+              }`}
           >
             <FileText className="w-4 h-4" />
             <span>Dashboard Rekapitulasi & Filter Komisi</span>
@@ -297,9 +295,8 @@ export default function DoinganActivity() {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {beauticianList.map(s => (
-                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
-                    s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
-                  }`}>
+                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
+                    }`}>
                     <div className="flex justify-between items-center">
                       <div className="font-bold text-sm text-[#1e1b15]">{s.full_name}</div>
                       {s.is_busy ? (
@@ -333,9 +330,8 @@ export default function DoinganActivity() {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {nurseList.map(s => (
-                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
-                    s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
-                  }`}>
+                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
+                    }`}>
                     <div className="flex justify-between items-center">
                       <div className="font-bold text-sm text-[#1e1b15]">{s.full_name}</div>
                       {s.is_busy ? (
@@ -552,9 +548,8 @@ export default function DoinganActivity() {
                             <div className="text-[10px] text-gray-500">{item.kategori_layanan}</div>
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              item.status_pengerjaan === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'
-                            }`}>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.status_pengerjaan === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'
+                              }`}>
                               {item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : 'IN PROGRESS'}
                             </span>
                           </td>

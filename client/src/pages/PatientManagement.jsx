@@ -831,7 +831,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 className="px-4 py-2.5 bg-white hover:bg-[#fff8f0] text-[#7d5141] border border-[#d6c2bd] font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-2"
               >
                 <Search className="w-4 h-4 text-[#7d5141]" />
-                <span>🔍 Cari Pasien Lama (Kunjungan Berulang)</span>
+                <span>🔍 Cari Pasien Lama</span>
               </button>
 
               <button
@@ -840,7 +840,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 className="px-4 py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
               >
                 <UserPlus className="w-4 h-4" />
-                <span>+ Register Pasien Baru</span>
+                <span>Register Pasien Baru</span>
               </button>
             </div>
           </div>
@@ -883,7 +883,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                   {activeTodayQueue.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="text-center py-10 text-gray-400 italic">
-                        Belum ada antrean treatment pasien yang aktif hari ini. Klik <strong>+ Register Pasien Baru</strong> atau <strong>🔍 Cari Pasien Lama</strong> di atas.
+                        Belum ada antrean treatment pasien yang aktif hari ini. Klik <strong>Register Pasien Baru</strong> atau <strong>🔍 Cari Pasien Lama</strong> di atas.
                       </td>
                     </tr>
                   ) : (
@@ -1211,10 +1211,10 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                   <tr>
                     <th className="py-3 px-4 whitespace-nowrap">Tgl Terdaftar</th>
                     <th className="py-3 px-4 min-w-[140px]">Nama Pasien</th>
-                    <th className="py-3 px-4 min-w-[130px]">Kontak (HP & NIK)</th>
+                    <th className="py-3 px-4 min-w-[130px]">HP & NIK</th>
                     <th className="py-3 px-4 whitespace-nowrap">Tipe Pasien</th>
                     <th className="py-3 px-4 whitespace-nowrap">Poin</th>
-                    <th className="py-3 px-4 text-right min-w-[360px] whitespace-nowrap">AKSI / KELOLA MASTER DATA</th>
+                    <th className="py-3 px-4 text-right min-w-[360px] whitespace-nowrap">AKSI</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
@@ -1334,7 +1334,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
               <div>
                 <h3 className="font-serif font-bold text-lg text-[#1e1b15] flex items-center gap-2">
                   <Search className="w-5 h-5 text-[#7d5141]" />
-                  <span>Pencarian Pasien Terdaftar (Kunjungan Berulang)</span>
+                  <span>🔍 Cari Pasien Lama</span>
                 </h3>
                 <p className="text-xs text-[#83746f]">Cari pasien lama berdasarkan Nama, No. HP, atau NIK untuk dibuatkan sesi pengerjaan treatment hari ini.</p>
               </div>

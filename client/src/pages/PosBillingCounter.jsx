@@ -154,8 +154,12 @@ export default function PosBillingCounter() {
     setSelectedTherapistId(doi.petugas_id);
     setActiveDoinganId(doi.id);
 
+    const targetPatient = patients.find(p => p.id === doi.pasien_id);
+    const isTrial = (doi.status_doingan === 'Trial' || doi.tipe_pasien === 'TRIAL' || (targetPatient && targetPatient.tipe_pasien === 'TRIAL'));
+
     const matchingTreatment = tList.find(t => t.id === doi.tindakan_id) || tList.find(t => t.nama_tindakan === doi.nama_tindakan);
-    const finalPrice = matchingTreatment ? (matchingTreatment.tarif_tindakan_medis || matchingTreatment.tarif_konsul_dokter || 150000) : 150000;
+    const basePrice = matchingTreatment ? (matchingTreatment.harga_paket || matchingTreatment.tarif_tindakan_medis || matchingTreatment.tarif_konsul_dokter || 0) : 0;
+    const finalPrice = isTrial ? 0 : basePrice;
 
     const newItem = {
       item_id: doi.tindakan_id || 'doi-' + doi.id,
@@ -180,19 +184,26 @@ export default function PosBillingCounter() {
   };
 
   const addToCart = (item, type) => {
+    const selectedPatient = patients.find(p => p.id === selectedPatientId);
+    const isTrial = selectedPatient && selectedPatient.tipe_pasien === 'TRIAL';
+
     const existingIndex = cart.findIndex(c => c.item_id === item.id && c.jenis_item === type);
     if (existingIndex > -1) {
       const updatedCart = [...cart];
       updatedCart[existingIndex].jumlah += 1;
       setCart(updatedCart);
     } else {
+      let hargaItem = type === 'RETAIL' ? item.harga_jual : (item.tarif_tindakan_medis || item.tarif_konsul_dokter || 0);
+      if (type === 'TINDAKAN' && isTrial) {
+        hargaItem = 0;
+      }
       const newItem = {
         item_id: item.id,
         produk_id: type === 'RETAIL' ? item.id : null,
         tindakan_id: type === 'TINDAKAN' ? item.id : null,
         jenis_item: type,
         nama_item: type === 'RETAIL' ? item.nama_produk : item.nama_tindakan,
-        harga_satuan: type === 'RETAIL' ? item.harga_jual : (item.tarif_tindakan_medis || item.tarif_konsul_dokter),
+        harga_satuan: hargaItem,
         jumlah: 1
       };
       setCart([...cart, newItem]);
