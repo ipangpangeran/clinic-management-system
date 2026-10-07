@@ -105,8 +105,12 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const fetchMarketingUsers = async () => {
     try {
       const res = await axios.get('/api/users');
-      // Include all staff so FO admin can assign any marketing user or staff
-      setMarketingList(res.data || []);
+      // Only include users whose role or lini_profesi is Marketing
+      const marketingOnly = (res.data || []).filter(u => 
+        (u.role || '').toLowerCase() === 'marketing' || 
+        (u.lini_profesi || '').toLowerCase() === 'marketing'
+      );
+      setMarketingList(marketingOnly);
     } catch (err) {
       console.error('Error fetching users for marketing selection', err);
     }
