@@ -156,6 +156,10 @@ async function initDb() {
         await runQuery('PRAGMA foreign_keys = ON');
         console.log('[DB Migration] pasien table upgraded successfully!');
       }
+    } catch (e) {
+      // ignore table migration error if already migrated
+    }
+
     try {
       await runQuery(`ALTER TABLE pasien ADD COLUMN referrer_pasien_id TEXT`);
     } catch (e) { }
@@ -372,29 +376,43 @@ async function initDb() {
 
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN kategori_layanan TEXT DEFAULT 'Facial (Beautician)'`);
-    } catch (e) { }
+    } catch (e) {
+      // column already exists
+    }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN status_pengerjaan TEXT DEFAULT 'IN_PROGRESS'`);
-    } catch (e) { }
+    } catch (e) {
+      // column already exists
+    }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN started_at DATETIME`);
-    } catch (e) { }
+    } catch (e) {
+      // column already exists
+    }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN completed_at DATETIME`);
-    } catch (e) { }
+    } catch (e) {
+      // column already exists
+    }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN is_billed INTEGER DEFAULT 0`);
-    } catch (e) { }
+    } catch (e) {
+      // column already exists
+    }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN marketing_id TEXT`);
-    } catch (e) { }
+    } catch (e) {
+      // column already exists
+    }
 
     try {
       await runQuery(`UPDATE doingan SET started_at = created_at WHERE started_at IS NULL`);
       await runQuery("UPDATE doingan SET created_at = datetime(created_at, '+7 hours') WHERE created_at < '2026-10-06 00:00:00' AND strftime('%H', created_at) >= '17'");
       await runQuery("UPDATE doingan SET started_at = datetime(started_at, '+7 hours') WHERE started_at < '2026-10-06 00:00:00' AND strftime('%H', started_at) >= '17'");
       await runQuery("UPDATE doingan SET completed_at = datetime(completed_at, '+7 hours') WHERE completed_at < '2026-10-06 00:00:00' AND strftime('%H', completed_at) >= '17'");
-    } catch (e) { }
+    } catch (e) {
+      // ignore
+    }
 
     // Migration: Fix any negative sisa_stok in stok_produk
     try {
@@ -407,12 +425,6 @@ async function initDb() {
     } catch (e) {
       // ignore
     }
-
-    // Migration: Consolidate old roles into Manager
-    try {
-      await runQuery(`UPDATE users SET role = 'Manager' WHERE role IN ('Nurse', 'Beautician', 'Marketing', 'Dokter', 'Therapist / BTC')`);
-      await runQuery(`UPDATE role_permissions SET role = 'Manager' WHERE role IN ('Nurse', 'Beautician', 'Marketing', 'Dokter', 'Therapist / BTC')`);
-    } catch (e) { }
 
     await seedDefaultData();
     console.log('[DB] Database schema and column migration completed.');
@@ -449,17 +461,7 @@ async function seedDefaultData() {
     const existingByUsername = await getQuery('SELECT id FROM users WHERE username = ?', [u.username]);
     const existingById = await getQuery('SELECT id FROM users WHERE id = ?', [u.id]);
 
-    if (existingByUsername) {
-      await runQuery(
-        'UPDATE users SET password = ?, role = ?, full_name = ?, phone = ?, gaji_pokok = ? WHERE id = ?',
-        [u.password, u.role, u.full_name, u.phone, u.gaji_pokok, existingByUsername.id]
-      );
-    } else if (existingById) {
-      await runQuery(
-        'UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ? WHERE id = ?',
-        [u.username, u.password, u.full_name, u.role, u.phone, u.gaji_pokok, u.id]
-      );
-    } else {
+    if (!existingByUsername && !existingById) {
       await runQuery(
         'INSERT INTO users (id, username, password, full_name, role, phone, gaji_pokok) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [u.id, u.username, u.password, u.full_name, u.role, u.phone, u.gaji_pokok]
@@ -472,7 +474,9 @@ async function seedDefaultData() {
     await runQuery(`UPDATE users SET gaji_pokok = 5000000 WHERE role = 'Manager' AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
     await runQuery(`UPDATE users SET gaji_pokok = 4000000 WHERE (role = 'Admin FO' OR role = 'Resepsionis / Cashier') AND (gaji_pokok IS NULL OR gaji_pokok = 0)`);
     await runQuery(`UPDATE users SET gaji_pokok = 0 WHERE role IN ('Super Admin', 'Admin System', 'Admin Klinik')`);
-  } catch (e) { }
+  } catch (e) {
+    // ignore
+  }
 
   const roles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Manager', 'Admin FO', 'Beautician', 'Nurse'];
   const modules = [
