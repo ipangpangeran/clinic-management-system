@@ -45,7 +45,7 @@ export default function ClinicSettingsAcl() {
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const rolesList = ['Super Admin', 'Admin Klinik', 'Manager', 'Admin FO', 'Beautician', 'Nurse'];
+  const rolesList = ['Super Admin', 'Admin Klinik', 'Manager', 'Admin FO', 'Beautician', 'Nurse', 'Marketing'];
   
   const modulesList = [
     { key: 'clinic_profile', name: 'Detail Profil Klinik' },
