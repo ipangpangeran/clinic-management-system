@@ -395,7 +395,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
 
   const filteredRawPatients = patients.filter(p => {
     const searchLower = rawSearch.toLowerCase();
-    const matchSearch = !rawSearch || 
+    const matchSearch = !rawSearch ||
       (p.nama_lengkap && p.nama_lengkap.toLowerCase().includes(searchLower)) ||
       (p.no_hp && p.no_hp.includes(rawSearch)) ||
       (p.no_ktp && p.no_ktp.includes(rawSearch)) ||
@@ -741,8 +741,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     const matchSearch = (p.nama_lengkap || '').toLowerCase().includes(search.toLowerCase()) ||
       (p.no_hp || '').includes(search) ||
       (p.no_ktp && p.no_ktp.includes(search));
-    const matchFilter = filterType === 'ALL' || 
-      (filterType === 'TRIAL' && (p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1)) || 
+    const matchFilter = filterType === 'ALL' ||
+      (filterType === 'TRIAL' && (p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1)) ||
       (filterType === 'MEMBER' && (p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler'));
     let matchDate = true;
     if (dateFilter) {
@@ -762,9 +762,9 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   });
 
   // Active intake queue today (exclude patients whose treatment is completed AND billing finished, and exclude Marketing referral records)
-  const activeTodayQueue = todayDoinganList.filter(d => 
-    !(d.status_pengerjaan === 'COMPLETED' && d.is_billed === 1) && 
-    d.petugas_role !== 'Marketing' && 
+  const activeTodayQueue = todayDoinganList.filter(d =>
+    !(d.status_pengerjaan === 'COMPLETED' && d.is_billed === 1) &&
+    d.petugas_role !== 'Marketing' &&
     d.kategori_layanan !== 'Marketing Referral'
   );
 
@@ -803,33 +803,6 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 ? 'Database mentah pencatatan awal kedatangan seluruh pelanggan. Data kedatangan Trial tersimpan utuh dan tidak terpengaruh migrasi Member.'
                 : 'Kelola profil pelanggan aktif, riwayat poin, klaim paket treatment member, edit profil, dan reminder kontrol.'}
           </p>
-        </div>
-
-        <div className="flex flex-wrap bg-[#faf3e8] p-1 border border-[#d6c2bd] rounded-2xl text-xs font-bold shadow-2xs self-start sm:self-auto gap-1">
-          <button
-            type="button"
-            onClick={() => setViewMode('INTAKE')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${viewMode === 'INTAKE' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Pendaftaran & Intake Hari Ini</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('RAW_MASTER')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${viewMode === 'RAW_MASTER' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
-          >
-            <Database className="w-4 h-4" />
-            <span>Master Data Pelanggan</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('DETAIL')}
-            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${(viewMode === 'DETAIL' || viewMode === 'MASTER') ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Detail Data Pelanggan</span>
-          </button>
         </div>
       </div>
 
@@ -1048,13 +1021,13 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase tracking-wider border-b border-[#e5ded4]">
                   <tr>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Tgl Intake / Registrasi</th>
+                    <th className="py-3.5 px-4 whitespace-nowrap">Tgl Registrasi</th>
                     <th className="py-3.5 px-4 min-w-[150px]">Nama Pasien</th>
-                    <th className="py-3.5 px-4 min-w-[140px]">Kontak (HP & NIK)</th>
+                    <th className="py-3.5 px-4 min-w-[140px]">HP & NIK</th>
                     <th className="py-3.5 px-4 whitespace-nowrap">Tipe Kedatangan Awal</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Status Saat Ini</th>
+                    <th className="py-3.5 px-4 whitespace-nowrap">Tipe Saat Ini</th>
                     <th className="py-3.5 px-4 min-w-[150px]">Marketing Intake</th>
-                    <th className="py-3.5 px-4 text-center whitespace-nowrap">Aksi / Intake Treatment</th>
+                    <th className="py-3.5 px-4 text-center whitespace-nowrap">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
@@ -1083,11 +1056,11 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             {initialTipe === 'TRIAL' ? (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                TRIAL (DATANG AWAL)
+                                TRIAL
                               </span>
                             ) : (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                MEMBER (DATANG AWAL)
+                                MEMBER
                               </span>
                             )}
                           </td>
