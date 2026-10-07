@@ -904,6 +904,21 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/pasien/paket/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ?', [id]);
+    if (!pkg) return res.status(404).json({ message: 'Paket pasien tidak ditemukan' });
+
+    await runQuery('DELETE FROM pasien_paket_usage WHERE pasien_paket_id = ?', [id]);
+    await runQuery('DELETE FROM pasien_paket WHERE id = ?', [id]);
+
+    res.json({ message: `Paket "${pkg.nama_paket}" berhasil dihapus!` });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting patient package', error: err.message });
+  }
+});
+
 // CLAIM / PROCESS USE OF PATIENT PACKAGE ITEM -> CREATES DOINGAN (GRATIS/MEMOTONG KUOTA)
 app.post('/api/pasien/paket/:paketId/claim', authenticateToken, async (req, res) => {
   try {
@@ -935,18 +950,19 @@ app.post('/api/pasien/paket/:paketId/claim', authenticateToken, async (req, res)
     await runQuery(`
       INSERT INTO doingan (
         id, pasien_id, petugas_id, role_petugas, kategori_layanan, 
-        nama_tindakan, status_pengerjaan, status_doingan, is_billed, marketing_id, notes
+        nama_tindakan, status_pengerjaan, status_doingan, is_billed, marketing_id, notes,
+        started_at, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, 'IN_PROGRESS', 'Member', 1, NULL, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 'IN_PROGRESS', 'Member', 1, NULL, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'))
     `, [doinganId, pkg.pasien_id, petugas.id, petugas.role || petugas.lini_profesi, kategoriLayanan, `[Klaim Paket ${pkg.nama_paket}] ${itemClaimedName}`, notes || `Klaim Kuota Paket ${pkg.nama_paket}`]);
 
-    // Record usage log
+    // Record usage log with GMT +7 timestamp
     const usageId = 'usg-' + Date.now();
     await runQuery(`
       INSERT INTO pasien_paket_usage (
-        id, pasien_paket_id, pasien_id, item_claimed, doingan_id, petugas_id, petugas_nama, used_by_user_id, notes
+        id, pasien_paket_id, pasien_id, item_claimed, doingan_id, petugas_id, petugas_nama, used_at, used_by_user_id, notes
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'), ?, ?)
     `, [usageId, paketId, pkg.pasien_id, itemClaimedName, doinganId, petugas.id, petugas.full_name, req.user.id, notes || `Klaim paket ${pkg.nama_paket}`]);
 
     res.json({ 

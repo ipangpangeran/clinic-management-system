@@ -626,6 +626,22 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     }
   };
 
+  const handleDeletePatientPackage = async (paketId, namaPaket) => {
+    if (!window.confirm(`Apakah Anda yakin ingin menghapus paket "${namaPaket}" dari pasien ini?\n\nSeluruh riwayat kuota paket ini akan dibersihkan dari sistem.`)) {
+      return;
+    }
+    try {
+      await axios.delete(`/api/pasien/paket/${paketId}`);
+      alert(`Paket "${namaPaket}" berhasil dihapus!`);
+      if (selectedPatient) {
+        const res = await axios.get(`/api/pasien/${selectedPatient.id}/paket`);
+        setPackages(res.data);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menghapus paket pasien');
+    }
+  };
+
   const handleCreateMasterPkg = async (e) => {
     e.preventDefault();
     if (!newMasterNama || !newMasterItemA) {
@@ -708,14 +724,12 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     }
     const exportData = packageLogs.map((log, index) => ({
       'No.': index + 1,
-      'Tanggal & Waktu Klaim': log.used_at ? new Date(log.used_at).toLocaleString('id-ID') : '-',
-      'Nama Pasien': log.pasien_nama || '-',
-      'No. HP Pasien': log.pasien_hp || '-',
+      'Tanggal & Jam Klaim': log.used_at ? new Date(log.used_at).toLocaleString('id-ID') : '-',
+      'Nama Pasien': log.pasien_nama ? `${log.pasien_nama} (${log.pasien_hp || '-'})` : '-',
       'Nama Paket': log.nama_paket || '-',
-      'Porsi/Item Diklaim': log.item_claimed || '-',
-      'Petugas Bertugas': log.petugas_nama || '-',
-      'Admin FO Penginput': log.user_fo_nama || '-',
-      'Catatan': log.notes || '-'
+      'Item / Porsi Klaim': log.item_claimed || '-',
+      'Petugas Assigned': log.petugas_nama || '-',
+      'Detail tindakan': log.notes || log.item_claimed || '-'
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -1656,10 +1670,21 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 packages.map(pkg => (
                   <div key={pkg.id} className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-3 text-xs shadow-2xs">
                     <div className="flex justify-between items-center border-b border-[#d6c2bd]/60 pb-2">
-                      <div className="font-bold text-sm text-[#1e1b15]">{pkg.nama_paket}</div>
-                      <div className="text-xs font-mono font-bold text-[#7d5141]">
-                        Total Sisa Kuota: <span className="text-emerald-700">{pkg.sisa_kuota}</span> / {pkg.total_kuota} Sesi
+                      <div>
+                        <div className="font-bold text-sm text-[#1e1b15]">{pkg.nama_paket}</div>
+                        <div className="text-xs font-mono font-bold text-[#7d5141]">
+                          Total Sisa Kuota: <span className="text-emerald-700">{pkg.sisa_kuota}</span> / {pkg.total_kuota} Sesi
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePatientPackage(pkg.id, pkg.nama_paket)}
+                        className="px-2.5 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 font-bold rounded-lg text-xs cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
+                        title="Hapus Paket Pasien Ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus</span>
+                      </button>
                     </div>
 
                     {/* Sub-item A & B Quotas */}
@@ -2095,7 +2120,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                       <th className="py-2.5 px-3">Nama Paket</th>
                       <th className="py-2.5 px-3">Item / Porsi Klaim</th>
                       <th className="py-2.5 px-3">Petugas Assigned</th>
-                      <th className="py-2.5 px-3">FO Penginput</th>
+                      <th className="py-2.5 px-3">Detail tindakan</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#e5ded4]">
@@ -2123,8 +2148,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                           <td className="py-2.5 px-3 font-semibold text-[#514440]">
                             {log.petugas_nama || '-'}
                           </td>
-                          <td className="py-2.5 px-3 text-gray-500">
-                            {log.user_fo_nama || '-'}
+                          <td className="py-2.5 px-3 text-[#514440] font-medium">
+                            {log.notes || log.item_claimed || '-'}
                           </td>
                         </tr>
                       ))

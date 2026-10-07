@@ -493,6 +493,7 @@ async function initDb() {
       await runQuery(`UPDATE pasien SET tipe_pasien = 'MEMBER' WHERE tipe_pasien = 'NON-TRIAL' OR tipe_pasien = 'Reguler'`);
       await runQuery(`UPDATE pasien SET has_trial_history = 1 WHERE tipe_pasien = 'TRIAL' OR tipe_pasien = 'Trial'`);
       await runQuery(`DELETE FROM doingan WHERE role_petugas = 'Marketing' OR kategori_layanan = 'Marketing Referral' OR id LIKE 'doi-mkt-%'`);
+      await runQuery(`UPDATE pasien_paket_usage SET used_at = datetime(used_at, '+7 hours') WHERE used_at < '2026-10-08 00:00:00'`);
     } catch (e) {
       // ignore
     }
