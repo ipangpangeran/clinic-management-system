@@ -31,7 +31,7 @@ export default function LoginPage() {
             <img
               src="/logo/DEFLOW_LOGO_TAGLINE_CKLT.png"
               alt="DEFLOW Aesthetic Clinic"
-              className="h-20 object-contain"
+              className="h-[calc(var(--spacing)*30)] object-contain"
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = '/logo/DEFLOW_LOGO_TAGLINE.png';
