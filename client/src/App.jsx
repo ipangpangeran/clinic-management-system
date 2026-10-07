@@ -28,6 +28,7 @@ function MainApp() {
 
     const navModules = {
       patients: 'patient_intake',
+      master_customer: 'patient_management',
       customer_database: 'patient_management',
       doingan: 'doingan',
       pos: 'patient_packages',
@@ -115,8 +116,10 @@ function MainApp() {
         return <DashboardOverview setActiveTab={setActiveTab} />;
       case 'patients':
         return <PatientManagement mode="INTAKE" setActiveTab={setActiveTab} />;
+      case 'master_customer':
+        return <PatientManagement mode="RAW_MASTER" setActiveTab={setActiveTab} />;
       case 'customer_database':
-        return <PatientManagement mode="MASTER" setActiveTab={setActiveTab} />;
+        return <PatientManagement mode="DETAIL" setActiveTab={setActiveTab} />;
       case 'doingan':
         return <DoinganActivity />;
       case 'pos':

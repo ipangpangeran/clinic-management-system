@@ -3,7 +3,7 @@ import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { 
   LayoutDashboard, UserPlus, ShoppingBag, PackageCheck, 
-  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles, X, Users
+  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles, X, Users, Database
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, setIsMobileMenuOpen }) {
@@ -19,7 +19,8 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
   const navItems = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, module: null },
     { id: 'patients', label: 'Pendaftaran Pasien & Treatment', icon: UserPlus, module: 'patient_intake' },
-    { id: 'customer_database', label: 'Database Data Pelanggan', icon: Users, module: 'patient_management' },
+    { id: 'master_customer', label: 'Master Data Pelanggan', icon: Database, module: 'patient_management' },
+    { id: 'customer_database', label: 'Detail Data Pelanggan', icon: Users, module: 'patient_management' },
     { id: 'doingan', label: 'Doingan & Aktivitas Perawatan', icon: Sparkles, module: 'doingan' },
     { id: 'pos', label: 'POS & Billing Counter', icon: ShoppingBag, module: 'patient_packages' },
     { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'] },

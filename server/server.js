@@ -639,7 +639,16 @@ app.put('/api/acl', authenticateToken, async (req, res) => {
 // --- PATIENT MANAGEMENT & INTAKE ROUTES ---
 app.get('/api/pasien', authenticateToken, async (req, res) => {
   try {
-    const pasienList = await allQuery('SELECT * FROM pasien ORDER BY created_at DESC');
+    const pasienList = await allQuery(`
+      SELECT 
+        p.*, 
+        u.full_name as marketing_nama,
+        r.nama_lengkap as referrer_nama
+      FROM pasien p
+      LEFT JOIN users u ON p.marketing_id = u.id
+      LEFT JOIN pasien r ON p.referrer_pasien_id = r.id
+      ORDER BY p.created_at DESC
+    `);
     res.json(pasienList);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching patients', error: err.message });
@@ -673,18 +682,26 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
 
     const id = 'pasien-' + Date.now();
     const hasTrial = normalizedTipe === 'TRIAL' ? 1 : 0;
+    const initialTipe = normalizedTipe;
+
     await runQuery(`
       INSERT INTO pasien (
         id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, 
-        riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id, has_trial_history
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id, has_trial_history, initial_tipe_pasien
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id, no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, 
       riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, 
-      referrer_pasien_id || null, marketing_id || null, hasTrial
+      referrer_pasien_id || null, marketing_id || null, hasTrial, initialTipe
     ]);
 
-    const newPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
+    const newPatient = await getQuery(`
+      SELECT p.*, u.full_name as marketing_nama, r.nama_lengkap as referrer_nama 
+      FROM pasien p 
+      LEFT JOIN users u ON p.marketing_id = u.id 
+      LEFT JOIN pasien r ON p.referrer_pasien_id = r.id 
+      WHERE p.id = ?
+    `, [id]);
     res.status(201).json({ message: 'Pasien berhasil didaftarkan', pasien: newPatient });
   } catch (err) {
     res.status(500).json({ message: 'Error registering patient', error: err.message });
@@ -718,23 +735,30 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
       if (existingHp) return res.status(400).json({ message: 'data sudah terdaftar (No. HP sudah digunakan oleh pasien lain)' });
     }
 
-    const currentPatient = await getQuery('SELECT has_trial_history, tipe_pasien FROM pasien WHERE id = ?', [id]);
-    const wasTrial = (currentPatient && (currentPatient.tipe_pasien === 'TRIAL' || currentPatient.has_trial_history === 1));
+    const currentPatient = await getQuery('SELECT has_trial_history, tipe_pasien, initial_tipe_pasien FROM pasien WHERE id = ?', [id]);
+    const wasTrial = (currentPatient && (currentPatient.tipe_pasien === 'TRIAL' || currentPatient.has_trial_history === 1 || currentPatient.initial_tipe_pasien === 'TRIAL'));
     const hasTrial = (normalizedTipe === 'TRIAL' || wasTrial) ? 1 : 0;
+    const finalInitialTipe = (currentPatient && currentPatient.initial_tipe_pasien) ? currentPatient.initial_tipe_pasien : (wasTrial ? 'TRIAL' : normalizedTipe);
 
     await runQuery(`
       UPDATE pasien
       SET no_ktp = ?, no_hp = ?, nama_lengkap = ?, tipe_pasien = ?, alamat = ?, tgl_lahir = ?, 
           riwayat_alergi = ?, jenis_kulit = ?, rekomendasi_dokter = ?, referrer_pasien_id = ?, marketing_id = ?,
-          has_trial_history = ?
+          has_trial_history = ?, initial_tipe_pasien = ?
       WHERE id = ?
     `, [
       no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, 
       riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, 
-      referrer_pasien_id || null, marketing_id || null, hasTrial, id
+      referrer_pasien_id || null, marketing_id || null, hasTrial, finalInitialTipe, id
     ]);
 
-    const updated = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
+    const updated = await getQuery(`
+      SELECT p.*, u.full_name as marketing_nama, r.nama_lengkap as referrer_nama 
+      FROM pasien p 
+      LEFT JOIN users u ON p.marketing_id = u.id 
+      LEFT JOIN pasien r ON p.referrer_pasien_id = r.id 
+      WHERE p.id = ?
+    `, [id]);
     res.json({ message: 'Data pasien berhasil diperbarui', pasien: updated });
   } catch (err) {
     res.status(500).json({ message: 'Error updating patient', error: err.message });

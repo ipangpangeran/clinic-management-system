@@ -5,13 +5,13 @@ import { AuthContext } from '../context/AuthContext';
 import {
   UserPlus, Search, Edit, Trash2, Download, Package, Calendar,
   AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet, UserCheck,
-  Clock, RefreshCw, Sparkles, Stethoscope, Users, CheckCircle2, UserPlus2, History
+  Clock, RefreshCw, Sparkles, Stethoscope, Users, CheckCircle2, UserPlus2, History, Database
 } from 'lucide-react';
 
 export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const { user, hasPermission } = useContext(AuthContext);
 
-  // Current view mode: 'INTAKE' (Pendaftaran Pasien & Treatment) or 'MASTER' (Database Data Pelanggan)
+  // Current view mode: 'INTAKE' (Pendaftaran Pasien & Treatment), 'RAW_MASTER' (Master Data Pelanggan), or 'DETAIL' (Detail Data Pelanggan)
   const [viewMode, setViewMode] = useState(mode);
 
   useEffect(() => {
@@ -23,6 +23,11 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const [loadingToday, setLoadingToday] = useState(false);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('ALL');
+
+  // Master Data Pelanggan (Raw) State
+  const [rawSearch, setRawSearch] = useState('');
+  const [rawMonthFilter, setRawMonthFilter] = useState('ALL');
+  const [rawTypeFilter, setRawTypeFilter] = useState('ALL');
 
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -381,6 +386,65 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     XLSX.writeFile(workbook, fileName);
   };
 
+  // Master Data Pelanggan (Raw) Filtering & Export
+  const availableMonths = Array.from(new Set(
+    patients
+      .filter(p => p.created_at)
+      .map(p => p.created_at.slice(0, 7))
+  )).sort().reverse();
+
+  const filteredRawPatients = patients.filter(p => {
+    const searchLower = rawSearch.toLowerCase();
+    const matchSearch = !rawSearch || 
+      (p.nama_lengkap && p.nama_lengkap.toLowerCase().includes(searchLower)) ||
+      (p.no_hp && p.no_hp.includes(rawSearch)) ||
+      (p.no_ktp && p.no_ktp.includes(rawSearch)) ||
+      (p.marketing_nama && p.marketing_nama.toLowerCase().includes(searchLower));
+
+    let matchMonth = true;
+    if (rawMonthFilter !== 'ALL' && p.created_at) {
+      const pMonth = p.created_at.slice(0, 7);
+      matchMonth = (pMonth === rawMonthFilter);
+    }
+
+    const initialTipe = p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien);
+    let matchType = true;
+    if (rawTypeFilter === 'TRIAL') {
+      matchType = (initialTipe === 'TRIAL');
+    } else if (rawTypeFilter === 'MEMBER') {
+      matchType = (initialTipe === 'MEMBER');
+    }
+
+    return matchSearch && matchMonth && matchType;
+  });
+
+  const handleExportRawMasterExcel = () => {
+    if (!canExportExcel) {
+      alert('Akses Terbatas: Anda tidak memiliki wewenang export data.');
+      return;
+    }
+    const exportData = filteredRawPatients.map((p, index) => {
+      const initialTipe = p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien);
+      return {
+        'No.': index + 1,
+        'Tgl Registrasi / Intake': p.created_at ? new Date(p.created_at).toLocaleDateString('id-ID') : '-',
+        'Nama Pasien': p.nama_lengkap,
+        'No. Handphone': p.no_hp,
+        'No. KTP': p.no_ktp || '-',
+        'Tipe Kedatangan Awal': initialTipe,
+        'Status Saat Ini': p.tipe_pasien,
+        'Marketing Intake': p.marketing_nama || '-',
+        'Referrer Pasien': p.referrer_nama || '-'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Master Data Mentah');
+    const fileName = `Master_Data_Pelanggan_Raw_${rawMonthFilter}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
   const handleSavePatient = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -726,33 +790,45 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#e5ded4] pb-4">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">
-            {viewMode === 'INTAKE' ? 'Pendaftaran Pasien & Treatment Hari Ini' : 'Database Data Pelanggan'}
+            {viewMode === 'INTAKE'
+              ? 'Pendaftaran Pasien & Treatment Hari Ini'
+              : viewMode === 'RAW_MASTER'
+                ? 'Master Data Pelanggan'
+                : 'Detail Data Pelanggan'}
           </h1>
           <p className="text-xs text-[#514440]">
             {viewMode === 'INTAKE'
               ? 'Menu pendaftaran pasien baru, intake kunjungan berulang pasien lama, serta antrean treatment aktif hari ini.'
-              : 'Master database seluruh pelanggan terdaftar, riwayat poin, data medis, edit profil, dan export Excel.'}
+              : viewMode === 'RAW_MASTER'
+                ? 'Database mentah pencatatan awal kedatangan seluruh pelanggan. Data kedatangan Trial tersimpan utuh dan tidak terpengaruh migrasi Member.'
+                : 'Kelola profil pelanggan aktif, riwayat poin, klaim paket treatment member, edit profil, dan reminder kontrol.'}
           </p>
         </div>
 
-        <div className="flex bg-[#faf3e8] p-1 border border-[#d6c2bd] rounded-2xl text-xs font-bold shadow-2xs self-start sm:self-auto">
+        <div className="flex flex-wrap bg-[#faf3e8] p-1 border border-[#d6c2bd] rounded-2xl text-xs font-bold shadow-2xs self-start sm:self-auto gap-1">
           <button
             type="button"
             onClick={() => setViewMode('INTAKE')}
-            className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${viewMode === 'INTAKE' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
-              }`}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${viewMode === 'INTAKE' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
           >
             <UserPlus className="w-4 h-4" />
             <span>Pendaftaran & Intake Hari Ini</span>
           </button>
           <button
             type="button"
-            onClick={() => setViewMode('MASTER')}
-            className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${viewMode === 'MASTER' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
-              }`}
+            onClick={() => setViewMode('RAW_MASTER')}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${viewMode === 'RAW_MASTER' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Master Data Pelanggan</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('DETAIL')}
+            className={`px-3.5 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${(viewMode === 'DETAIL' || viewMode === 'MASTER') ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
           >
             <Users className="w-4 h-4" />
-            <span>Database Data Pelanggan</span>
+            <span>Detail Data Pelanggan</span>
           </button>
         </div>
       </div>
@@ -897,8 +973,176 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
         </div>
       )}
 
-      {/* VIEW MODE 2: DATABASE DATA PELANGGAN MASTER */}
-      {viewMode === 'MASTER' && (
+      {/* VIEW MODE 2: MASTER DATA PELANGGAN (DATA MENTAH REGISTRASI / KEDATANGAN AWAL) */}
+      {viewMode === 'RAW_MASTER' && (
+        <div className="space-y-6">
+          {/* Controls Bar: Search, Month Filter, Arrival Type Filter, Export */}
+          <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+            <div className="relative flex-1">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#83746f]">
+                <Search className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                value={rawSearch}
+                onChange={(e) => setRawSearch(e.target.value)}
+                placeholder="Cari NIK, No. HP, Nama Pasien, atau Marketing..."
+                className="w-full pl-9 pr-4 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141] font-medium"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="flex items-center gap-1.5 bg-[#faf3e8] px-3 py-1.5 border border-[#d6c2bd] rounded-xl">
+                <Calendar className="w-4 h-4 text-[#7d5141]" />
+                <span className="font-semibold text-[#514440]">Bulan Intake:</span>
+                <select
+                  value={rawMonthFilter}
+                  onChange={(e) => setRawMonthFilter(e.target.value)}
+                  className="bg-white px-2.5 py-1 border border-[#d6c2bd] rounded-lg text-xs font-bold text-[#1e1b15]"
+                >
+                  <option value="ALL">-- Semua Bulan --</option>
+                  {availableMonths.map(m => {
+                    const dateObj = new Date(`${m}-01`);
+                    const monthLabel = dateObj.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                    return <option key={m} value={m}>{monthLabel}</option>;
+                  })}
+                </select>
+              </div>
+
+              <span className="text-[#83746f] font-semibold ml-1">Kedatangan Awal:</span>
+              <button
+                onClick={() => setRawTypeFilter('ALL')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${rawTypeFilter === 'ALL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+              >
+                Semua Kedatangan ({patients.length})
+              </button>
+              <button
+                onClick={() => setRawTypeFilter('TRIAL')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${rawTypeFilter === 'TRIAL' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}
+              >
+                Trial Awal ({patients.filter(p => (p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien)) === 'TRIAL').length})
+              </button>
+              <button
+                onClick={() => setRawTypeFilter('MEMBER')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${rawTypeFilter === 'MEMBER' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
+              >
+                Member Direct ({patients.filter(p => (p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien)) === 'MEMBER').length})
+              </button>
+
+              {canExportExcel && (
+                <button
+                  onClick={handleExportRawMasterExcel}
+                  className="ml-1 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  title="Export Master Data Mentah Pelanggan ke Excel"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Export Excel (Mentah)</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Master Raw Patient Table */}
+          <div className="bg-white rounded-2xl border border-[#e5ded4] shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase tracking-wider border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-3.5 px-4 whitespace-nowrap">Tgl Intake / Registrasi</th>
+                    <th className="py-3.5 px-4 min-w-[150px]">Nama Pasien</th>
+                    <th className="py-3.5 px-4 min-w-[140px]">Kontak (HP & NIK)</th>
+                    <th className="py-3.5 px-4 whitespace-nowrap">Tipe Kedatangan Awal</th>
+                    <th className="py-3.5 px-4 whitespace-nowrap">Status Saat Ini</th>
+                    <th className="py-3.5 px-4 min-w-[150px]">Marketing Intake</th>
+                    <th className="py-3.5 px-4 text-center whitespace-nowrap">Aksi / Intake Treatment</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {filteredRawPatients.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="text-center py-10 text-[#83746f] italic">
+                        Tidak ada data mentah pelanggan yang cocok dengan filter pencarian / bulan.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRawPatients.map(p => {
+                      const initialTipe = p.initial_tipe_pasien || (p.has_trial_history === 1 ? 'TRIAL' : p.tipe_pasien);
+                      const isCurrentlyMember = p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler';
+                      return (
+                        <tr key={p.id} className="hover:bg-[#fff8f0] transition-colors">
+                          <td className="py-3.5 px-4 text-[#83746f] font-medium whitespace-nowrap">
+                            {p.created_at ? new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-[#1e1b15] text-sm">
+                            {p.nama_lengkap}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-semibold text-[#1e1b15]">{p.no_hp}</div>
+                            {p.no_ktp && <div className="text-[10px] text-[#83746f]">NIK: {p.no_ktp}</div>}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {initialTipe === 'TRIAL' ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                TRIAL (DATANG AWAL)
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                MEMBER (DATANG AWAL)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {isCurrentlyMember && initialTipe === 'TRIAL' ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300">
+                                MEMBER (MIGRASI DARI TRIAL)
+                              </span>
+                            ) : isCurrentlyMember ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                MEMBER
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                TRIAL
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-semibold text-[#1e1b15]">{p.marketing_nama || '-'}</div>
+                            {p.referrer_nama && <div className="text-[10px] text-indigo-700 font-medium">Referred by: {p.referrer_nama}</div>}
+                          </td>
+                          <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => openIntakeForExisting(p)}
+                                className="px-2.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                                title="Assign Petugas & Masukkan ke Antrean Treatment Hari Ini"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span>+ Intake Treatment</span>
+                              </button>
+                              <button
+                                onClick={() => openEditModal(p)}
+                                className="px-2.5 py-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] text-[#7d5141] border border-[#d6c2bd] font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
+                                title="Edit Profil Pasien"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW MODE 3: DETAIL DATA PELANGGAN */}
+      {(viewMode === 'DETAIL' || viewMode === 'MASTER') && (
         <div className="space-y-6">
           {/* Master Controls & Search Bar */}
           <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">

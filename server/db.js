@@ -172,6 +172,15 @@ async function initDb() {
       await runQuery(`ALTER TABLE pasien ADD COLUMN has_trial_history INTEGER DEFAULT 0`);
     } catch (e) { }
 
+    try {
+      await runQuery(`ALTER TABLE pasien ADD COLUMN initial_tipe_pasien TEXT`);
+    } catch (e) { }
+
+    try {
+      await runQuery(`UPDATE pasien SET initial_tipe_pasien = tipe_pasien WHERE initial_tipe_pasien IS NULL OR initial_tipe_pasien = ''`);
+      await runQuery(`UPDATE pasien SET initial_tipe_pasien = 'TRIAL' WHERE has_trial_history = 1`);
+    } catch (e) { }
+
     // 5a. Master Paket Templates
     await runQuery(`
       CREATE TABLE IF NOT EXISTS master_paket (
