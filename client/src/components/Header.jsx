@@ -69,7 +69,7 @@ export default function Header({ setActiveTab, setIsMobileMenuOpen }) {
             </span>
           </h2>
           <div className="hidden sm:flex items-center gap-3 text-xs text-[#83746f] mt-0.5 font-medium">
-            <span className="flex items-center gap-1 truncate max-w-xs">
+            <span className="flex items-center gap-1 truncate max-w-sm sm:max-w-md md:max-w-xl lg:max-w-4xl">
               <MapPin className="w-3.5 h-3.5 text-[#7d5141] shrink-0" />
               <span className="truncate">{clinic?.address || 'Pekanbaru, Riau'}</span>
             </span>

@@ -1047,7 +1047,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                   title="Export Master Data Mentah Pelanggan ke Excel"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
-                  <span>Export Excel (Mentah)</span>
+                  <span>Export Excel</span>
                 </button>
               )}
             </div>
@@ -1100,13 +1100,12 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                           )}
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            item.status_saat_ini.includes('MIGRASI')
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${item.status_saat_ini.includes('MIGRASI')
                               ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
                               : item.status_saat_ini === 'MEMBER'
                                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                 : 'bg-amber-100 text-amber-800 border border-amber-300'
-                          }`}>
+                            }`}>
                             {item.status_saat_ini}
                           </span>
                         </td>
@@ -1140,89 +1139,100 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       {(viewMode === 'DETAIL' || viewMode === 'MASTER') && (
         <div className="space-y-6">
           {/* Master Controls & Search Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="relative w-full md:w-72">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#83746f]">
-                <Search className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari NIK, No. HP, atau Nama Pasien..."
-                className="w-full pl-9 pr-4 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-              />
-            </div>
+          <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-3">
+            {/* Top Bar: Left (Filter Nama & Filter Hari), Right (Filter Tipe) */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              {/* LEFT SIDE: Filter Nama & Filter Hari */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Filter Nama */}
+                <div className="relative w-full sm:w-64">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#83746f]">
+                    <Search className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Cari NIK, No. HP, atau Nama Pasien..."
+                    className="w-full pl-9 pr-4 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                  />
+                </div>
 
-            {/* Date & Type Filters */}
-            <div className="flex flex-wrap items-center gap-2 text-xs w-full md:w-auto">
-              <div className="flex items-center gap-1.5 bg-[#faf3e8] p-1 border border-[#d6c2bd] rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setDateFilter(todayStr)}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${dateFilter === todayStr ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
-                    }`}
-                >
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>Terdaftar Hari Ini</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDateFilter('')}
-                  className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${dateFilter === '' ? 'bg-white text-[#7d5141] font-bold shadow-2xs' : 'text-[#514440] hover:bg-[#eee7dd]'
-                    }`}
-                >
-                  Semua Tgl
-                </button>
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="px-2 py-1 bg-white border border-[#d6c2bd] rounded-lg text-xs font-semibold text-[#1e1b15]"
-                />
+                {/* Filter Hari */}
+                <div className="flex flex-wrap items-center gap-1.5 bg-[#faf3e8] p-1 border border-[#d6c2bd] rounded-xl text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDateFilter(todayStr)}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${dateFilter === todayStr ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+                      }`}
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Terdaftar Hari Ini</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDateFilter('')}
+                    className={`px-2.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${dateFilter === '' ? 'bg-white text-[#7d5141] font-bold shadow-2xs' : 'text-[#514440] hover:bg-[#eee7dd]'
+                      }`}
+                  >
+                    Semua Tgl
+                  </button>
+                  <input
+                    type="date"
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    className="px-2 py-1 bg-white border border-[#d6c2bd] rounded-lg text-xs font-semibold text-[#1e1b15]"
+                  />
+                </div>
               </div>
 
-              <span className="text-[#83746f] font-semibold ml-1">Tipe:</span>
-              <button
-                onClick={() => setFilterType('ALL')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'ALL' ? 'bg-[#7d5141] text-white' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
-              >
-                Semua ({patients.length})
-              </button>
-              <button
-                onClick={() => setFilterType('TRIAL')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'TRIAL' ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}
-              >
-                Trial & Riwayat ({patients.filter(p => p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1).length})
-              </button>
-              <button
-                onClick={() => setFilterType('MEMBER')}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'MEMBER' || filterType === 'NON-TRIAL' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
-              >
-                Member ({patients.filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler').length})
-              </button>
+              {/* RIGHT SIDE: Filter Tipe */}
+              <div className="flex flex-wrap items-center justify-start lg:justify-end gap-1.5 text-xs">
+                <span className="text-[#83746f] font-semibold">Tipe:</span>
+                <button
+                  onClick={() => setFilterType('ALL')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'ALL' ? 'bg-[#7d5141] text-white' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+                >
+                  Semua ({patients.length})
+                </button>
+                <button
+                  onClick={() => setFilterType('TRIAL')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'TRIAL' ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}
+                >
+                  Trial & Riwayat ({patients.filter(p => p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1).length})
+                </button>
+                <button
+                  onClick={() => setFilterType('MEMBER')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'MEMBER' || filterType === 'NON-TRIAL' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
+                >
+                  Member ({patients.filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler').length})
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setShowLogsModal(true)}
-                className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
-                title="Histori Klaim Paket Pasien"
-              >
-                <History className="w-3.5 h-3.5" />
-                <span>Histori Klaim Paket ({packageLogs.length})</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLogsModal(true)}
+                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                  title="Histori Klaim Paket Pasien"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>Histori Klaim Paket ({packageLogs.length})</span>
+                </button>
+              </div>
+            </div>
 
-              {canExportExcel && (
+            {/* Bottom Right: Export Excel */}
+            {canExportExcel && (
+              <div className="flex justify-end pt-2 border-t border-[#f0e8dd]">
                 <button
                   onClick={handleExportExcel}
-                  className="ml-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                   title="Export master data pasien ke Excel"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>Export Excel</span>
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Master Patient Table */}
