@@ -976,6 +976,13 @@ app.get('/api/marketing/recap', authenticateToken, async (req, res) => {
 
 app.get('/api/reminders', authenticateToken, async (req, res) => {
   try {
+    const waSetting = await getQuery("SELECT setting_value FROM system_settings WHERE setting_key = 'wa_reminder_enabled'");
+    const isWaEnabled = waSetting ? waSetting.setting_value === '1' : false;
+
+    if (!isWaEnabled) {
+      return res.json([]);
+    }
+
     const reminders = await allQuery(`
       SELECT pr.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien
       FROM pasien_reminder pr
@@ -990,6 +997,12 @@ app.get('/api/reminders', authenticateToken, async (req, res) => {
 
 app.post('/api/reminders', authenticateToken, async (req, res) => {
   try {
+    const waSetting = await getQuery("SELECT setting_value FROM system_settings WHERE setting_key = 'wa_reminder_enabled'");
+    const isWaEnabled = waSetting ? waSetting.setting_value === '1' : false;
+    if (!isWaEnabled) {
+      return res.status(400).json({ message: 'Fitur WhatsApp Gateway & Reminder saat ini sedang NON-AKTIF di Pengaturan Sistem' });
+    }
+
     const { pasien_id, tgl_kembali, message_text } = req.body;
     if (!pasien_id || !tgl_kembali) return res.status(400).json({ message: 'Pasien dan tanggal kembali wajib diisi' });
 
@@ -1428,7 +1441,12 @@ app.get('/api/transaksi/:id/receipt', async (req, res) => {
     const details = await allQuery('SELECT * FROM transaksi_detail WHERE transaksi_id = ?', [id]);
     const clinic = await getQuery('SELECT * FROM clinic_profile WHERE id = 1');
 
-    const nextReminder = await getQuery('SELECT tgl_kembali FROM pasien_reminder WHERE pasien_id = ? ORDER BY tgl_kembali ASC LIMIT 1', [trx.pasien_id]);
+    const waSetting = await getQuery("SELECT setting_value FROM system_settings WHERE setting_key = 'wa_reminder_enabled'");
+    const isWaEnabled = waSetting ? waSetting.setting_value === '1' : false;
+
+    const nextReminder = isWaEnabled 
+      ? await getQuery('SELECT tgl_kembali FROM pasien_reminder WHERE pasien_id = ? ORDER BY tgl_kembali ASC LIMIT 1', [trx.pasien_id])
+      : null;
 
     res.json({
       clinic,
@@ -1595,6 +1613,13 @@ app.post('/api/payroll/pay', authenticateToken, async (req, res) => {
 
 // --- WHATSAPP GATEWAY & SCHEDULER ---
 async function triggerWaReminders() {
+  const waSetting = await getQuery("SELECT setting_value FROM system_settings WHERE setting_key = 'wa_reminder_enabled'");
+  const isWaEnabled = waSetting ? waSetting.setting_value === '1' : false;
+  if (!isWaEnabled) {
+    console.log('[WA Gateway] Fitur WA Reminder sedang non-aktif. Mengabaikan pengiriman.');
+    return [];
+  }
+
   const tomorrowDate = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
   const pendingReminders = await allQuery(`

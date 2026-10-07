@@ -1,4 +1,5 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
+import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { 
   LayoutDashboard, UserPlus, ShoppingBag, PackageCheck, 
@@ -7,6 +8,13 @@ import {
 
 export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, setIsMobileMenuOpen }) {
   const { user, logout, hasPermission } = useContext(AuthContext);
+  const [waReminderEnabled, setWaReminderEnabled] = useState(false);
+
+  useEffect(() => {
+    axios.get('/api/settings')
+      .then(res => setWaReminderEnabled(res.data.wa_reminder_enabled === '1'))
+      .catch(err => console.error('Error fetching settings in Sidebar', err));
+  }, []);
 
   const navItems = [
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, module: null },
@@ -17,7 +25,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
     { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'] },
     { id: 'financial', label: 'Keuangan & Komisi Gaji', icon: DollarSign, module: ['payroll', 'commission_formulas', 'pricing'] },
     { id: 'acl', label: 'Kelola User & Dynamic ACL', icon: ShieldCheck, module: 'acl' },
-    { id: 'wa', label: 'WhatsApp Gateway & Reminder', icon: MessageSquare, module: 'reminders' },
+    ...(waReminderEnabled ? [{ id: 'wa', label: 'WhatsApp Gateway & Reminder', icon: MessageSquare, module: 'reminders' }] : []),
   ];
 
   const getInitials = (name) => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { ShieldCheck, Building2, Save, Link2, Users, UserPlus, Trash2, Edit2, KeyRound, Phone, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { ShieldCheck, Building2, Save, Link2, Users, UserPlus, Trash2, Edit2, KeyRound, Phone, CheckCircle2, ShieldAlert, MessageSquare, ToggleLeft, ToggleRight } from 'lucide-react';
 
 export default function ClinicSettingsAcl() {
   const { user: currentUser } = useContext(AuthContext);
@@ -381,6 +381,42 @@ export default function ClinicSettingsAcl() {
                 />
               </div>
             </div>
+
+            {/* WA REMINDER FEATURE TOGGLE SWITCH (SUPER ADMIN & SYSTEM ADMIN) */}
+            {isSuperAdmin && (
+              <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-xs text-[#1e1b15]">
+                    <MessageSquare className="w-4 h-4 text-[#7d5141]" />
+                    <span>Fitur WhatsApp Gateway & Reminder Jadwal Kontrol Pasien</span>
+                  </div>
+                  <p className="text-[11px] text-[#514440]">
+                    Jika dimatikan (OFF), seluruh jadwal kontrol, reminder H-1, dan menu WhatsApp Gateway disembunyikan dari sistem.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleWaReminder}
+                  className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 ${
+                    waReminderEnabled
+                      ? 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm'
+                      : 'bg-gray-400 hover:bg-gray-500 text-white'
+                  }`}
+                >
+                  {waReminderEnabled ? (
+                    <>
+                      <ToggleRight className="w-5 h-5 text-white" />
+                      <span>FITUR WA: AKTIF (ON)</span>
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="w-5 h-5 text-white" />
+                      <span>FITUR WA: NON-AKTIF (OFF)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* WA API KEY / ENDPOINT POINTING CONFIGURATION (HIDDEN FOR ADMIN KLINIK - ONLY SUPER ADMIN CAN SEE) */}
             {isSuperAdmin && (

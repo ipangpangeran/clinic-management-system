@@ -8,6 +8,7 @@ export default function WhatsAppGateway({ setActiveTab }) {
   const [waLogs, setWaLogs] = useState([]);
   const [reminders, setReminders] = useState([]);
   const [clinic, setClinic] = useState(null);
+  const [waReminderEnabled, setWaReminderEnabled] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -16,20 +17,26 @@ export default function WhatsAppGateway({ setActiveTab }) {
 
   const fetchWaData = async () => {
     try {
-      const [logRes, remRes, profRes] = await Promise.all([
+      const [logRes, remRes, profRes, setRes] = await Promise.all([
         axios.get('/api/wa/logs'),
         axios.get('/api/reminders'),
-        axios.get('/api/clinic-profile')
+        axios.get('/api/clinic-profile'),
+        axios.get('/api/settings')
       ]);
       setWaLogs(logRes.data);
       setReminders(remRes.data);
       setClinic(profRes.data);
+      setWaReminderEnabled(setRes.data?.wa_reminder_enabled === '1');
     } catch (err) {
       console.error('Error fetching WA data', err);
     }
   };
 
   const handleManualTrigger = async () => {
+    if (!waReminderEnabled) {
+      alert('Fitur WhatsApp Reminder sedang non-aktif di Pengaturan Sistem.');
+      return;
+    }
     setSending(true);
     try {
       await axios.post('/api/wa/send-reminders');
@@ -67,6 +74,23 @@ export default function WhatsAppGateway({ setActiveTab }) {
 
   return (
     <div className="space-y-6">
+      {!waReminderEnabled && (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-center justify-between text-amber-900 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900 uppercase">Perhatian</span>
+            <span>Fitur WhatsApp & Reminder Kontrol saat ini sedang <strong>NON-AKTIF (OFF)</strong> di Pengaturan Sistem Klinik.</span>
+          </div>
+          {isSuperAdmin && setActiveTab && (
+            <button
+              onClick={() => setActiveTab('acl')}
+              className="px-3 py-1 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-lg cursor-pointer"
+            >
+              Aktifkan di Settings →
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -75,11 +99,11 @@ export default function WhatsAppGateway({ setActiveTab }) {
         </div>
         <button
           onClick={handleManualTrigger}
-          disabled={sending}
+          disabled={sending || !waReminderEnabled}
           className="px-5 py-2.5 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2"
         >
           <Send className="w-4 h-4" />
-          {sending ? 'Memproses Pengiriman API...' : 'Kirim Reminder WhatsApp H-1 Sekarang'}
+          {!waReminderEnabled ? 'Fitur WA Non-Aktif' : sending ? 'Memproses Pengiriman API...' : 'Kirim Reminder WhatsApp H-1 Sekarang'}
         </button>
       </div>
 
@@ -87,15 +111,21 @@ export default function WhatsAppGateway({ setActiveTab }) {
       <div className="bg-white p-6 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200 shadow-xs">
+            <div className={`p-3 rounded-xl border shadow-xs ${waReminderEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
               <Smartphone className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-base text-[#1e1b15]">Status WA Gateway</h3>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> API AKTIF & TERHUBUNG
-                </span>
+                {waReminderEnabled ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> API AKTIF & TERHUBUNG
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                    FITUR NON-AKTIF (OFF)
+                  </span>
+                )}
               </div>
               <p className="text-xs text-[#514440] font-mono mt-1">
                 Endpoint URL: <strong className="text-[#7d5141]">{getMaskedEndpoint(clinic?.wa_api_url)}</strong>

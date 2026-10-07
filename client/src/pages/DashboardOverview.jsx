@@ -6,6 +6,7 @@ export default function DashboardOverview({ setActiveTab }) {
   const [todayPatients, setTodayPatients] = useState([]);
   const [products, setProducts] = useState([]);
   const [reminders, setReminders] = useState([]);
+  const [waReminderEnabled, setWaReminderEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -14,14 +15,16 @@ export default function DashboardOverview({ setActiveTab }) {
 
   const fetchDashboardData = async () => {
     try {
-      const [todayRes, prodRes, rRes] = await Promise.all([
+      const [todayRes, prodRes, rRes, setRes] = await Promise.all([
         axios.get('/api/doingan/today'),
         axios.get('/api/stok'),
-        axios.get('/api/reminders')
+        axios.get('/api/reminders'),
+        axios.get('/api/settings')
       ]);
       setTodayPatients(todayRes.data || []);
       setProducts(prodRes.data || []);
       setReminders(rRes.data || []);
+      setWaReminderEnabled(setRes.data?.wa_reminder_enabled === '1');
     } catch (err) {
       console.error('Error fetching dashboard data', err);
     } finally {
@@ -57,7 +60,7 @@ export default function DashboardOverview({ setActiveTab }) {
         <div className="space-y-2">
           <h1 className="font-serif text-2xl font-bold tracking-tight">Selamat Datang di DEFLOW Aesthetic Clinic</h1>
           <p className="text-amber-100 text-sm max-w-xl">
-            Sistem manajemen internal terintegrasi untuk pendaftaran pasien, kasir POS, insentif komisi 5 lini, logistik stok, dan pengingat WhatsApp.
+            Sistem manajemen internal terintegrasi untuk pendaftaran pasien, kasir POS, insentif komisi 5 lini, dan logistik stok.
           </p>
         </div>
         <div className="hidden md:flex gap-3">
@@ -79,7 +82,7 @@ export default function DashboardOverview({ setActiveTab }) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${waReminderEnabled ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
         <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs flex items-center justify-between">
           <div className="space-y-1">
             <p className="text-xs font-semibold text-[#83746f] uppercase tracking-wider">Pasien Ditangani Hari Ini</p>
@@ -107,18 +110,20 @@ export default function DashboardOverview({ setActiveTab }) {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold text-[#83746f] uppercase tracking-wider">Reminder Kontrol (H-1)</p>
-            <h3 className="text-2xl font-bold text-[#1e1b15] font-serif">{pendingRemindersList.length} Pasien</h3>
-            <div className="text-[11px] text-amber-700 font-semibold">
-              {pendingRemindersList.length} Menunggu WA
+        {waReminderEnabled && (
+          <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-[#83746f] uppercase tracking-wider">Reminder Kontrol (H-1)</p>
+              <h3 className="text-2xl font-bold text-[#1e1b15] font-serif">{pendingRemindersList.length} Pasien</h3>
+              <div className="text-[11px] text-amber-700 font-semibold">
+                {pendingRemindersList.length} Menunggu WA
+              </div>
+            </div>
+            <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] text-[#7d5141] rounded-xl">
+              <MessageSquare className="w-6 h-6" />
             </div>
           </div>
-          <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] text-[#7d5141] rounded-xl">
-            <MessageSquare className="w-6 h-6" />
-          </div>
-        </div>
+        )}
 
         <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs flex items-center justify-between">
           <div className="space-y-1">
@@ -137,7 +142,7 @@ export default function DashboardOverview({ setActiveTab }) {
       {/* Grid Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Pasien Ditangani Hari Ini Table */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-[#e5ded4] p-6 shadow-xs space-y-4">
+        <div className={`${waReminderEnabled ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white rounded-2xl border border-[#e5ded4] p-6 shadow-xs space-y-4`}>
           <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
             <div>
               <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Daftar Pasien Ditangani Hari Ini</h3>
@@ -224,35 +229,37 @@ export default function DashboardOverview({ setActiveTab }) {
         </div>
 
         {/* Reminders Control Upcoming */}
-        <div className="bg-white rounded-2xl border border-[#e5ded4] p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
-            <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Jadwal Kontrol Besok</h3>
-            <button
-              onClick={() => setActiveTab('wa')}
-              className="text-xs font-semibold text-[#7d5141] hover:underline cursor-pointer"
-            >
-              Gateway WA →
-            </button>
-          </div>
+        {waReminderEnabled && (
+          <div className="bg-white rounded-2xl border border-[#e5ded4] p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
+              <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Jadwal Kontrol Besok</h3>
+              <button
+                onClick={() => setActiveTab('wa')}
+                className="text-xs font-semibold text-[#7d5141] hover:underline cursor-pointer"
+              >
+                Gateway WA →
+              </button>
+            </div>
 
-          <div className="space-y-3">
-            {pendingRemindersList.length === 0 ? (
-              <p className="text-xs text-[#83746f] italic text-center py-6">Tidak ada antrean reminder PENDING.</p>
-            ) : (
-              pendingRemindersList.slice(0, 4).map(r => (
-                <div key={r.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-1.5">
-                  <div className="flex justify-between items-center text-xs font-bold text-[#1e1b15]">
-                    <span>{r.pasien_nama}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
-                      {r.tgl_kembali}
-                    </span>
+            <div className="space-y-3">
+              {pendingRemindersList.length === 0 ? (
+                <p className="text-xs text-[#83746f] italic text-center py-6">Tidak ada antrean reminder PENDING.</p>
+              ) : (
+                pendingRemindersList.slice(0, 4).map(r => (
+                  <div key={r.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-1.5">
+                    <div className="flex justify-between items-center text-xs font-bold text-[#1e1b15]">
+                      <span>{r.pasien_nama}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">
+                        {r.tgl_kembali}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#514440] line-clamp-2">{r.message_text}</p>
                   </div>
-                  <p className="text-[11px] text-[#514440] line-clamp-2">{r.message_text}</p>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

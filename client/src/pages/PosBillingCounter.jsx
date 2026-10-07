@@ -833,7 +833,9 @@ export default function PosBillingCounter() {
 
               <div className="text-center font-bold pt-1 uppercase">
                 Terima Kasih Atas Kunjungan Anda<br/>
-                Jadwal Kontrol Anda: {receiptData.next_control_date}<br/>
+                {receiptData.next_control_date && receiptData.next_control_date !== '-' && (
+                  <>Jadwal Kontrol Anda: {receiptData.next_control_date}<br/></>
+                )}
                 ========================================
               </div>
             </div>
