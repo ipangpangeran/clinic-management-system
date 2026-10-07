@@ -722,15 +722,23 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       alert('Belum ada histori klaim paket untuk diexport');
       return;
     }
-    const exportData = packageLogs.map((log, index) => ({
-      'No.': index + 1,
-      'Tanggal & Jam Klaim': log.used_at ? new Date(log.used_at).toLocaleString('id-ID') : '-',
-      'Nama Pasien': log.pasien_nama ? `${log.pasien_nama} (${log.pasien_hp || '-'})` : '-',
-      'Nama Paket': log.nama_paket || '-',
-      'Item / Porsi Klaim': log.item_claimed || '-',
-      'Petugas Assigned': log.petugas_nama || '-',
-      'Detail tindakan': log.notes || log.item_claimed || '-'
-    }));
+    const exportData = packageLogs.map((log, index) => {
+      let detail = log.item_claimed || '-';
+      if (log.doingan_status === 'COMPLETED' && log.doingan_nama_tindakan) {
+        detail = log.doingan_nama_tindakan;
+      } else if (log.notes && !log.notes.startsWith('Klaim paket') && !log.notes.startsWith('Klaim Kuota')) {
+        detail = log.notes;
+      }
+      return {
+        'No.': index + 1,
+        'Tanggal & Jam Klaim': log.used_at ? new Date(log.used_at).toLocaleString('id-ID') : '-',
+        'Nama Pasien': log.pasien_nama ? `${log.pasien_nama} (${log.pasien_hp || '-'})` : '-',
+        'Nama Paket': log.nama_paket || '-',
+        'Item / Porsi Klaim': log.item_claimed || '-',
+        'Petugas Assigned': log.petugas_nama || '-',
+        'Detail tindakan': detail
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
@@ -2149,7 +2157,13 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                             {log.petugas_nama || '-'}
                           </td>
                           <td className="py-2.5 px-3 text-[#514440] font-medium">
-                            {log.notes || log.item_claimed || '-'}
+                            {(log.doingan_status === 'COMPLETED' && log.doingan_nama_tindakan)
+                              ? log.doingan_nama_tindakan
+                              : (log.notes && !log.notes.startsWith('Klaim paket') && !log.notes.startsWith('Klaim Kuota'))
+                                ? log.notes
+                                : (log.doingan_nama_tindakan && !log.doingan_nama_tindakan.startsWith('['))
+                                  ? log.doingan_nama_tindakan
+                                  : (log.item_claimed || '-')}
                           </td>
                         </tr>
                       ))

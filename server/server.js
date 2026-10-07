@@ -372,6 +372,12 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
       WHERE id = ?
     `, [mainTindakanId, finalNamaTindakan, totalKomisi, notes || doi.notes || '', id]);
 
+    await runQuery(`
+      UPDATE pasien_paket_usage
+      SET notes = ?
+      WHERE doingan_id = ?
+    `, [finalNamaTindakan, id]);
+
     res.json({ message: 'Pengerjaan tindakan berhasil dikonfirmasi selesai!', komisi: totalKomisi });
   } catch (err) {
     res.status(500).json({ message: 'Error completing doingan', error: err.message });
@@ -978,11 +984,19 @@ app.post('/api/pasien/paket/:paketId/claim', authenticateToken, async (req, res)
 app.get('/api/pasien/paket/usage/all', authenticateToken, async (req, res) => {
   try {
     const logs = await allQuery(`
-      SELECT pu.*, pp.nama_paket, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, u.full_name as user_fo_nama
+      SELECT 
+        pu.*, 
+        pp.nama_paket, 
+        p.nama_lengkap as pasien_nama, 
+        p.no_hp as pasien_hp, 
+        u.full_name as user_fo_nama,
+        d.nama_tindakan as doingan_nama_tindakan,
+        d.status_pengerjaan as doingan_status
       FROM pasien_paket_usage pu
       JOIN pasien_paket pp ON pu.pasien_paket_id = pp.id
       JOIN pasien p ON pp.pasien_id = p.id
       LEFT JOIN users u ON pu.used_by_user_id = u.id
+      LEFT JOIN doingan d ON pu.doingan_id = d.id
       ORDER BY pu.used_at DESC
     `);
     res.json(logs);

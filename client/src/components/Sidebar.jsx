@@ -52,7 +52,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
             <img
               src="/logo/DEFLOW_LOGO_TAGLINE.png"
               alt="DEFLOW Aesthetic Clinic"
-              className="h-12 sm:h-14 max-w-[85%] object-contain transition-all hover:scale-105 mx-auto"
+              className="h-16 sm:h-20 max-w-[85%] object-contain transition-all hover:scale-105 mx-auto"
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = '/logo/DEFLOW_LOGO_ONLY.png';
