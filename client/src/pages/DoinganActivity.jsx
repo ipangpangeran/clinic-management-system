@@ -232,7 +232,7 @@ export default function DoinganActivity() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Digital Alur Pasien & Doingan Perawatan</h1>
-          <p className="text-xs text-[#514440]">Monitoring status live petugas Beautician & Nurse, serta rekapan laporan komisi lengkap termasuk tim Marketing.</p>
+          <p className="text-xs text-[#514440]">Monitoring status live petugas BTC & Nurse, serta rekapan laporan komisi lengkap.</p>
         </div>
         <div className="flex items-center gap-2">
           {canManageTreatments && (
@@ -240,7 +240,7 @@ export default function DoinganActivity() {
               onClick={() => setShowTreatmentModal(true)}
               className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
             >
-              <Plus className="w-4 h-4" /> + Master Jenis Tindakan Medis
+              <Plus className="w-4 h-4" />Master Jenis Tindakan Medis
             </button>
           )}
           <div className="px-3.5 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141] flex items-center gap-1.5">
@@ -254,21 +254,21 @@ export default function DoinganActivity() {
       <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
         <div className="flex overflow-x-auto gap-2 border-b border-[#e5ded4] pb-3 text-xs whitespace-nowrap">
           <button
-            onClick={() => setActiveMainTab('LIVE_STATUS')}
-            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeMainTab === 'LIVE_STATUS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
-              }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>Monitoring Status Live Petugas (BTC & Nurse)</span>
-          </button>
-
-          <button
             onClick={() => setActiveMainTab('RECAP')}
             className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeMainTab === 'RECAP' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
               }`}
           >
             <FileText className="w-4 h-4" />
             <span>Dashboard Rekapitulasi & Filter Komisi</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMainTab('LIVE_STATUS')}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeMainTab === 'LIVE_STATUS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+              }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span>Monitoring Status Live Petugas (BTC & Nurse)</span>
           </button>
         </div>
 
