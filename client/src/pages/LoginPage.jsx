@@ -99,7 +99,7 @@ export default function LoginPage() {
         {/* Demo Quick Login Helper */}
         <div className="pt-2 border-t border-[#e5ded4] space-y-2">
           <p className="text-[11px] font-bold text-[#7d5141] text-center uppercase tracking-wider">
-            Demo Akun Fast Login (Klik Untuk Coba):
+            DEV ONLY - Demo Akun Fast Login:
           </p>
           <div className="grid grid-cols-2 gap-1.5 text-[11px]">
             <button
