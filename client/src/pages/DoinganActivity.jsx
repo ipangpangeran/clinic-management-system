@@ -9,7 +9,7 @@ import {
 
 export default function DoinganActivity() {
   const { user } = useContext(AuthContext);
-  const [activeMainTab, setActiveMainTab] = useState('LIVE_STATUS'); // 'LIVE_STATUS', 'RECAP'
+  const [activeMainTab, setActiveMainTab] = useState('RECAP'); // 'LIVE_STATUS', 'RECAP'
 
   // Data States
   const [patients, setPatients] = useState([]);
@@ -273,7 +273,7 @@ export default function DoinganActivity() {
         </div>
 
         {/* TAB 1: MONITORING STATUS LIVE PETUGAS (BEAUTICIAN & NURSE) */}
-        {activeMainTab === 'RECAP' && (
+        {activeMainTab === 'LIVE_STATUS' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
               <div>
