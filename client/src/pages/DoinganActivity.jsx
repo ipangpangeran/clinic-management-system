@@ -222,8 +222,9 @@ export default function DoinganActivity() {
     XLSX.writeFile(workbook, `Rekap_Doingan_Marketing_Deflow_${startDate}_to_${endDate}.xlsx`);
   };
 
-  const beauticianList = staffList.filter(s => (s.role === 'Beautician' || s.lini_profesi === 'Beautician') && s.role !== 'Marketing' && s.lini_profesi !== 'Marketing');
-  const nurseList = staffList.filter(s => (s.role === 'Nurse' || s.lini_profesi === 'Nurse' || s.role === 'Dokter') && s.role !== 'Marketing' && s.lini_profesi !== 'Marketing');
+  const nonStaffRoles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Admin FO', 'Manager', 'Marketing'];
+  const beauticianList = staffList.filter(s => s.role === 'Beautician' || (s.lini_profesi === 'Beautician' && !nonStaffRoles.includes(s.role)));
+  const nurseList = staffList.filter(s => (s.role === 'Nurse' || s.role === 'Dokter') || (s.lini_profesi === 'Nurse' && !nonStaffRoles.includes(s.role)));
 
   return (
     <div className="space-y-6">

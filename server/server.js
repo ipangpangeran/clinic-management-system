@@ -220,11 +220,11 @@ app.get('/api/doingan', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/staff-availability -> Returns staff users (Beautician & Nurse only) with their active work status
+// GET /api/staff-availability -> Returns staff users (Beautician, Nurse, Dokter only) with their active work status
 app.get('/api/staff-availability', authenticateToken, async (req, res) => {
   try {
     const { lini } = req.query; // 'Beautician' or 'Nurse'
-    let query = "SELECT id, username, full_name, role, lini_profesi FROM users WHERE (role IN ('Beautician', 'Nurse') OR lini_profesi IN ('Beautician', 'Nurse')) AND role != 'Marketing' AND (lini_profesi IS NULL OR lini_profesi != 'Marketing')";
+    let query = "SELECT id, username, full_name, role, lini_profesi FROM users WHERE role IN ('Beautician', 'Nurse', 'Dokter') AND role NOT IN ('Super Admin', 'Admin System', 'Admin Klinik', 'Admin FO', 'Manager', 'Marketing')";
     const params = [];
     if (lini) {
       query += " AND (role = ? OR lini_profesi = ?)";
