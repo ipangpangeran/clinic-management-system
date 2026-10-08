@@ -1628,7 +1628,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                         <option value="">-- {loadingStaff ? 'Memuat Staff...' : 'Pilih Petugas Staff'} --</option>
                         {staffList.map(s => (
                           <option key={s.id} value={s.id} disabled={s.is_busy}>
-                            {s.full_name} ({s.role}) {s.is_busy ? '[SEDANG DITANGANI PASIEN LAIN]' : '[READY]'}
+                            {s.is_busy ? '🔴' : '🟢'} {s.full_name}
                           </option>
                         ))}
                       </select>
@@ -1923,7 +1923,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                   <option value="">-- Select Petugas Bertugas --</option>
                   {staffList.map(s => (
                     <option key={s.id} value={s.id} disabled={s.is_busy}>
-                      {s.full_name} ({s.role}) {s.is_busy ? '[SEDANG DITANGANI PASIEN LAIN]' : '[READY]'}
+                      {s.is_busy ? '🔴' : '🟢'} {s.full_name}
                     </option>
                   ))}
                 </select>

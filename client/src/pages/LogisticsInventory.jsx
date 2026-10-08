@@ -394,7 +394,7 @@ export default function LogisticsInventory() {
                       </td>
                       <td className="py-3 px-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
-                            req.status === 'REJECTED' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                          req.status === 'REJECTED' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
                           }`}>
                           {req.status === 'PENDING' ? 'MENUNGGU APPROVAL' : req.status}
                         </span>
@@ -455,7 +455,7 @@ export default function LogisticsInventory() {
                     <td className="py-3 px-4 text-[#514440]">{m.requester_name || 'Staff'}</td>
                     <td className="py-3 px-4">
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${m.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                          m.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                        m.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
                         }`}>
                         {m.status}
                       </span>
@@ -495,7 +495,7 @@ export default function LogisticsInventory() {
                 onClick={openNewMasterPaketModal}
                 className="px-3.5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
               >
-                <Plus className="w-3.5 h-3.5" /> + Tambah Master Paket Baru
+                <Plus className="w-3.5 h-3.5" /> Tambah Master Paket Baru
               </button>
             </div>
 
@@ -514,7 +514,7 @@ export default function LogisticsInventory() {
                   {masterPakets.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="text-center py-6 text-gray-400 italic">
-                        Belum ada template paket. Klik "+ Tambah Master Paket Baru" untuk membuat.
+                        Belum ada template paket. Klik "Tambah Master Paket Baru" untuk membuat.
                       </td>
                     </tr>
                   ) : (
@@ -598,8 +598,8 @@ export default function LogisticsInventory() {
                       <td className="py-3 px-4 text-[#83746f]">{p.minimum_stok} {p.satuan}</td>
                       <td className="py-3 px-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isLow
-                            ? 'bg-red-100 text-red-800 border border-red-300 animate-pulse'
-                            : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          ? 'bg-red-100 text-red-800 border border-red-300 animate-pulse'
+                          : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                           }`}>
                           {isLow ? 'ALERT: MENIPIS' : 'AMANKAN'}
                         </span>
@@ -903,9 +903,9 @@ export default function LogisticsInventory() {
                 />
               </div>
 
-              <div className="text-[11px] text-gray-500 italic bg-gray-50 p-2.5 rounded-lg border border-gray-200">
+              {/* <div className="text-[11px] text-gray-500 italic bg-gray-50 p-2.5 rounded-lg border border-gray-200">
                 ⚡ Catatan: Perubahan/penambahan template paket langsung disimpan ke database <strong>tanpa perlu proses approval</strong>.
-              </div>
+              </div> */}
 
               <button
                 type="submit"

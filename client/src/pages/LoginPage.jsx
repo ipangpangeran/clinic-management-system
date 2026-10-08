@@ -63,7 +63,7 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 className="w-full pl-9 pr-4 py-2.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-[#1e1b15] focus:outline-none focus:border-[#7d5141] transition-all"
-                placeholder="Masukkan username"
+                placeholder="Input username"
               />
             </div>
           </div>
@@ -82,7 +82,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="w-full pl-9 pr-4 py-2.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-[#1e1b15] focus:outline-none focus:border-[#7d5141] transition-all"
-                placeholder="Masukkan password"
+                placeholder="Input password"
               />
             </div>
           </div>
@@ -92,7 +92,7 @@ export default function LoginPage() {
             disabled={submitting}
             className="w-full py-3 px-4 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
           >
-            {submitting ? 'Memproses...' : 'Masuk ke Sistem'}
+            {submitting ? 'Memproses...' : 'Login'}
           </button>
         </form>
 
@@ -135,7 +135,7 @@ export default function LoginPage() {
               onClick={() => { setUsername('rahma'); setPassword('admin1234'); }}
               className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
             >
-              💆‍♀️ Beautician Rahma
+              💆‍♀️ BTC Rahma
             </button>
             <button
               type="button"
@@ -149,21 +149,21 @@ export default function LoginPage() {
               onClick={() => { setUsername('indah.khairun'); setPassword('admin1234'); }}
               className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
             >
-              💆‍♀️ Beautician Indah
+              💆‍♀️ BTC Indah
             </button>
             <button
               type="button"
               onClick={() => { setUsername('henni.mariani'); setPassword('admin1234'); }}
               className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
             >
-              💆‍♀️ Beautician Henni
+              💆‍♀️ BTC Henni
             </button>
             <button
               type="button"
               onClick={() => { setUsername('anggun.aprilia'); setPassword('admin1234'); }}
               className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
             >
-              💆‍♀️ Beautician Anggun
+              💆‍♀️ BTC Anggun
             </button>
           </div>
         </div>
