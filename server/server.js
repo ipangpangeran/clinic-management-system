@@ -220,14 +220,14 @@ app.get('/api/doingan', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/staff-availability -> Returns staff users with their active work status
+// GET /api/staff-availability -> Returns staff users (Beautician & Nurse only) with their active work status
 app.get('/api/staff-availability', authenticateToken, async (req, res) => {
   try {
     const { lini } = req.query; // 'Beautician' or 'Nurse'
-    let query = "SELECT id, username, full_name, role, lini_profesi FROM users WHERE role NOT IN ('Super Admin', 'Admin System', 'Admin Klinik', 'Admin FO', 'Manager')";
+    let query = "SELECT id, username, full_name, role, lini_profesi FROM users WHERE (role IN ('Beautician', 'Nurse') OR lini_profesi IN ('Beautician', 'Nurse')) AND role != 'Marketing' AND (lini_profesi IS NULL OR lini_profesi != 'Marketing')";
     const params = [];
     if (lini) {
-      query += " AND (role = ? OR (lini_profesi = ? AND role IN ('Beautician', 'Nurse')))";
+      query += " AND (role = ? OR lini_profesi = ?)";
       params.push(lini, lini);
     }
     const staffList = await allQuery(query, params);
@@ -335,12 +335,19 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
     let totalKomisi = 0;
     let mainTindakanId = null;
 
+    const commRows = await allQuery('SELECT role_key, nominal_komisi FROM role_commissions');
+    const commMap = {};
+    commRows.forEach(r => commMap[r.role_key] = r.nominal_komisi);
+
+    const commBtcTrial = commMap['BTC_TRIAL'] ?? 13000;
+    const commBtcMember = commMap['BTC_MEMBER'] ?? 17000;
+    const commBtcTraining = commMap['BTC_TRAINING'] ?? 10000;
+
     const isTrial = (doi.status_doingan === 'Trial' || doi.tipe_pasien === 'TRIAL');
 
     if (isTrial) {
       finalNamaTindakan = 'Tindakan Treatment Trial';
-      // Commission: 10K if staff is Training, 13K if Regular
-      totalKomisi = isTraining ? 10000 : 13000;
+      totalKomisi = isTraining ? commBtcTraining : commBtcTrial;
     } else {
       if (tindakan_ids && Array.isArray(tindakan_ids) && tindakan_ids.length > 0) {
         const placeholders = tindakan_ids.map(() => '?').join(',');
@@ -351,13 +358,13 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
 
         selectedTreatments.forEach(t => {
           if (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') {
-            totalKomisi += (t.komisi_fix_therapist || 17000);
+            totalKomisi += (t.komisi_fix_therapist || commBtcMember);
           } else {
-            totalKomisi += (t.komisi_fix_therapist || 15000);
+            totalKomisi += (t.komisi_fix_therapist || commBtcTrial);
           }
         });
       } else {
-        totalKomisi = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') ? 17000 : (isTraining ? 10000 : 13000);
+        totalKomisi = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') ? commBtcMember : (isTraining ? commBtcTraining : commBtcTrial);
       }
     }
 
@@ -639,6 +646,38 @@ app.put('/api/acl', authenticateToken, async (req, res) => {
     res.json({ message: 'Dynamic ACL matriks berhasil diperbarui' });
   } catch (err) {
     res.status(500).json({ message: 'Error updating ACL', error: err.message });
+  }
+});
+
+// --- CATALOG & MATRIX KOMISI ROLE ROUTES ---
+app.get('/api/role-commissions', authenticateToken, async (req, res) => {
+  try {
+    const list = await allQuery('SELECT * FROM role_commissions ORDER BY role_key ASC');
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching role commissions', error: err.message });
+  }
+});
+
+app.put('/api/role-commissions', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System' && req.user.role !== 'Admin Klinik') {
+      return res.status(403).json({ message: 'Hanya Admin yang diizinkan mengubah skema komisi role' });
+    }
+    const { commissions } = req.body;
+    if (!Array.isArray(commissions)) return res.status(400).json({ message: 'Data komisi tidak valid' });
+
+    for (const item of commissions) {
+      await runQuery(`
+        UPDATE role_commissions
+        SET nominal_komisi = ?, updated_at = datetime('now', '+7 hours')
+        WHERE role_key = ?
+      `, [Number(item.nominal_komisi) || 0, item.role_key]);
+    }
+
+    res.json({ message: 'Catalog & Matrix Komisi Role berhasil diperbarui!' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating role commissions', error: err.message });
   }
 });
 
@@ -1039,13 +1078,16 @@ app.post('/api/settings/toggle-wa-reminder', authenticateToken, async (req, res)
 // --- MARKETING TRIAL ACQUISITION RECAP ---
 app.get('/api/marketing/recap', authenticateToken, async (req, res) => {
   try {
+    const mktCommRow = await getQuery("SELECT nominal_komisi FROM role_commissions WHERE role_key = 'MARKETING'");
+    const mktCommNominal = mktCommRow ? mktCommRow.nominal_komisi : 10000;
+
     const recap = await allQuery(`
       SELECT 
         u.id as marketing_id,
         u.full_name as marketing_nama,
         u.role as marketing_role,
         COUNT(DISTINCT d.id) as total_trial_count,
-        (COUNT(DISTINCT d.id) * 10000) as total_komisi_marketing
+        (COUNT(DISTINCT d.id) * ${mktCommNominal}) as total_komisi_marketing
       FROM users u
       LEFT JOIN doingan d ON d.marketing_id = u.id AND d.status_pengerjaan = 'COMPLETED' AND (d.status_doingan = 'Trial' OR d.status_doingan = 'TRIAL')
       WHERE u.role = 'Marketing' OR u.lini_profesi = 'Marketing' OR u.id IN (SELECT DISTINCT marketing_id FROM doingan WHERE marketing_id IS NOT NULL)

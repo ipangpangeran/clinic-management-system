@@ -510,20 +510,9 @@ export default function ClinicSettingsAcl() {
                       <td className="py-3 px-4 font-bold text-[#1e1b15]">{u.full_name}</td>
                       <td className="py-3 px-4 font-mono font-semibold text-[#7d5141]">{u.username}</td>
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#faf3e8] text-[#7d5141] border border-[#d6c2bd]">
-                            {u.role}
-                          </span>
-                          {u.is_training === 1 ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                              TRAINING (10K)
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                              REGULAR (13K)
-                            </span>
-                          )}
-                        </div>
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#faf3e8] text-[#7d5141] border border-[#d6c2bd]">
+                          {u.role}
+                        </span>
                       </td>
                       <td className="py-3 px-4 font-semibold text-[#1e1b15]">
                         {u.role === 'Super Admin' || u.role === 'Admin System' || u.role === 'Admin Klinik' ? (

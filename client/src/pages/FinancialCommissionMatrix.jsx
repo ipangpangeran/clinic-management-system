@@ -20,6 +20,8 @@ export default function FinancialCommissionMatrix() {
 
   const [payrollSummary, setPayrollSummary] = useState([]);
   const [treatments, setTreatments] = useState([]);
+  const [roleCommissions, setRoleCommissions] = useState([]);
+  const [savingCommissions, setSavingCommissions] = useState(false);
   const [selectedBulan, setSelectedBulan] = useState(new Date().getMonth() + 1);
   const [selectedTahun, setSelectedTahun] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
@@ -58,7 +60,36 @@ export default function FinancialCommissionMatrix() {
   useEffect(() => {
     fetchPayroll();
     fetchTreatments();
+    fetchRoleCommissions();
   }, [selectedBulan, selectedTahun]);
+
+  const fetchRoleCommissions = async () => {
+    try {
+      const res = await axios.get('/api/role-commissions');
+      setRoleCommissions(res.data || []);
+    } catch (err) {
+      console.error('Error fetching role commissions', err);
+    }
+  };
+
+  const handleCommissionChange = (roleKey, value) => {
+    setRoleCommissions(prev => prev.map(c =>
+      c.role_key === roleKey ? { ...c, nominal_komisi: value } : c
+    ));
+  };
+
+  const handleSaveRoleCommissions = async () => {
+    setSavingCommissions(true);
+    try {
+      await axios.put('/api/role-commissions', { commissions: roleCommissions });
+      alert('Catalog & Matrix Komisi Role berhasil diperbarui!');
+      fetchRoleCommissions();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyimpan matrix komisi role');
+    } finally {
+      setSavingCommissions(false);
+    }
+  };
 
   const fetchPayroll = async () => {
     setLoading(true);
@@ -290,28 +321,87 @@ export default function FinancialCommissionMatrix() {
           </div>
         )}
 
-        {/* RUMUS KOMISI ROLE REVISI */}
+        {/* CATALOG & MATRIX KOMISI ROLE */}
         {activeTab === 'FORMULAS' && canReadFormulas && (
           <div className="space-y-4">
-            <h3 className="font-serif font-bold text-base text-[#1e1b15]">Skema Aturan Komisi & Aktivitas Per Role (Spesifikasi DEFLOW)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Catalog & Matrix Komisi Role DEFLOW</h3>
+                <p className="text-xs text-[#514440]">Parameter nilai komisi diatur terpusat per role. Perubahan nominal komisi otomatis berlaku untuk seluruh user yang berada dalam role tersebut.</p>
+              </div>
+              {canManageTreatments && (
+                <button
+                  type="button"
+                  onClick={handleSaveRoleCommissions}
+                  disabled={savingCommissions}
+                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 shrink-0"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>{savingCommissions ? 'Menyimpan...' : 'Simpan Matrix Komisi'}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-[#e5ded4] overflow-hidden shadow-xs">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-3 px-4">Kategori Role / Status</th>
+                    <th className="py-3 px-4">Deskripsi / Perhitungan Komisi</th>
+                    <th className="py-3 px-4 min-w-[200px]">Nominal Komisi (Rp)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {roleCommissions.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="text-center py-6 text-gray-400 italic">Memuat catalog & matrix komisi role...</td>
+                    </tr>
+                  ) : (
+                    roleCommissions.map(comm => (
+                      <tr key={comm.role_key} className="hover:bg-[#fff8f0]">
+                        <td className="py-3.5 px-4 font-bold text-[#1e1b15] text-sm">
+                          {comm.role_name}
+                        </td>
+                        <td className="py-3.5 px-4 text-[#514440] font-medium">
+                          {comm.keterangan || '-'}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="relative max-w-xs">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-xs">Rp</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={comm.nominal_komisi}
+                              onChange={(e) => handleCommissionChange(comm.role_key, e.target.value)}
+                              disabled={!canManageTreatments}
+                              className="w-full pl-8 pr-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141] text-xs focus:outline-none focus:border-[#7d5141]"
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">1. Manager (Terapis & Perawatan)</div>
+                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">1. Team Marketing</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Aktivitas: Doingan / Nama Pasien & Status Doingan<br/>
-                  - Mbr (Member)   : Rp 17.000 / Doingan<br/>
-                  - Trial (Free)    : Rp 13.000 / Doingan
+                  Komisi = Total Akuisisi Pasien Trial × Nominal Parameter (Rp 10.000 / Pasien)
                 </div>
-                <p className="text-[11px] text-[#514440]">Komisi otomatis terhitung sesuai status doingan pasien member (Rp 17.000) atau trial free (Rp 13.000) dan tindakan perawatan medis.</p>
+                <p className="text-[11px] text-[#514440]">Mendapatkan insentif per pasien trial baru yang didaftarkan ke sistem.</p>
               </div>
 
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
-                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">2. Admin FO (Front Office & Kasir)</div>
+                <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">2. Beautician & Nurse (Terapis & Medis)</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Aktivitas: Mendaftarkan Pasien & Membuat Tagihan / Billing<br/>
-                  Komisi = Omset Billing Kasir Harian (1.5%)
+                  - Pasien Trial    : Rp 13.000 / Doingan<br/>
+                  - Pasien Member   : Rp 17.000 / Doingan<br/>
+                  - Staff Training : Rp 10.000 / Doingan
                 </div>
-                <p className="text-[11px] text-[#514440]">Mengelola pendaftaran pasien awal dan kasir nota billing counter.</p>
+                <p className="text-[11px] text-[#514440]">Komisi tindakan perawatan otomatis terhitung sesuai status pasien & status terapis.</p>
               </div>
             </div>
           </div>

@@ -253,7 +253,7 @@ async function initDb() {
     try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN petugas_id TEXT`); } catch(e){}
     try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN petugas_nama TEXT`); } catch(e){}
 
-    // 6b. System Settings (Feature Toggles)
+    // 6b. System Settings (Feature Toggles) & Role Commission Matrix
     await runQuery(`
       CREATE TABLE IF NOT EXISTS system_settings (
         setting_key TEXT PRIMARY KEY,
@@ -262,6 +262,16 @@ async function initDb() {
       )
     `);
     await runQuery(`INSERT OR IGNORE INTO system_settings (setting_key, setting_value) VALUES ('wa_reminder_enabled', '0')`);
+
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS role_commissions (
+        role_key TEXT PRIMARY KEY,
+        role_name TEXT NOT NULL,
+        nominal_komisi REAL NOT NULL DEFAULT 0,
+        keterangan TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     // 7. Patient Reminders
     await runQuery(`
@@ -507,6 +517,14 @@ async function initDb() {
 }
 
 async function seedDefaultData() {
+  const commCount = await getQuery('SELECT COUNT(*) as count FROM role_commissions');
+  if (commCount.count === 0) {
+    await runQuery(`INSERT INTO role_commissions (role_key, role_name, nominal_komisi, keterangan) VALUES ('MARKETING', 'Marketing (Pasien Trial)', 10000, 'Komisi per akuisisi pasien trial')`);
+    await runQuery(`INSERT INTO role_commissions (role_key, role_name, nominal_komisi, keterangan) VALUES ('BTC_TRIAL', 'Beautician / Nurse Pasien Trial', 13000, 'Komisi per treatment pasien trial')`);
+    await runQuery(`INSERT INTO role_commissions (role_key, role_name, nominal_komisi, keterangan) VALUES ('BTC_MEMBER', 'Beautician / Nurse Pasien Member', 17000, 'Komisi per treatment pasien member')`);
+    await runQuery(`INSERT INTO role_commissions (role_key, role_name, nominal_komisi, keterangan) VALUES ('BTC_TRAINING', 'Beautician / Nurse Training', 10000, 'Komisi per treatment untuk staff status training')`);
+  }
+
   const profileRow = await getQuery('SELECT COUNT(*) as count FROM clinic_profile');
   if (profileRow.count === 0) {
     await runQuery(`
