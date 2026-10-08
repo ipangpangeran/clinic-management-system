@@ -273,7 +273,7 @@ export default function DoinganActivity() {
         </div>
 
         {/* TAB 1: MONITORING STATUS LIVE PETUGAS (BEAUTICIAN & NURSE) */}
-        {activeMainTab === 'LIVE_STATUS' && (
+        {activeMainTab === 'RECAP' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
               <div>
