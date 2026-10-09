@@ -5,10 +5,17 @@ import { AuthContext } from '../context/AuthContext';
 import {
   UserPlus, Search, Edit, Trash2, Download, Package, Calendar,
   AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet, UserCheck,
-  Clock, RefreshCw, Sparkles, Stethoscope, Users, CheckCircle2, UserPlus2, History, Database
+  Clock, RefreshCw, Sparkles, Stethoscope, Users, CheckCircle2, UserPlus2, History, Database,
+  ShoppingCart, X
 } from 'lucide-react';
+import { formatPersonName } from '../utils/formatters';
 
-export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
+export default function PatientManagement({
+  mode = 'INTAKE',
+  setActiveTab,
+  autoOpenNewPatient = false,
+  setAutoOpenNewPatient
+}) {
   const { user, hasPermission } = useContext(AuthContext);
 
   // Current view mode: 'INTAKE' (Pendaftaran Pasien & Treatment), 'RAW_MASTER' (Master Data Pelanggan), or 'DETAIL' (Detail Data Pelanggan)
@@ -83,6 +90,16 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
   const [itemAKuota, setItemAKuota] = useState(3);
   const [itemBName, setItemBName] = useState('Facial');
   const [itemBKuota, setItemBKuota] = useState(2);
+
+  // Member Registration Package Selection State
+  const [selectedRegPackages, setSelectedRegPackages] = useState([]);
+  const [isBuyingPackage, setIsBuyingPackage] = useState(false);
+
+  // Migration from Trial to Member Package Modal State
+  const [migratedPatient, setMigratedPatient] = useState(null);
+  const [showMigrationPackageModal, setShowMigrationPackageModal] = useState(false);
+  const [selectedMigrationPackages, setSelectedMigrationPackages] = useState([]);
+  const [submittingMigrationPkg, setSubmittingMigrationPkg] = useState(false);
 
   // Claim Modal State
   const [showClaimModal, setShowClaimModal] = useState(false);
@@ -225,6 +242,17 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     fetchStaffAvailability(lini);
   };
 
+  const toggleRegPackage = (pkg) => {
+    setSelectedRegPackages(prev => {
+      const exists = prev.some(p => p.id === pkg.id);
+      if (exists) {
+        return prev.filter(p => p.id !== pkg.id);
+      } else {
+        return [...prev, pkg];
+      }
+    });
+  };
+
   const openNewPatientModal = () => {
     setEditMode(false);
     setSelectedPatient(null);
@@ -243,6 +271,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     setReferrerPasienId('');
     setMgmSearchInput('');
     setShowMgmDropdown(false);
+    setSelectedRegPackages([]);
+    setIsBuyingPackage(false);
     setKebutuhanLayanan('Beautician');
     setSelectedStaffId('');
     setErrorMessage('');
@@ -250,6 +280,13 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     setShowModal(true);
     fetchStaffAvailability('Beautician');
   };
+
+  useEffect(() => {
+    if (autoOpenNewPatient) {
+      openNewPatientModal();
+      if (setAutoOpenNewPatient) setAutoOpenNewPatient(false);
+    }
+  }, [autoOpenNewPatient]);
 
   const openIntakeForExisting = (p) => {
     setEditMode(false);
@@ -264,6 +301,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     const refP = patients.find(x => x.id === p.referrer_pasien_id);
     setMgmSearchInput(refP ? `${refP.nama_lengkap} (${refP.no_hp})` : '');
     setShowMgmDropdown(false);
+    setSelectedRegPackages([]);
+    setIsBuyingPackage(false);
     setKebutuhanLayanan('Beautician');
     setSelectedStaffId('');
     setErrorMessage('');
@@ -295,6 +334,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     const refP = patients.find(x => x.id === p.referrer_pasien_id);
     setMgmSearchInput(refP ? `${refP.nama_lengkap} (${refP.no_hp})` : '');
     setShowMgmDropdown(false);
+    setSelectedRegPackages([]);
+    setIsBuyingPackage(false);
     setKebutuhanLayanan('Beautician');
     setSelectedStaffId('');
     setErrorMessage('');
@@ -317,8 +358,40 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       alert(`Status pasien "${patient.nama_lengkap}" berhasil diubah menjadi MEMBER!`);
       fetchPatients();
       fetchTodayDoingan();
+
+      // Langsung munculkan modal pemilihan paket yang dibeli pasien
+      setMigratedPatient(patient);
+      setSelectedMigrationPackages([]);
+      setShowMigrationPackageModal(true);
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal mengubah status pasien');
+    }
+  };
+
+  const handleConfirmMigrationPackages = async () => {
+    if (!migratedPatient) return;
+    if (selectedMigrationPackages.length === 0) {
+      alert('Silakan pilih minimal 1 paket treatment yang dibeli oleh pasien member!');
+      return;
+    }
+
+    setSubmittingMigrationPkg(true);
+    try {
+      await axios.post(`/api/pasien/${migratedPatient.id}/paket`, {
+        packages: selectedMigrationPackages,
+        marketing_id: migratedPatient.marketing_id || null
+      });
+      const totalNominal = selectedMigrationPackages.reduce((sum, p) => sum + (Number(p.harga_paket) || 0), 0);
+      alert(`Berhasil! ${selectedMigrationPackages.length} paket telah ditambahkan ke pasien "${migratedPatient.nama_lengkap}". Tagihan sebesar Rp ${totalNominal.toLocaleString('id-ID')} telah diteruskan ke Kasir POS.`);
+      setShowMigrationPackageModal(false);
+      setMigratedPatient(null);
+      setSelectedMigrationPackages([]);
+      fetchPatients();
+      fetchTodayDoingan();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyimpan paket pembelian');
+    } finally {
+      setSubmittingMigrationPkg(false);
     }
   };
 
@@ -488,8 +561,13 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
     setErrorMessage('');
     setSuccessMessage('');
 
-    if (!editMode && !selectedStaffId) {
+    if (!editMode && !isBuyingPackage && !selectedStaffId) {
       setErrorMessage('Silakan pilih Petugas Bertugas (Beautician / Nurse) untuk menangani treatment pasien hari ini.');
+      return;
+    }
+
+    if (!editMode && isBuyingPackage && selectedRegPackages.length === 0) {
+      setErrorMessage('Mode Beli Paket aktif: Silakan pilih minimal 1 paket treatment yang dibeli.');
       return;
     }
 
@@ -498,31 +576,45 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
 
     try {
       if (editMode && selectedPatient) {
+        if (!noHp || !namaLengkap) {
+          setErrorMessage('Nama Lengkap dan No. Handphone wajib diisi');
+          return;
+        }
+        const formattedNama = formatPersonName(namaLengkap);
         const payload = {
           no_ktp: noKtp || null,
           no_hp: noHp,
-          nama_lengkap: namaLengkap,
-          tipe_pasien: formType,
-          alamat: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? alamat : null,
-          tgl_lahir: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? tglLahir : null,
-          riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? riwayatAlergi : null,
-          jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? jenisKulit : null,
-          rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? rekomendasiDokter : null,
-          marketing_id: marketingId || null,
-          referrer_pasien_id: referrerPasienId || null,
+          nama_lengkap: formattedNama,
+          // Preserve tipe_pasien asli dan data lainnya agar tidak berubah
+          tipe_pasien: selectedPatient.tipe_pasien,
+          alamat: selectedPatient.alamat,
+          tgl_lahir: selectedPatient.tgl_lahir,
+          riwayat_alergi: selectedPatient.riwayat_alergi,
+          jenis_kulit: selectedPatient.jenis_kulit,
+          rekomendasi_dokter: selectedPatient.rekomendasi_dokter,
+          marketing_id: selectedPatient.marketing_id,
+          referrer_pasien_id: selectedPatient.referrer_pasien_id,
         };
         await axios.put(`/api/pasien/${selectedPatient.id}`, payload);
-        patientIdToAssign = selectedPatient.id;
-        setSuccessMessage('Data pasien berhasil diperbarui!');
+        setSuccessMessage('Data pasien (Nama, No HP, NIK) berhasil diperbarui!');
+        fetchPatients();
+        fetchTodayDoingan();
+        setTimeout(() => {
+          setShowModal(false);
+          setEditMode(false);
+          setSelectedPatient(null);
+        }, 1200);
+        return;
       } else if (modePendaftaran === 'NEW') {
         if (!noHp || !namaLengkap) {
           setErrorMessage('Nama Lengkap dan No. Handphone wajib diisi');
           return;
         }
+        const formattedNama = formatPersonName(namaLengkap);
         const payload = {
           no_ktp: noKtp || null,
           no_hp: noHp,
-          nama_lengkap: namaLengkap,
+          nama_lengkap: formattedNama,
           tipe_pasien: formType,
           alamat: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? alamat : null,
           tgl_lahir: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? tglLahir : null,
@@ -534,7 +626,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
         };
         const res = await axios.post('/api/pasien', payload);
         patientIdToAssign = res.data.pasien?.id;
-        targetPatientName = res.data.pasien?.nama_lengkap || namaLengkap;
+        targetPatientName = res.data.pasien?.nama_lengkap || formattedNama;
         setSuccessMessage('Pasien baru berhasil didaftarkan!');
       } else if (modePendaftaran === 'EXISTING') {
         if (!selectedExistingPatientId) {
@@ -554,8 +646,17 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
         }
       }
 
-      // Live Assignment process if staff selected
-      if (selectedStaffId && patientIdToAssign) {
+      // Save purchased packages if member selected packages
+      if ((formType === 'MEMBER' || formType === 'NON-TRIAL') && isBuyingPackage && selectedRegPackages.length > 0 && patientIdToAssign) {
+        await axios.post(`/api/pasien/${patientIdToAssign}/paket`, {
+          packages: selectedRegPackages,
+          marketing_id: marketingId || null
+        });
+        setSelectedRegPackages([]);
+      }
+
+      // Live Assignment process ONLY if not buying package and staff selected
+      if (!isBuyingPackage && selectedStaffId && patientIdToAssign) {
         const selectedStaffObj = staffList.find(s => s.id === selectedStaffId);
         const katName = kebutuhanLayanan === 'Nurse' ? 'Tindakan Medis (Nurse)' : 'Facial (Beautician)';
 
@@ -567,6 +668,8 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
         });
 
         setSuccessMessage(`Berhasil! Pasien ${targetPatientName} di-assign ke ${selectedStaffObj?.full_name || 'Petugas'}. Sesi otomatis IN_PROGRESS!`);
+      } else if (isBuyingPackage) {
+        setSuccessMessage(`Berhasil! Pendaftaran member & pembelian paket untuk ${targetPatientName} sukses. Tagihan paket telah diteruskan ke Kasir POS!`);
       }
 
       fetchPatients();
@@ -755,14 +858,17 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       'No.': index + 1,
       'Nama Marketing': m.marketing_nama || '-',
       'Role / Lini Profesi': m.marketing_role || 'Marketing',
-      'Jumlah Pasien Trial Didapatkan': m.total_trial_count || 0,
-      'Total Komisi Trial (Rp 10.000 / Pasien)': m.total_komisi_marketing || 0
+      'Pasien Trial Selesai': m.total_trial_count || 0,
+      'Komisi Trial (Rp 10.000 / Pasien)': m.total_komisi_trial || 0,
+      'Paket Member Terjual': m.total_paket_count || 0,
+      'Komisi Penjualan Paket': m.total_komisi_paket || 0,
+      'Total Keseluruhan Komisi': m.total_komisi_marketing || 0
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap Komisi Marketing');
-    XLSX.writeFile(workbook, `Rekap_Komisi_Marketing_Trial_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(workbook, `Rekap_Komisi_Marketing_DEFLOW_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const openReminderModal = (p) => {
@@ -821,9 +927,10 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
       (p.no_ktp && p.no_ktp.includes(term));
   });
 
-  // Active intake queue today (exclude patients whose treatment is completed AND billing finished, and exclude Marketing referral records)
+  // Active intake queue today (exclude patients whose treatment is completed AND billing finished, cancelled patients, and exclude Marketing referral records)
   const activeTodayQueue = todayDoinganList.filter(d =>
     !(d.status_pengerjaan === 'COMPLETED' && d.is_billed === 1) &&
+    d.status_pengerjaan !== 'CANCELLED' &&
     d.petugas_role !== 'Marketing' &&
     d.kategori_layanan !== 'Marketing Referral'
   );
@@ -972,7 +1079,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                             {isInProgress ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-700 border border-red-300">
                                 <Clock className="w-3.5 h-3.5 animate-spin" />
-                                Sedang Ditangani (IN_PROGRESS)
+                                Sedang Ditangani
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
@@ -1123,10 +1230,10 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                         </td>
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${item.status_saat_ini.includes('MIGRASI')
-                              ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
-                              : item.status_saat_ini === 'MEMBER'
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-amber-100 text-amber-800 border border-amber-300'
+                            ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                            : item.status_saat_ini === 'MEMBER'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-amber-100 text-amber-800 border border-amber-300'
                             }`}>
                             {item.status_saat_ini}
                           </span>
@@ -1331,14 +1438,16 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                               </button>
                             )}
 
-                            <button
-                              onClick={() => openPackageModal(p)}
-                              className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
-                              title="Kelola Paket Treatment Member"
-                            >
-                              <Package className="w-3.5 h-3.5" />
-                              <span>Paket</span>
-                            </button>
+                            {isMember && (
+                              <button
+                                onClick={() => openPackageModal(p)}
+                                className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-semibold rounded-lg text-[11px] cursor-pointer inline-flex items-center gap-1"
+                                title="Kelola Paket Treatment Member"
+                              >
+                                <Package className="w-3.5 h-3.5" />
+                                <span>Paket</span>
+                              </button>
+                            )}
 
                             {waReminderEnabled && (
                               <button
@@ -1407,27 +1516,47 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                   Tidak ditemukan pasien dengan kata kunci "{repeatSearch}".
                 </div>
               ) : (
-                matchedRepeatPatients.slice(0, 10).map(p => (
-                  <div key={p.id} className="p-3.5 bg-[#faf3e8]/60 hover:bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex items-center justify-between gap-3 transition-colors">
-                    <div>
-                      <div className="font-bold text-sm text-[#1e1b15]">{p.nama_lengkap}</div>
-                      <div className="text-xs text-[#514440] font-medium">HP: {p.no_hp} {p.no_ktp ? `| NIK: ${p.no_ktp}` : ''}</div>
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${p.tipe_pasien === 'TRIAL' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                        }`}>
-                        {p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}
-                      </span>
-                    </div>
+                matchedRepeatPatients.slice(0, 10).map(p => {
+                  const isRepeatMember = p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' || p.status_saat_ini === 'MEMBER';
+                  return (
+                    <div key={p.id} className="p-3.5 bg-[#faf3e8]/60 hover:bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex items-center justify-between gap-3 transition-colors">
+                      <div>
+                        <div className="font-bold text-sm text-[#1e1b15]">{p.nama_lengkap}</div>
+                        <div className="text-xs text-[#514440] font-medium">HP: {p.no_hp} {p.no_ktp ? `| NIK: ${p.no_ktp}` : ''}</div>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-1 ${p.tipe_pasien === 'TRIAL' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                          {p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}
+                        </span>
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() => openIntakeForExisting(p)}
-                      className="px-3.5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
-                    >
-                      <UserCheck className="w-4 h-4" />
-                      <span>+ Buat Sesi Treatment Hari Ini</span>
-                    </button>
-                  </div>
-                ))
+                      <div className="flex items-center gap-2">
+                        {isRepeatMember && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowRepeatVisitModal(false);
+                              openPackageModal(p);
+                            }}
+                            className="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-semibold rounded-xl text-xs cursor-pointer inline-flex items-center gap-1"
+                            title="Kelola Paket Treatment Member"
+                          >
+                            <Package className="w-4 h-4" />
+                            <span>Klaim Paket</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => openIntakeForExisting(p)}
+                          className="px-3.5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+                        >
+                          <UserCheck className="w-4 h-4" />
+                          <span>Buat Sesi Hari Ini</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -1440,7 +1569,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
           <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto border border-[#e5ded4]">
             <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
               <h3 className="font-serif font-bold text-lg text-[#1e1b15]">
-                {editMode ? 'Edit Data Profil Pasien' : (modePendaftaran === 'NEW' ? 'Form Pendaftaran Pasien Baru' : `Intake Treatment Hari Ini: ${namaLengkap}`)}
+                {editMode ? `Edit Data Pasien: ${selectedPatient?.nama_lengkap || namaLengkap}` : (modePendaftaran === 'NEW' ? 'Form Pendaftaran Pasien Baru' : `Intake Treatment Hari Ini: ${namaLengkap}`)}
               </h3>
               <button onClick={() => setShowModal(false)} className="text-gray-400 font-bold text-xl hover:text-black">×</button>
             </div>
@@ -1460,149 +1589,333 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
             )}
 
             <form onSubmit={handleSavePatient} className="space-y-4 text-xs">
-              {/* Patient Data Fields */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="block text-[#514440] font-semibold mb-1">Tipe Pasien / Pelanggan *</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormType('TRIAL')}
-                      className={`py-2 text-center rounded-xl font-bold transition-all ${formType === 'TRIAL' ? 'bg-amber-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
-                    >
-                      PASIEN TRIAL
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormType('MEMBER')}
-                      className={`py-2 text-center rounded-xl font-bold transition-all ${formType === 'MEMBER' || formType === 'NON-TRIAL' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
-                    >
-                      PASIEN MEMBER
-                    </button>
+              {/* KHUSUS EDIT MODE: HANYA NAMA, NO HP, DAN NIK */}
+              {editMode ? (
+                <div className="space-y-3.5">
+                  {/* Read-Only Status & Info Banner */}
+                  <div className="p-3.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div>
+                      <span className="text-[10px] font-bold text-[#514440] uppercase tracking-wider block">Status Keanggotaan / Tipe Pasien</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                          selectedPatient?.tipe_pasien === 'MEMBER' || selectedPatient?.tipe_pasien === 'NON-TRIAL'
+                            ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                            : 'bg-amber-100 text-amber-900 border border-amber-300'
+                        }`}>
+                          {selectedPatient?.tipe_pasien || 'PASIEN'}
+                        </span>
+                        <span className="text-[11px] text-gray-500 italic">(Tipe member dikunci & tidak dapat diubah)</span>
+                      </div>
+                    </div>
+                    {selectedPatient?.marketing_nama && (
+                      <div className="text-left sm:text-right">
+                        <span className="text-[10px] font-bold text-[#514440] uppercase tracking-wider block">Marketing PIC</span>
+                        <span className="text-xs font-bold text-[#7d5141]">{selectedPatient.marketing_nama}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3 Input Fields yang dapat diedit */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[#514440] font-semibold mb-1">Nama Lengkap Pasien *</label>
+                      <input
+                        type="text"
+                        required
+                        value={namaLengkap}
+                        onChange={(e) => setNamaLengkap(formatPersonName(e.target.value))}
+                        placeholder="misal: Ilman Pangeran"
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-0.5">* Otomatis kapital huruf awal nama orang (EYD Title Case)</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[#514440] font-semibold mb-1">No. Handphone / WhatsApp *</label>
+                      <input
+                        type="text"
+                        required
+                        value={noHp}
+                        onChange={(e) => setNoHp(e.target.value)}
+                        placeholder="08123456789..."
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[#514440] font-semibold mb-1">NIK / No. KTP</label>
+                      <input
+                        type="text"
+                        value={noKtp}
+                        onChange={(e) => setNoKtp(e.target.value)}
+                        placeholder="16 digit NIK KTP..."
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                      />
+                    </div>
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-[#514440] font-semibold mb-1">Nama Lengkap Pasien *</label>
-                  <input
-                    type="text"
-                    required
-                    disabled={modePendaftaran === 'EXISTING'}
-                    value={namaLengkap}
-                    onChange={(e) => setNamaLengkap(e.target.value)}
-                    placeholder="Nama Pasien..."
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[#514440] font-semibold mb-1">No. Handphone / WhatsApp *</label>
-                  <input
-                    type="text"
-                    required
-                    disabled={modePendaftaran === 'EXISTING'}
-                    value={noHp}
-                    onChange={(e) => setNoHp(e.target.value)}
-                    placeholder="08123456789..."
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[#514440] font-semibold mb-1">NIK / No. KTP</label>
-                  <input
-                    type="text"
-                    value={noKtp}
-                    disabled={modePendaftaran === 'EXISTING'}
-                    onChange={(e) => setNoKtp(e.target.value)}
-                    placeholder="16 digit NIK KTP..."
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[#514440] font-semibold mb-1">Team Marketing (Assigned FO)</label>
-                  <select
-                    value={marketingId}
-                    disabled={modePendaftaran === 'EXISTING'}
-                    onChange={(e) => setMarketingId(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-                  >
-                    <option value="">-- Tanpa Team Marketing --</option>
-                    {marketingList.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.full_name} ({m.role || m.lini_profesi})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-[#83746f] mt-0.5">*Trial mendapat komisi 10K untuk Team Marketing</p>
-                </div>
-
-                <div className="sm:col-span-2 relative">
-                  <label className="block text-[#514440] font-semibold mb-1">MGM (Member Get Member) / Referrer</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      disabled={modePendaftaran === 'EXISTING'}
-                      value={mgmSearchInput}
-                      onFocus={() => setShowMgmDropdown(true)}
-                      onChange={(e) => {
-                        setMgmSearchInput(e.target.value);
-                        setShowMgmDropdown(true);
-                        if (!e.target.value) setReferrerPasienId('');
-                      }}
-                      placeholder="Ketik nama atau No. HP member yang membawa pasien ini..."
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141] pr-16"
-                    />
-                    {referrerPasienId && (
+              ) : (
+                /* MODE PENDAFTARAN BARU / INTAKE TREATMENT */
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[#514440] font-semibold mb-1">Tipe Pasien / Pelanggan *</label>
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => {
-                          setReferrerPasienId('');
-                          setMgmSearchInput('');
+                          setFormType('TRIAL');
+                          if (kebutuhanLayanan !== 'Beautician') {
+                            handleLayananChange('Beautician');
+                          }
                         }}
-                        className="absolute right-2 top-2 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-lg hover:bg-red-200 transition-colors"
+                        className={`py-2 text-center rounded-xl font-bold transition-all ${formType === 'TRIAL' ? 'bg-amber-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
                       >
-                        Reset
+                        PASIEN TRIAL
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormType('MEMBER')}
+                        className={`py-2 text-center rounded-xl font-bold transition-all ${formType === 'MEMBER' || formType === 'NON-TRIAL' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
+                      >
+                        PASIEN MEMBER
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[#514440] font-semibold mb-1">Nama Lengkap Pasien *</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={modePendaftaran === 'EXISTING'}
+                      value={namaLengkap}
+                      onChange={(e) => setNamaLengkap(formatPersonName(e.target.value))}
+                      placeholder="misal: Ilman Pangeran"
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-0.5">* Otomatis kapital huruf awal nama (EYD Title Case)</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[#514440] font-semibold mb-1">No. Handphone / WhatsApp *</label>
+                    <input
+                      type="text"
+                      required
+                      disabled={modePendaftaran === 'EXISTING'}
+                      value={noHp}
+                      onChange={(e) => setNoHp(e.target.value)}
+                      placeholder="08123456789..."
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[#514440] font-semibold mb-1">NIK / No. KTP</label>
+                    <input
+                      type="text"
+                      value={noKtp}
+                      disabled={modePendaftaran === 'EXISTING'}
+                      onChange={(e) => setNoKtp(e.target.value)}
+                      placeholder="16 digit NIK KTP..."
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[#514440] font-semibold mb-1">Team Marketing (Assigned FO)</label>
+                    <select
+                      value={marketingId}
+                      disabled={modePendaftaran === 'EXISTING'}
+                      onChange={(e) => setMarketingId(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                    >
+                      <option value="">-- Tanpa Team Marketing --</option>
+                      {marketingList.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.full_name} ({m.role || m.lini_profesi})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2 relative">
+                    <label className="block text-[#514440] font-semibold mb-1">MGM</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        disabled={modePendaftaran === 'EXISTING'}
+                        value={mgmSearchInput}
+                        onFocus={() => setShowMgmDropdown(true)}
+                        onChange={(e) => {
+                          setMgmSearchInput(e.target.value);
+                          setShowMgmDropdown(true);
+                          if (!e.target.value) setReferrerPasienId('');
+                        }}
+                        placeholder="Ketik nama atau No. HP member yang membawa pasien ini..."
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141] pr-16"
+                      />
+                      {referrerPasienId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReferrerPasienId('');
+                            setMgmSearchInput('');
+                          }}
+                          className="absolute right-2 top-2 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-lg hover:bg-red-200 transition-colors"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    {showMgmDropdown && mgmSearchInput && (
+                      <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-[#d6c2bd] rounded-xl shadow-lg max-h-44 overflow-y-auto divide-y divide-gray-100">
+                        {patients
+                          .filter(p => p.id !== selectedPatient?.id)
+                          .filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' || p.status_saat_ini === 'MEMBER')
+                          .filter(p => (p.nama_lengkap || '').toLowerCase().includes(mgmSearchInput.toLowerCase()) || (p.no_hp || '').includes(mgmSearchInput))
+                          .slice(0, 8)
+                          .map(p => (
+                            <div
+                              key={p.id}
+                              onClick={() => {
+                                setReferrerPasienId(p.id);
+                                setMgmSearchInput(`${p.nama_lengkap} (HP: ${p.no_hp})`);
+                                setShowMgmDropdown(false);
+                              }}
+                              className="p-2.5 hover:bg-[#faf3e8] cursor-pointer text-xs flex justify-between items-center transition-colors"
+                            >
+                              <div>
+                                <span className="font-bold text-[#1e1b15]">{p.nama_lengkap}</span>
+                                <span className="text-[10px] text-emerald-700 font-semibold ml-2">(Member)</span>
+                              </div>
+                              <span className="text-[#83746f] text-[11px] font-semibold">{p.no_hp}</span>
+                            </div>
+                          ))
+                        }
+                      </div>
                     )}
                   </div>
-                  {showMgmDropdown && mgmSearchInput && (
-                    <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-[#d6c2bd] rounded-xl shadow-lg max-h-44 overflow-y-auto divide-y divide-gray-100">
-                      {patients
-                        .filter(p => p.id !== selectedPatient?.id)
-                        .filter(p => (p.nama_lengkap || '').toLowerCase().includes(mgmSearchInput.toLowerCase()) || (p.no_hp || '').includes(mgmSearchInput))
-                        .slice(0, 8)
-                        .map(p => (
+                </div>
+              )}
+
+              {/* Toggle Beli Paket Treatment atau Kunjungan Reguler/Trial */}
+              {(formType === 'MEMBER' || formType === 'NON-TRIAL') && !editMode && (
+                <div className="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  <div>
+                    <div className="font-bold text-xs text-[#1e1b15] flex items-center gap-1.5">
+                      <Package className="w-4 h-4 text-[#7d5141]" />
+                      <span>Apakah Pasien Membeli Paket Treatment?</span>
+                    </div>
+                    <p className="text-[11px] text-[#514440] mt-0.5">
+                      {isBuyingPackage
+                        ? 'Pasien membeli paket: Assign petugas ditiadakan (di-hide), tagihan paket langsung diteruskan ke POS Kasir.'
+                        : 'Pasien tidak beli paket: Menu assign petugas akan ditampilkan untuk perawatan hari ini.'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#d6c2bd] self-start sm:self-auto shrink-0 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsBuyingPackage(false);
+                        setSelectedRegPackages([]);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        !isBuyingPackage
+                          ? 'bg-[#514440] text-white shadow-xs'
+                          : 'text-[#83746f] hover:text-[#1e1b15]'
+                      }`}
+                    >
+                      TIDAK
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsBuyingPackage(true)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isBuyingPackage
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'text-[#83746f] hover:text-[#1e1b15]'
+                      }`}
+                    >
+                      YA (Beli Paket)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Pembelian Paket Treatment Member (HANYA MUNCUL JIKA isBuyingPackage == true) */}
+              {(formType === 'MEMBER' || formType === 'NON-TRIAL') && !editMode && isBuyingPackage && (
+                <div className="p-4 bg-[#fffbf2] rounded-xl border border-amber-200 space-y-3 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-[#7d5141] uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <Package className="w-4 h-4 text-[#7d5141]" />
+                      <span>Pilih Paket Treatment yang Dibeli</span>
+                    </div>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-900 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                      Bisa Pilih &gt; 1 Paket
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-[#514440]">
+                    Pilih paket treatment yang dibeli oleh member baru ini. Tagihan paket akan otomatis diteruskan ke antrean Kasir POS.
+                  </p>
+
+                  {masterPackages.length === 0 ? (
+                    <div className="p-3 bg-white rounded-lg border border-amber-200 text-xs text-gray-400 italic">
+                      Belum ada Master Paket yang terdaftar di sistem.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-52 overflow-y-auto pr-1">
+                      {masterPackages.map(pkg => {
+                        const isSelected = selectedRegPackages.some(p => p.id === pkg.id);
+                        return (
                           <div
-                            key={p.id}
-                            onClick={() => {
-                              setReferrerPasienId(p.id);
-                              setMgmSearchInput(`${p.nama_lengkap} (HP: ${p.no_hp})`);
-                              setShowMgmDropdown(false);
-                            }}
-                            className="p-2.5 hover:bg-[#faf3e8] cursor-pointer text-xs flex justify-between items-center transition-colors"
+                            key={pkg.id}
+                            onClick={() => toggleRegPackage(pkg)}
+                            className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 select-none ${
+                              isSelected
+                                ? 'bg-amber-100 border-[#7d5141] shadow-2xs ring-1 ring-[#7d5141]'
+                                : 'bg-white border-[#d6c2bd] hover:border-[#7d5141]'
+                            }`}
                           >
-                            <div>
-                              <span className="font-bold text-[#1e1b15]">{p.nama_lengkap}</span>
-                              <span className="text-[10px] text-gray-500 ml-2">({p.tipe_pasien === 'TRIAL' ? 'Trial' : 'Member'})</span>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="mt-0.5 accent-[#7d5141] cursor-pointer"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-[#1e1b15] truncate">{pkg.nama_paket}</div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                {pkg.item_a_name} ({pkg.item_a_kuota}x){pkg.item_b_name ? ` + ${pkg.item_b_name} (${pkg.item_b_kuota}x)` : ''}
+                              </div>
+                              <div className="text-[11px] font-bold text-[#7d5141] mt-1">
+                                Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                              </div>
                             </div>
-                            <span className="text-[#83746f] text-[11px] font-semibold">{p.no_hp}</span>
                           </div>
-                        ))
-                      }
+                        );
+                      })}
                     </div>
                   )}
-                  <p className="text-[10px] text-[#83746f] mt-0.5">*Member pembuat referral otomatis dapat bonus poin 5% dari total harga paket treatment yang dibeli</p>
-                </div>
-              </div>
 
-              {/* Live Staff Assignment Box */}
-              {!editMode && (
-                <div className="p-4 bg-[#faf3e8] rounded-xl border border-[#d6c2bd] space-y-3">
+                  {selectedRegPackages.length > 0 && (
+                    <div className="flex items-center justify-between pt-2 border-t border-amber-200 text-xs font-bold text-[#7d5141]">
+                      <span>{selectedRegPackages.length} Paket Dipilih:</span>
+                      <span className="text-sm">
+                        Total Rp {selectedRegPackages.reduce((sum, p) => sum + (Number(p.harga_paket) || 0), 0).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Live Staff Assignment Box (HANYA MUNCUL JIKA TIDAK BELI PAKET ATAU PASIEN TRIAL) */}
+              {!editMode && (!isBuyingPackage || formType === 'TRIAL') && (
+                <div className="p-4 bg-[#faf3e8] rounded-xl border border-[#d6c2bd] space-y-3 animate-in fade-in duration-150">
                   <div className="font-bold text-[#7d5141] uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-[#7d5141]" />
-                    <span>Assign Petugas & Lini Profesi Treatment Hari Ini</span>
+                    <span>Assign Petugas</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1614,8 +1927,15 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                         className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                       >
                         <option value="Beautician">Facial & Care (Beautician)</option>
-                        <option value="Nurse">Tindakan Medis (Nurse)</option>
+                        {formType !== 'TRIAL' && (
+                          <option value="Nurse">Tindakan Medis (Nurse)</option>
+                        )}
                       </select>
+                      {formType === 'TRIAL' && (
+                        <p className="text-[10px] text-amber-800 font-medium mt-1">
+                          * Pasien Trial khusus ditangani oleh Beautician
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1907,9 +2227,6 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 <div className="text-xs text-emerald-800 font-semibold">
                   Sisa Kuota: {claimItemKey === 'A' ? selectedClaimPkg.item_a_kuota : selectedClaimPkg.item_b_kuota} Sesi
                 </div>
-                <div className="text-[10px] text-gray-500 mt-1">
-                  *Klaim paket memotong kuota dan otomatis masuk ke antrean Doingan petugas dengan status Gratis (Prepaid Rp 0). Petugas menerima komisi standar. Marketing tidak mendapat komisi.
-                </div>
               </div>
 
               <div>
@@ -1929,7 +2246,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                 </select>
               </div>
 
-              <div>
+              {/* <div>
                 <label className="block text-[#514440] font-semibold mb-1">Catatan Pengeklaiman (Opsional)</label>
                 <input
                   type="text"
@@ -1938,7 +2255,7 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                   placeholder="Catatan pengerjaan / area..."
                   className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15]"
                 />
-              </div>
+              </div> */}
 
               <div className="pt-2 flex justify-end gap-2 border-t border-[#e5ded4]">
                 <button
@@ -2176,17 +2493,17 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
         </div>
       )}
 
-      {/* MODAL REKAP MARKETING 10K */}
+      {/* MODAL REKAP MARKETING TRIAL & PAKET */}
       {showMarketingModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4] max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4] max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
               <div>
                 <h3 className="font-serif font-bold text-lg text-[#1e1b15] flex items-center gap-2">
                   <Users className="w-5 h-5 text-amber-700" />
-                  <span>Rekap Data Pasien Trial & Komisi Marketing (10K / Pasien)</span>
+                  <span>Rekap Data Pasien & Komisi Team Marketing</span>
                 </h3>
-                <p className="text-xs text-[#83746f]">Menampilkan berapa data trial yang didapatkan masing-masing user marketing dan total komisinya.</p>
+                <p className="text-xs text-[#83746f]">Menampilkan rincian pencapaian akuisisi pasien trial (10K/pasien) dan komisi penjualan paket treatment member.</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -2208,14 +2525,17 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                     <th className="py-2.5 px-3">No.</th>
                     <th className="py-2.5 px-3">Nama Marketing</th>
                     <th className="py-2.5 px-3">Role / Lini</th>
-                    <th className="py-2.5 px-3 text-center">Jml Pasien Trial Selesai</th>
-                    <th className="py-2.5 px-3 text-right">Total Komisi (Rp 10.000 / Pasien)</th>
+                    <th className="py-2.5 px-3 text-center">Pasien Trial</th>
+                    <th className="py-2.5 px-3 text-right">Komisi Trial</th>
+                    <th className="py-2.5 px-3 text-center">Paket Terjual</th>
+                    <th className="py-2.5 px-3 text-right">Komisi Paket</th>
+                    <th className="py-2.5 px-3 text-right">Total Komisi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
                   {marketingRecap.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="text-center py-6 text-gray-400 italic">Belum ada data pencapaian marketing.</td>
+                      <td colSpan="8" className="text-center py-6 text-gray-400 italic">Belum ada data pencapaian marketing.</td>
                     </tr>
                   ) : (
                     marketingRecap.map((m, idx) => (
@@ -2224,6 +2544,13 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                         <td className="py-2.5 px-3 font-bold text-[#1e1b15]">{m.marketing_nama}</td>
                         <td className="py-2.5 px-3 text-[#83746f]">{m.marketing_role || 'Marketing'}</td>
                         <td className="py-2.5 px-3 text-center font-bold text-amber-800">{m.total_trial_count || 0} Pasien</td>
+                        <td className="py-2.5 px-3 text-right font-medium text-gray-600">
+                          Rp {(m.total_komisi_trial || 0).toLocaleString('id-ID')}
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-bold text-purple-800">{m.total_paket_count || 0} Paket</td>
+                        <td className="py-2.5 px-3 text-right font-medium text-purple-700">
+                          Rp {(m.total_komisi_paket || 0).toLocaleString('id-ID')}
+                        </td>
                         <td className="py-2.5 px-3 text-right font-bold text-emerald-700 font-mono text-sm">
                           Rp {(m.total_komisi_marketing || 0).toLocaleString('id-ID')}
                         </td>
@@ -2232,6 +2559,145 @@ export default function PatientManagement({ mode = 'INTAKE', setActiveTab }) {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PEMBELIAN PAKET PASIEN MIGRASI DARI TRIAL KE MEMBER */}
+      {showMigrationPackageModal && migratedPatient && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-2xl border border-[#e5ded4] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in duration-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-gradient-to-r from-emerald-50 via-amber-50 to-[#faf3e8] border-b border-[#e5ded4] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-base text-[#1e1b15]">
+                    Pilih Paket Treatment Pasien Member
+                  </h3>
+                  <p className="text-xs text-emerald-800 font-semibold">
+                    Status pasien "{migratedPatient.nama_lengkap}" berhasil diubah menjadi MEMBER!
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (confirm('Tutup jendela pemilihan paket? Tagihan paket tidak akan diteruskan ke POS jika belum disimpan.')) {
+                    setShowMigrationPackageModal(false);
+                    setMigratedPatient(null);
+                  }
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-[#514440] space-y-1">
+                <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-700" />
+                  <span>Penambahan Paket Wajib / Pilihan Pasien Migrasi</span>
+                </div>
+                <p>
+                  Pasien yang bermigrasi dari Trial ke Member perlu memilih paket treatment yang dibeli. Tagihan dari paket yang dipilih akan <strong>langsung muncul di antrean Kasir POS</strong>.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#514440] uppercase tracking-wider mb-2">
+                  Daftar Master Paket (Bisa Pilih &gt; 1 Paket) *
+                </label>
+
+                {masterPackages.length === 0 ? (
+                  <div className="p-4 text-center bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-500 italic">
+                    Belum ada Master Paket yang tersedia.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                    {masterPackages.map(pkg => {
+                      const isSelected = selectedMigrationPackages.some(p => p.id === pkg.id);
+                      return (
+                        <div
+                          key={pkg.id}
+                          onClick={() => {
+                            setSelectedMigrationPackages(prev => {
+                              const exists = prev.some(p => p.id === pkg.id);
+                              if (exists) {
+                                return prev.filter(p => p.id !== pkg.id);
+                              } else {
+                                return [...prev, pkg];
+                              }
+                            });
+                          }}
+                          className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 select-none ${
+                            isSelected
+                              ? 'bg-emerald-50 border-emerald-600 shadow-xs ring-1 ring-emerald-600'
+                              : 'bg-white border-[#d6c2bd] hover:border-emerald-600'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="mt-0.5 accent-emerald-700 cursor-pointer"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
+                            <div className="text-[10px] text-gray-600 mt-0.5">
+                              {pkg.item_a_name} ({pkg.item_a_kuota}x){pkg.item_b_name ? ` + ${pkg.item_b_name} (${pkg.item_b_kuota}x)` : ''}
+                            </div>
+                            <div className="text-xs font-bold text-emerald-800 mt-1">
+                              Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Total & Summary Card */}
+              <div className="p-3.5 bg-[#faf3e8] rounded-xl border border-[#d6c2bd] flex justify-between items-center text-xs font-bold">
+                <div className="text-[#514440]">
+                  <span>Total Paket Terpilih: </span>
+                  <span className="text-[#7d5141] font-extrabold">{selectedMigrationPackages.length} Paket</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-gray-500 font-semibold uppercase">Total Tagihan POS</div>
+                  <div className="text-sm text-emerald-800 font-extrabold">
+                    Rp {selectedMigrationPackages.reduce((sum, p) => sum + (Number(p.harga_paket) || 0), 0).toLocaleString('id-ID')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-[#faf3e8] border-t border-[#e5ded4] flex justify-between items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMigrationPackageModal(false);
+                  setMigratedPatient(null);
+                }}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-[#514440] font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Lewati (Beli Nanti)
+              </button>
+              <button
+                type="button"
+                disabled={submittingMigrationPkg || selectedMigrationPackages.length === 0}
+                onClick={handleConfirmMigrationPackages}
+                className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>{submittingMigrationPkg ? 'Menyimpan...' : 'Simpan & Teruskan Tagihan ke POS'}</span>
+              </button>
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Users, ShoppingBag, PackageCheck, MessageSquare, AlertCircle, Clock, CheckCircle2, UserPlus } from 'lucide-react';
 
-export default function DashboardOverview({ setActiveTab }) {
+export default function DashboardOverview({ setActiveTab, onOpenNewPatient }) {
   const [todayPatients, setTodayPatients] = useState([]);
   const [products, setProducts] = useState([]);
   const [reminders, setReminders] = useState([]);
@@ -65,11 +65,17 @@ export default function DashboardOverview({ setActiveTab }) {
         </div>
         <div className="hidden md:flex gap-3">
           <button
-            onClick={() => setActiveTab('patients')}
+            onClick={() => {
+              if (onOpenNewPatient) {
+                onOpenNewPatient();
+              } else {
+                setActiveTab('patients');
+              }
+            }}
             className="px-4 py-2.5 bg-white text-[#7d5141] font-semibold text-xs rounded-xl shadow-xs hover:bg-[#fff8f0] transition-all cursor-pointer flex items-center gap-1.5"
           >
             <UserPlus className="w-4 h-4" />
-            + Pendaftaran Pasien
+            Pendaftaran Pasien
           </button>
           <button
             onClick={() => setActiveTab('pos')}
@@ -179,8 +185,8 @@ export default function DashboardOverview({ setActiveTab }) {
                         <td className="py-3 px-3 text-[#514440]">{p.pasien_hp}</td>
                         <td className="py-3 px-3">
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${p.tipe_pasien === 'TRIAL'
-                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                              : 'bg-blue-100 text-blue-800 border border-blue-300'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-blue-100 text-blue-800 border border-blue-300'
                             }`}>
                             {p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler' ? 'MEMBER' : p.tipe_pasien}
                           </span>

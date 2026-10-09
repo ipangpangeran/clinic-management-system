@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { ShieldCheck, Building2, Save, Link2, Users, UserPlus, Trash2, Edit2, KeyRound, Phone, CheckCircle2, ShieldAlert, MessageSquare, ToggleLeft, ToggleRight } from 'lucide-react';
+import { formatPersonName } from '../utils/formatters';
 
 export default function ClinicSettingsAcl() {
   const { user: currentUser } = useContext(AuthContext);
@@ -19,7 +20,9 @@ export default function ClinicSettingsAcl() {
     email: 'info@deflowclinic.com',
     logo_url: '/logo/DEFLOW_LOGO_ONLY.png',
     tax_rate_percent: 11.0,
-    wa_api_url: 'https://api-wa.ipangpangeran.com/send?api_key=ipang-super-secret-key-123456'
+    is_tax_enabled: 1,
+    wa_api_url: 'https://api-wa.ipangpangeran.com/send?api_key=ipang-super-secret-key-123456',
+    idle_timeout_minutes: 15
   });
 
   // User Management State
@@ -238,8 +241,9 @@ export default function ClinicSettingsAcl() {
     return item ? Boolean(item[action]) : false;
   };
 
-  // Check if current logged in user is Super Admin
+  // Check if current logged in user is Super Admin or Admin Klinik
   const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin System';
+  const isSuperAdminOrClinicAdmin = isSuperAdmin || currentUser?.role === 'Admin Klinik';
 
   return (
     <div className="space-y-6">
@@ -439,28 +443,97 @@ export default function ClinicSettingsAcl() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Tarif Pajak PPN (%)</label>
-                <input
-                  type="number"
-                  value={profile.tax_rate_percent}
-                  onChange={(e) => setProfile({ ...profile, tax_rate_percent: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold"
-                />
+            {/* FITUR PPN (PAJAK PERTAMBAHAN NILAI) ON / OFF & RATE SETTING */}
+            <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-3 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 font-bold text-xs text-[#1e1b15]">
+                    <ShieldCheck className="w-4 h-4 text-[#7d5141]" />
+                    <span>Fitur Pajak PPN Transaksi Kasir POS (Khusus Super Admin & Admin Klinik)</span>
+                  </div>
+                  <p className="text-[11px] text-[#514440]">
+                    Atur status aktif (ON) atau nonaktif (OFF) serta persentase tarif pajak PPN untuk seluruh tagihan di kasir POS & struk.
+                  </p>
+                </div>
+
+                {isSuperAdminOrClinicAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextState = !(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true);
+                      setProfile({ ...profile, is_tax_enabled: nextState ? 1 : 0 });
+                    }}
+                    className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 shadow-xs ${
+                      (profile.is_tax_enabled === 1 || profile.is_tax_enabled === true)
+                        ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                        : 'bg-gray-400 hover:bg-gray-500 text-white'
+                    }`}
+                  >
+                    {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? (
+                      <>
+                        <ToggleRight className="w-5 h-5 text-white" />
+                        <span>PPN: AKTIF (ON)</span>
+                      </>
+                    ) : (
+                      <>
+                        <ToggleLeft className="w-5 h-5 text-white" />
+                        <span>PPN: NONAKTIF (OFF)</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
+                    (profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? 'PPN ON' : 'PPN OFF'}
+                  </span>
+                )}
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Auto Logout Idle (Menit) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="480"
-                  value={profile.idle_timeout_minutes || 15}
-                  onChange={(e) => setProfile({ ...profile, idle_timeout_minutes: Number(e.target.value) })}
-                  required
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141]"
-                />
-              </div>
+
+              {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#d6c2bd]/60 items-center">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#514440] mb-1">
+                      Tarif Persentase PPN (%) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        disabled={!isSuperAdminOrClinicAdmin}
+                        value={profile.tax_rate_percent}
+                        onChange={(e) => setProfile({ ...profile, tax_rate_percent: Number(e.target.value) })}
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
+                        placeholder="11"
+                        required
+                      />
+                      <span className="absolute right-3 top-2 text-xs font-bold text-[#83746f]">%</span>
+                    </div>
+                  </div>
+                  <div className="p-2.5 bg-white border border-[#d6c2bd]/60 rounded-xl text-[11px] text-[#514440]">
+                    Pajak PPN sebesar <strong>{profile.tax_rate_percent || 0}%</strong> akan otomatis ditambahkan ke total transaksi di kasir POS dan dicetak pada struk.
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-medium">
+                  Status PPN saat ini <strong>NONAKTIF (OFF)</strong>. Menu POS & cetak struk tidak akan memunculkan baris PPN, dan total bayar murni sesuai harga item.
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#514440] mb-1">Auto Logout Idle Sesi (Menit) *</label>
+              <input
+                type="number"
+                min="1"
+                max="480"
+                value={profile.idle_timeout_minutes || 15}
+                onChange={(e) => setProfile({ ...profile, idle_timeout_minutes: Number(e.target.value) })}
+                required
+                className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141]"
+              />
             </div>
 
             <button
@@ -652,7 +725,7 @@ export default function ClinicSettingsAcl() {
                 <input
                   type="text"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(e) => setFullName(formatPersonName(e.target.value))}
                   required
                   placeholder="misal: Siti Anita, S.Kep"
                   className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"

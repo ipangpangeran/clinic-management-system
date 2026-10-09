@@ -4,19 +4,18 @@ import * as XLSX from 'xlsx';
 import { AuthContext } from '../context/AuthContext';
 import {
   Sparkles, User, FileCheck, DollarSign, Award, Plus, Trash2, CheckCircle2, ShieldAlert,
-  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck, UserPlus, FileText, Search, FileSpreadsheet
+  Smartphone, Calendar, Filter, Printer, Clock, CheckSquare, RefreshCw, UserCheck, UserPlus,
+  FileText, Search, FileSpreadsheet, Package, Phone, CheckCircle, AlertCircle
 } from 'lucide-react';
 
 export default function DoinganActivity() {
   const { user } = useContext(AuthContext);
-  const [activeMainTab, setActiveMainTab] = useState('RECAP'); // 'LIVE_STATUS', 'RECAP'
+  // Main tabs: 'BTC', 'NURSE', 'MARKETING', 'LIVE_STATUS'
+  const [activeMainTab, setActiveMainTab] = useState('BTC');
 
-  // Data States
-  const [patients, setPatients] = useState([]);
-  const [treatments, setTreatments] = useState([]);
+  // Staff and quick data states
   const [staffList, setStaffList] = useState([]);
-  const [allUsersList, setAllUsersList] = useState([]);
-  const [marketingRecap, setMarketingRecap] = useState([]);
+  const [treatments, setTreatments] = useState([]);
 
   const getLocalDateString = () => {
     const d = new Date();
@@ -26,15 +25,15 @@ export default function DoinganActivity() {
     return `${year}-${month}-${day}`;
   };
 
-  // Filtered Recap State (Admin Dashboard)
-  const [recapData, setRecapData] = useState([]);
-  const [recapSummary, setRecapSummary] = useState({ total_count: 0, completed_count: 0, total_komisi: 0 });
+  // Only Date Filters (as requested: "Masing-masing punya filter hanya utk filter tanggal saja")
   const [startDate, setStartDate] = useState(getLocalDateString());
   const [endDate, setEndDate] = useState(getLocalDateString());
-  const [filterPetugasId, setFilterPetugasId] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
   const [loadingRecap, setLoadingRecap] = useState(false);
+
+  // Separated Commission Data
+  const [btcData, setBtcData] = useState([]);
+  const [nurseData, setNurseData] = useState([]);
+  const [marketingData, setMarketingData] = useState([]);
 
   // Quick Treatment Modal State
   const [showTreatmentModal, setShowTreatmentModal] = useState(false);
@@ -49,11 +48,8 @@ export default function DoinganActivity() {
   const canManageTreatments = user?.role === 'Super Admin' || user?.role === 'Admin System' || user?.role === 'Admin Klinik';
 
   useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
     fetchStaffAvailability();
+    fetchTreatments();
     const interval = setInterval(() => {
       fetchStaffAvailability();
     }, 4000);
@@ -61,25 +57,17 @@ export default function DoinganActivity() {
   }, []);
 
   useEffect(() => {
-    if (activeMainTab === 'RECAP') {
-      fetchRecapData();
+    if (activeMainTab !== 'LIVE_STATUS') {
+      fetchDataForTab(activeMainTab);
     }
   }, [activeMainTab]);
 
-  const fetchInitialData = async () => {
+  const fetchTreatments = async () => {
     try {
-      const [pasRes, tndRes, usrRes, mktRes] = await Promise.all([
-        axios.get('/api/pasien'),
-        axios.get('/api/tindakan'),
-        axios.get('/api/users'),
-        axios.get('/api/marketing/recap')
-      ]);
-      setPatients(pasRes.data || []);
-      setTreatments(tndRes.data || []);
-      setAllUsersList(usrRes.data || []);
-      setMarketingRecap(mktRes.data || []);
+      const res = await axios.get('/api/tindakan');
+      setTreatments(res.data || []);
     } catch (err) {
-      console.error('Error fetching initial doingan data', err);
+      console.error('Error fetching treatments', err);
     }
   };
 
@@ -92,26 +80,21 @@ export default function DoinganActivity() {
     }
   };
 
-  const fetchRecapData = async () => {
+  const fetchDataForTab = async (targetTab = activeMainTab) => {
     setLoadingRecap(true);
     try {
-      const queryParams = new URLSearchParams({
-        start_date: startDate,
-        end_date: endDate
-      });
-      if (filterPetugasId) queryParams.append('petugas_id', filterPetugasId);
-      if (filterCategory) queryParams.append('kategori_layanan', filterCategory);
-      if (filterStatus) queryParams.append('status_pengerjaan', filterStatus);
-
-      const [recapRes, mktRes] = await Promise.all([
-        axios.get(`/api/doingan/recap?${queryParams.toString()}`),
-        axios.get('/api/marketing/recap')
-      ]);
-      setRecapData(recapRes.data.data || []);
-      setRecapSummary(recapRes.data.summary || { total_count: 0, completed_count: 0, total_komisi: 0 });
-      setMarketingRecap(mktRes.data || []);
+      if (targetTab === 'BTC') {
+        const res = await axios.get(`/api/doingan/recap?start_date=${startDate}&end_date=${endDate}&lini=BEAUTICIAN`);
+        setBtcData(res.data.data || []);
+      } else if (targetTab === 'NURSE') {
+        const res = await axios.get(`/api/doingan/recap?start_date=${startDate}&end_date=${endDate}&lini=NURSE`);
+        setNurseData(res.data.data || []);
+      } else if (targetTab === 'MARKETING') {
+        const res = await axios.get(`/api/marketing/recap-detail?start_date=${startDate}&end_date=${endDate}`);
+        setMarketingData(res.data || []);
+      }
     } catch (err) {
-      console.error('Error fetching recap data', err);
+      console.error(`Error fetching data for ${targetTab}`, err);
     } finally {
       setLoadingRecap(false);
     }
@@ -133,8 +116,7 @@ export default function DoinganActivity() {
         komisi_fix_therapist: Number(komisiFixTherapist) || 0,
         nominal_nurse_tindakan: Number(nominalNurseTindakan) || 0
       });
-      const tndRes = await axios.get('/api/tindakan');
-      setTreatments(tndRes.data);
+      fetchTreatments();
       setShowTreatmentModal(false);
       setNamaTindakan('');
     } catch (err) {
@@ -144,49 +126,40 @@ export default function DoinganActivity() {
     }
   };
 
-  const handleDeleteDoingan = async (id) => {
+  const handleDeleteDoingan = async (id, targetTab) => {
     if (!window.confirm('Hapus catatan doingan ini?')) return;
     try {
       await axios.delete(`/api/doingan/${id}`);
-      fetchRecapData();
+      fetchDataForTab(targetTab);
     } catch (err) {
       alert('Gagal menghapus doingan');
     }
   };
 
-  const handleExportExcel = () => {
-    if (recapData.length === 0 && marketingRecap.length === 0) {
-      alert('Belum ada data rekapan pengerjaan pada periode tanggal ini untuk di-export.');
+  // EXPORT EXCEL BEAUTICIAN (BTC)
+  const handleExportExcelBTC = () => {
+    if (btcData.length === 0) {
+      alert('Belum ada data komisi Beautician (BTC) pada periode tanggal ini untuk di-export.');
       return;
     }
-
-    const monthNames = [
-      "JANUARI", "FEBRUARI", "MARET", "APRIL", "MEI", "JUNI",
-      "JULI", "AGUSTUS", "SEPTEMBER", "OKTOBER", "NOVEMBER", "DESEMBER"
-    ];
-    const d = new Date();
-    const monthYearStr = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
-
     const rows = [
-      ["DEFLOW AESTHETIC CLINIC", "", "", "", `DATA LAPORAN DOINGAN & KOMISI ${monthYearStr}`],
-      ["", "", "", "", `Periode Laporan: ${startDate} s/d ${endDate}`],
+      ["DEFLOW AESTHETIC CLINIC", "", "", "", `LAPORAN DATA KOMISI BEAUTICIAN (BTC)`],
+      ["", "", "", "", `Periode: ${startDate} s/d ${endDate}`],
       [],
-      ["--- DETAIL DOINGAN PETUGAS MEDIS & TERAPIS ---"],
       [
         "No",
         "Waktu Mulai",
         "Waktu Selesai",
         "Nama Pasien",
         "Tipe Pasien",
-        "Petugas Bertugas",
-        "Lini Profesi / Role",
-        "Detail Treatment / Actions",
-        "Status Layanan",
-        "Nominal Komisi (Rp)"
+        "Petugas BTC",
+        "Detail Treatment / Facial",
+        "Status Pengerjaan",
+        "Pendapatan Komisi BTC (Rp)"
       ]
     ];
 
-    recapData.forEach((item, index) => {
+    btcData.forEach((item, index) => {
       rows.push([
         index + 1,
         item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
@@ -194,32 +167,106 @@ export default function DoinganActivity() {
         item.pasien_nama || '-',
         item.tipe_pasien || '-',
         item.petugas_nama || '-',
-        item.lini_profesi || item.role_petugas || '-',
         item.nama_tindakan || '-',
-        item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : 'IN PROGRESS',
+        item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : item.status_pengerjaan === 'CANCELLED' ? 'DIBATALKAN' : 'IN PROGRESS',
         item.komisi || 0
-      ]);
-    });
-
-    rows.push([]);
-    rows.push(["--- REKAPITULASI KOMISI MARKETING (TRIAL ACQUISITION & REFERRAL) ---"]);
-    rows.push(["No", "Nama Marketing", "Role / Lini", "Total Pasien Trial Didapat", "Komisi Per Pasien (Rp)", "Total Komisi Marketing (Rp)"]);
-
-    marketingRecap.forEach((mkt, idx) => {
-      rows.push([
-        idx + 1,
-        mkt.marketing_nama || '-',
-        mkt.marketing_role || 'Marketing',
-        mkt.total_trial_count || 0,
-        10000,
-        mkt.total_komisi_marketing || 0
       ]);
     });
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Rekap Doingan & Marketing");
-    XLSX.writeFile(workbook, `Rekap_Doingan_Marketing_Deflow_${startDate}_to_${endDate}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Komisi Beautician");
+    XLSX.writeFile(workbook, `Laporan_Komisi_BTC_Deflow_${startDate}_sd_${endDate}.xlsx`);
+  };
+
+  // EXPORT EXCEL NURSE
+  const handleExportExcelNurse = () => {
+    if (nurseData.length === 0) {
+      alert('Belum ada data komisi Nurse pada periode tanggal ini untuk di-export.');
+      return;
+    }
+    const rows = [
+      ["DEFLOW AESTHETIC CLINIC", "", "", "", `LAPORAN DATA KOMISI NURSE & MEDIS`],
+      ["", "", "", "", `Periode: ${startDate} s/d ${endDate}`],
+      [],
+      [
+        "No",
+        "Waktu Mulai",
+        "Waktu Selesai",
+        "Nama Pasien",
+        "Tipe Pasien",
+        "Petugas Nurse / Medis",
+        "Detail Tindakan Medis",
+        "Status Layanan",
+        "Pendapatan Komisi Nurse (Rp)"
+      ]
+    ];
+
+    nurseData.forEach((item, index) => {
+      rows.push([
+        index + 1,
+        item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
+        item.completed_at ? new Date(item.completed_at).toLocaleString('id-ID') : '-',
+        item.pasien_nama || '-',
+        item.tipe_pasien || '-',
+        item.petugas_nama || '-',
+        item.nama_tindakan || '-',
+        item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : item.status_pengerjaan === 'CANCELLED' ? 'DIBATALKAN' : 'IN PROGRESS',
+        item.komisi || 0
+      ]);
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Komisi Nurse");
+    XLSX.writeFile(workbook, `Laporan_Komisi_Nurse_Deflow_${startDate}_sd_${endDate}.xlsx`);
+  };
+
+  // EXPORT EXCEL MARKETING
+  const handleExportExcelMarketing = () => {
+    if (marketingData.length === 0) {
+      alert('Belum ada data komisi Marketing pada periode tanggal ini untuk di-export.');
+      return;
+    }
+    const rows = [
+      ["DEFLOW AESTHETIC CLINIC", "", "", "", `LAPORAN DATA KOMISI TIM MARKETING`],
+      ["", "", "", "", `Periode: ${startDate} s/d ${endDate}`],
+      [],
+      [
+        "No",
+        "Waktu Transaksi",
+        "Nama Petugas Marketing",
+        "Nama Pasien",
+        "No HP Pasien",
+        "Tipe Pasien",
+        "Jenis Komisi",
+        "Detail Paket / Tindakan",
+        "Pembayaran / Harga Paket Pasien (Rp)",
+        "Status Kasir POS",
+        "Pendapatan Komisi Marketing (Rp)"
+      ]
+    ];
+
+    marketingData.forEach((item, index) => {
+      rows.push([
+        index + 1,
+        item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
+        item.marketing_nama || '-',
+        item.pasien_nama || '-',
+        item.pasien_hp || '-',
+        item.tipe_pasien || '-',
+        item.jenis_komisi === 'PEMBELIAN_PAKET' ? 'Pembelian Paket Member' : 'Akuisisi Pasien Trial',
+        item.detail_transaksi || '-',
+        item.nominal_pembayaran || 0,
+        item.is_billed ? 'Lunas di Kasir POS' : 'Menunggu Pembayaran POS',
+        item.komisi || 0
+      ]);
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Komisi Marketing");
+    XLSX.writeFile(workbook, `Laporan_Komisi_Marketing_Deflow_${startDate}_sd_${endDate}.xlsx`);
   };
 
   const nonStaffRoles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Admin FO', 'Manager', 'Marketing'];
@@ -231,8 +278,8 @@ export default function DoinganActivity() {
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Digital Alur Pasien & Doingan Perawatan</h1>
-          <p className="text-xs text-[#514440]">Monitoring status live petugas BTC & Nurse, serta rekapan laporan komisi lengkap.</p>
+          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Pengecekan Data Komisi & Doingan</h1>
+          <p className="text-xs text-[#514440]">Pemisahan laporan komisi Beautician (BTC), Nurse, Marketing, serta monitoring live petugas.</p>
         </div>
         <div className="flex items-center gap-2">
           {canManageTreatments && (
@@ -250,29 +297,412 @@ export default function DoinganActivity() {
         </div>
       </div>
 
-      {/* Main Tabs Navigation */}
+      {/* Main Tabs Navigation (Separated BTC, Nurse, Marketing, Live Status) */}
       <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
         <div className="flex overflow-x-auto gap-2 border-b border-[#e5ded4] pb-3 text-xs whitespace-nowrap">
           <button
-            onClick={() => setActiveMainTab('RECAP')}
-            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeMainTab === 'RECAP' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
-              }`}
+            onClick={() => setActiveMainTab('BTC')}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              activeMainTab === 'BTC' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+            }`}
           >
-            <FileText className="w-4 h-4" />
-            <span>Dashboard Rekapitulasi & Filter Komisi</span>
+            <Sparkles className="w-4 h-4" />
+            <span>Komisi Beautician (BTC)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMainTab('NURSE')}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              activeMainTab === 'NURSE' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+            }`}
+          >
+            <FileCheck className="w-4 h-4" />
+            <span>Komisi Nurse</span>
+          </button>
+
+          <button
+            onClick={() => setActiveMainTab('MARKETING')}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              activeMainTab === 'MARKETING' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+            }`}
+          >
+            <Award className="w-4 h-4" />
+            <span>Komisi Marketing</span>
           </button>
 
           <button
             onClick={() => setActiveMainTab('LIVE_STATUS')}
-            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeMainTab === 'LIVE_STATUS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
-              }`}
+            className={`px-4 py-2.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-2 ${
+              activeMainTab === 'LIVE_STATUS' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'
+            }`}
           >
             <Clock className="w-4 h-4" />
-            <span>Monitoring Status Live Petugas (BTC & Nurse)</span>
+            <span>Monitoring Status Live Petugas</span>
           </button>
         </div>
 
-        {/* TAB 1: MONITORING STATUS LIVE PETUGAS (BEAUTICIAN & NURSE) */}
+        {/* COMMISSION FILTER BAR: ONLY DATE FILTERS AS REQUESTED */}
+        {activeMainTab !== 'LIVE_STATUS' && (
+          <div className="bg-[#faf3e8] p-4 rounded-2xl border border-[#d6c2bd] flex flex-col md:flex-row md:items-end justify-between gap-4 text-xs">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-[#514440] mb-1">Dari Tanggal *</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-[#514440] mb-1">Sampai Tanggal *</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fetchDataForTab(activeMainTab)}
+                disabled={loadingRecap}
+                className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Search className="w-3.5 h-3.5" />
+                {loadingRecap ? 'Memuat Data...' : 'Check / Filter'}
+              </button>
+            </div>
+
+            {/* Excel Export Buttons Per View */}
+            <div>
+              {activeMainTab === 'BTC' && (
+                <button
+                  onClick={handleExportExcelBTC}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="w-4 h-4" /> Export Excel Komisi BTC
+                </button>
+              )}
+              {activeMainTab === 'NURSE' && (
+                <button
+                  onClick={handleExportExcelNurse}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="w-4 h-4" /> Export Excel Komisi Nurse
+                </button>
+              )}
+              {activeMainTab === 'MARKETING' && (
+                <button
+                  onClick={handleExportExcelMarketing}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="w-4 h-4" /> Export Excel Komisi Marketing
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 1: KOMISI BEAUTICIAN (BTC) */}
+        {activeMainTab === 'BTC' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-[#e5ded4] pb-2">
+              <h3 className="font-serif font-bold text-base text-[#1e1b15] flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#7d5141]" />
+                <span>Rincian Pendapatan Komisi Beautician (BTC)</span>
+              </h3>
+              <span className="text-xs text-[#83746f]">Menampilkan data tindakan facial/perawatan per pasien & waktu pengerjaan</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-3 px-3 text-center w-12">No</th>
+                    <th className="py-3 px-4">Waktu Pengerjaan</th>
+                    <th className="py-3 px-4">Nama Pasien & Tipe</th>
+                    <th className="py-3 px-4">Petugas Beautician</th>
+                    <th className="py-3 px-4">Detail Treatment / Facial</th>
+                    <th className="py-3 px-4">Status Layanan</th>
+                    <th className="py-3 px-4 text-right">Pendapatan Komisi BTC</th>
+                    {canManageTreatments && <th className="py-3 px-4 text-center">Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {btcData.length === 0 ? (
+                    <tr>
+                      <td colSpan={canManageTreatments ? 8 : 7} className="text-center py-8 text-gray-400 italic">
+                        Belum ada data pengerjaan komisi Beautician pada periode tanggal {startDate} s/d {endDate}.
+                      </td>
+                    </tr>
+                  ) : (
+                    btcData.map((item, idx) => (
+                      <tr key={item.id} className="hover:bg-[#fff8f0]">
+                        <td className="py-3 px-3 text-center font-bold text-gray-500">{idx + 1}</td>
+                        <td className="py-3 px-4 text-[#83746f]">
+                          <div>Mulai: {new Date(item.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                          {item.completed_at && (
+                            <div className="text-[11px] text-gray-500">Selesai: {new Date(item.completed_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-[#1e1b15]">{item.pasien_nama}</div>
+                          <span className={`inline-block px-2 py-0.5 mt-0.5 rounded text-[10px] font-bold ${
+                            item.tipe_pasien === 'MEMBER' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-blue-100 text-blue-900 border border-blue-300'
+                          }`}>
+                            {item.tipe_pasien || 'PASIEN'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-[#7d5141]">
+                          {item.petugas_nama}
+                          <div className="text-[10px] text-gray-500">{item.lini_profesi || item.role_petugas || 'Beautician'}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-semibold text-[#1e1b15]">{item.nama_tindakan}</span>
+                          {item.notes && <div className="text-[10px] text-gray-500 italic mt-0.5">{item.notes}</div>}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            item.status_pengerjaan === 'CANCELLED'
+                              ? 'bg-gray-100 text-gray-700 border border-gray-300'
+                              : item.status_pengerjaan === 'COMPLETED'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-red-100 text-red-800 border border-red-300'
+                          }`}>
+                            {item.status_pengerjaan === 'CANCELLED' ? 'DIBATALKAN' : item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : 'IN PROGRESS'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-[#7d5141] text-sm">
+                          Rp {(item.komisi || 0).toLocaleString('id-ID')}
+                        </td>
+                        {canManageTreatments && (
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              onClick={() => handleDeleteDoingan(item.id, 'BTC')}
+                              className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-all cursor-pointer"
+                              title="Hapus catatan"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: KOMISI NURSE */}
+        {activeMainTab === 'NURSE' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-[#e5ded4] pb-2">
+              <h3 className="font-serif font-bold text-base text-[#1e1b15] flex items-center gap-2">
+                <FileCheck className="w-4 h-4 text-[#7d5141]" />
+                <span>Rincian Pendapatan Komisi Nurse & Medis</span>
+              </h3>
+              <span className="text-xs text-[#83746f]">Menampilkan data tindakan medis per pasien & waktu pengerjaan</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-3 px-3 text-center w-12">No</th>
+                    <th className="py-3 px-4">Waktu Pengerjaan</th>
+                    <th className="py-3 px-4">Nama Pasien & Tipe</th>
+                    <th className="py-3 px-4">Petugas Nurse / Medis</th>
+                    <th className="py-3 px-4">Detail Tindakan Medis</th>
+                    <th className="py-3 px-4">Status Layanan</th>
+                    <th className="py-3 px-4 text-right">Pendapatan Komisi Nurse</th>
+                    {canManageTreatments && <th className="py-3 px-4 text-center">Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {nurseData.length === 0 ? (
+                    <tr>
+                      <td colSpan={canManageTreatments ? 8 : 7} className="text-center py-8 text-gray-400 italic">
+                        Belum ada data pengerjaan komisi Nurse pada periode tanggal {startDate} s/d {endDate}.
+                      </td>
+                    </tr>
+                  ) : (
+                    nurseData.map((item, idx) => (
+                      <tr key={item.id} className="hover:bg-[#fff8f0]">
+                        <td className="py-3 px-3 text-center font-bold text-gray-500">{idx + 1}</td>
+                        <td className="py-3 px-4 text-[#83746f]">
+                          <div>Mulai: {new Date(item.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                          {item.completed_at && (
+                            <div className="text-[11px] text-gray-500">Selesai: {new Date(item.completed_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-[#1e1b15]">{item.pasien_nama}</div>
+                          <span className={`inline-block px-2 py-0.5 mt-0.5 rounded text-[10px] font-bold ${
+                            item.tipe_pasien === 'MEMBER' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-blue-100 text-blue-900 border border-blue-300'
+                          }`}>
+                            {item.tipe_pasien || 'PASIEN'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-[#7d5141]">
+                          {item.petugas_nama}
+                          <div className="text-[10px] text-gray-500">{item.lini_profesi || item.role_petugas || 'Nurse'}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-semibold text-[#1e1b15]">{item.nama_tindakan}</span>
+                          {item.notes && <div className="text-[10px] text-gray-500 italic mt-0.5">{item.notes}</div>}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            item.status_pengerjaan === 'CANCELLED'
+                              ? 'bg-gray-100 text-gray-700 border border-gray-300'
+                              : item.status_pengerjaan === 'COMPLETED'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : 'bg-red-100 text-red-800 border border-red-300'
+                          }`}>
+                            {item.status_pengerjaan === 'CANCELLED' ? 'DIBATALKAN' : item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : 'IN PROGRESS'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-[#7d5141] text-sm">
+                          Rp {(item.komisi || 0).toLocaleString('id-ID')}
+                        </td>
+                        {canManageTreatments && (
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              onClick={() => handleDeleteDoingan(item.id, 'NURSE')}
+                              className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-all cursor-pointer"
+                              title="Hapus catatan"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: KOMISI MARKETING (DENGAN DATA PEMBAYARAN PAKET PASIEN LENGKAP) */}
+        {activeMainTab === 'MARKETING' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#e5ded4] pb-2">
+              <div>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15] flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-700" />
+                  <span>Rincian Pendapatan Komisi Tim Marketing</span>
+                </h3>
+                <p className="text-xs text-[#83746f]">
+                  Menampilkan komisi dari <strong>Pembelian Paket Pasien</strong> (termasuk nilai transaksi & status kasir) serta <strong>Akuisisi Pasien Trial</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
+                <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                  <tr>
+                    <th className="py-3 px-3 text-center w-12">No</th>
+                    <th className="py-3 px-4">Waktu Transaksi</th>
+                    <th className="py-3 px-4">Petugas Marketing</th>
+                    <th className="py-3 px-4">Nama Pasien & Kontak</th>
+                    <th className="py-3 px-4">Jenis Komisi</th>
+                    <th className="py-3 px-4">Detail Paket / Tindakan</th>
+                    <th className="py-3 px-4 text-right">Pembayaran Paket Pasien (Rp)</th>
+                    <th className="py-3 px-4 text-center">Status Kasir POS</th>
+                    <th className="py-3 px-4 text-right">Komisi Marketing</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e5ded4]">
+                  {marketingData.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="text-center py-8 text-gray-400 italic">
+                        Belum ada data komisi marketing pada periode tanggal {startDate} s/d {endDate}.
+                      </td>
+                    </tr>
+                  ) : (
+                    marketingData.map((item, idx) => (
+                      <tr key={item.id + '-' + idx} className="hover:bg-[#fff8f0]">
+                        <td className="py-3 px-3 text-center font-bold text-gray-500">{idx + 1}</td>
+                        <td className="py-3 px-4 text-[#83746f]">
+                          {item.created_at ? new Date(item.created_at).toLocaleString('id-ID', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          }) : '-'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-[#1e1b15]">{item.marketing_nama}</div>
+                          <div className="text-[10px] text-amber-800 font-semibold uppercase">{item.marketing_role || 'Marketing'}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-[#1e1b15]">{item.pasien_nama}</div>
+                          <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
+                            <Phone className="w-3 h-3 text-gray-400" />
+                            <span>{item.pasien_hp || '-'}</span>
+                          </div>
+                          <span className={`inline-block px-1.5 py-0.2 mt-0.5 rounded text-[9px] font-bold ${
+                            item.tipe_pasien === 'MEMBER' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-blue-100 text-blue-900 border border-blue-300'
+                          }`}>
+                            {item.tipe_pasien || 'PASIEN'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {item.jenis_komisi === 'PEMBELIAN_PAKET' ? (
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-900 border border-purple-300 rounded-full font-bold text-[10px] flex items-center gap-1 w-fit">
+                              <Package className="w-3 h-3" /> Penjualan Paket Member
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-full font-bold text-[10px] flex items-center gap-1 w-fit">
+                              <Sparkles className="w-3 h-3" /> Akuisisi Pasien Trial
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-[#1e1b15]">
+                          {item.detail_transaksi}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {item.jenis_komisi === 'PEMBELIAN_PAKET' ? (
+                            <span className="font-extrabold text-[#1e1b15] text-xs">
+                              Rp {Number(item.nominal_pembayaran || 0).toLocaleString('id-ID')}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 italic text-[11px]">Trial (Included)</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {item.is_billed ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[10px] font-bold inline-flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> Lunas di Kasir POS
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-full text-[10px] font-bold inline-flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> Menunggu Kasir POS
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-extrabold text-emerald-700 text-sm">
+                          Rp {Number(item.komisi || 0).toLocaleString('id-ID')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: MONITORING STATUS LIVE PETUGAS (BEAUTICIAN & NURSE) */}
         {activeMainTab === 'LIVE_STATUS' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
@@ -296,8 +726,9 @@ export default function DoinganActivity() {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {beauticianList.map(s => (
-                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
-                    }`}>
+                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
+                    s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
+                  }`}>
                     <div className="flex justify-between items-center">
                       <div className="font-bold text-sm text-[#1e1b15]">{s.full_name}</div>
                       {s.is_busy ? (
@@ -331,8 +762,9 @@ export default function DoinganActivity() {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {nurseList.map(s => (
-                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
-                    }`}>
+                  <div key={s.id} className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
+                    s.is_busy ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'
+                  }`}>
                     <div className="flex justify-between items-center">
                       <div className="font-bold text-sm text-[#1e1b15]">{s.full_name}</div>
                       {s.is_busy ? (
@@ -356,223 +788,6 @@ export default function DoinganActivity() {
                     )}
                   </div>
                 ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: DASHBOARD REKAPITULASI & FILTER KOMISI (TERMASUK MARKETING) */}
-        {activeMainTab === 'RECAP' && (
-          <div className="space-y-5">
-            {/* Filter Controls */}
-            <div className="bg-[#faf3e8] p-4 rounded-2xl border border-[#d6c2bd] space-y-3 text-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-bold text-[#7d5141] uppercase tracking-wider">
-                  <Filter className="w-4 h-4" />
-                  <span>Filter Laporan Rekapitulasi Doingan & Komisi Petugas (Beautician, Nurse, Marketing)</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={fetchRecapData}
-                  disabled={loadingRecap}
-                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <Search className="w-3.5 h-3.5" />
-                  {loadingRecap ? 'Memuat Data...' : '🔍 Tampilkan / Filter Data'}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Dari Tanggal *</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Sampai Tanggal *</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Filter Nama Petugas / Marketing</label>
-                  <select
-                    value={filterPetugasId}
-                    onChange={(e) => setFilterPetugasId(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
-                  >
-                    <option value="">-- Semua Staff (BTC, Nurse & Marketing) --</option>
-                    {allUsersList
-                      .filter(s =>
-                        s.role === 'Beautician' ||
-                        s.role === 'Nurse' ||
-                        s.role === 'Marketing' ||
-                        s.role === 'Therapist / BTC' ||
-                        s.role === 'BTC' ||
-                        s.lini_profesi === 'Beautician' ||
-                        s.lini_profesi === 'Nurse'
-                      )
-                      .map(s => (
-                        <option key={s.id} value={s.id}>{s.full_name} ({s.role})</option>
-                      ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Filter Kategori Service</label>
-                  <select
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
-                  >
-                    <option value="">-- Semua Kategori --</option>
-                    <option value="Facial (Beautician)">Facial (Beautician)</option>
-                    <option value="Tindakan Medis (Nurse)">Tindakan Medis (Nurse)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#514440] mb-1">Filter Status Pengerjaan</label>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
-                  >
-                    <option value="">-- Semua Status --</option>
-                    <option value="IN_PROGRESS">IN PROGRESS (DILAYANI)</option>
-                    <option value="COMPLETED">COMPLETED (SELESAI)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Marketing Commission Recap Cards */}
-            <div className="bg-amber-50/60 p-5 rounded-2xl border border-amber-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-serif font-bold text-sm text-amber-900 flex items-center gap-2">
-                  <Award className="w-4 h-4 text-amber-700" />
-                  <span>Rekapitulasi Komisi Referral Tim Marketing (Trial Acquisition Rp 10.000 / Pasien)</span>
-                </h4>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {marketingRecap.map(mkt => (
-                  <div key={mkt.marketing_id} className="p-3.5 bg-white border border-amber-200 rounded-xl space-y-1 shadow-2xs">
-                    <div className="font-bold text-xs text-[#1e1b15]">{mkt.marketing_nama}</div>
-                    <div className="text-[11px] text-gray-500">Role: {mkt.marketing_role || 'Marketing'}</div>
-                    <div className="flex justify-between items-center pt-1 border-t border-gray-100 text-xs font-semibold">
-                      <span>Total Pasien Trial: <strong>{mkt.total_trial_count} Pasien</strong></span>
-                      <span className="text-emerald-700 font-bold">Rp {(mkt.total_komisi_marketing || 0).toLocaleString('id-ID')}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-1">
-                <span className="text-[11px] text-gray-500 font-semibold uppercase">Total Patient Sessions</span>
-                <div className="text-xl font-serif font-bold text-[#1e1b15]">{recapSummary.total_count} Sesi</div>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-1">
-                <span className="text-[11px] text-gray-500 font-semibold uppercase">Pengerjaan Selesai (Completed)</span>
-                <div className="text-xl font-serif font-bold text-emerald-700">{recapSummary.completed_count} Pasien</div>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-1">
-                <span className="text-[11px] text-gray-500 font-semibold uppercase">Total Accumulative Komisi</span>
-                <div className="text-xl font-serif font-bold text-[#7d5141]">
-                  Rp {recapSummary.total_komisi?.toLocaleString('id-ID')}
-                </div>
-              </div>
-            </div>
-
-            {/* Recap Table */}
-            <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
-                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Tabel Rekapitulasi Detail Activities & Komisi Medis/Terapis</h3>
-                <button
-                  onClick={handleExportExcel}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
-                >
-                  <FileSpreadsheet className="w-4 h-4" /> Export Excel Rekapan
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border border-[#e5ded4] rounded-xl">
-                  <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
-                    <tr>
-                      <th className="py-3 px-4">Waktu Assign / Selesai</th>
-                      <th className="py-3 px-4">Nama Pasien</th>
-                      <th className="py-3 px-4">Petugas & Lini Profesi</th>
-                      <th className="py-3 px-4">Detail Treatment / Actions</th>
-                      <th className="py-3 px-4">Status Layanan</th>
-                      <th className="py-3 px-4">Nominal Komisi</th>
-                      {canManageTreatments && <th className="py-3 px-4 text-center">Hapus</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#e5ded4]">
-                    {recapData.length === 0 ? (
-                      <tr>
-                        <td colSpan="7" className="text-center py-8 text-gray-400 italic">
-                          Belum ada data rekapan pengerjaan pada periode tanggal ini.
-                        </td>
-                      </tr>
-                    ) : (
-                      recapData.map(item => (
-                        <tr key={item.id} className="hover:bg-[#fff8f0]">
-                          <td className="py-3 px-4 text-[#83746f]">
-                            <div>Mulai: {new Date(item.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                            {item.completed_at && <div>Selesai: {new Date(item.completed_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>}
-                          </td>
-                          <td className="py-3 px-4 font-bold text-[#1e1b15]">
-                            {item.pasien_nama} ({item.tipe_pasien})
-                          </td>
-                          <td className="py-3 px-4 font-semibold text-[#7d5141]">
-                            {item.petugas_nama}
-                            <div className="text-[10px] font-semibold text-[#7d5141] uppercase">{item.lini_profesi || item.role_petugas}</div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="font-semibold text-[#1e1b15]">{item.nama_tindakan}</span>
-                            <div className="text-[10px] text-gray-500">{item.kategori_layanan}</div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.status_pengerjaan === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-800 border border-red-300'
-                              }`}>
-                              {item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : 'IN PROGRESS'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 font-bold text-[#7d5141]">
-                            Rp {(item.komisi || 0).toLocaleString('id-ID')}
-                          </td>
-                          {canManageTreatments && (
-                            <td className="py-3 px-4 text-center">
-                              <button
-                                onClick={() => handleDeleteDoingan(item.id)}
-                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg transition-all cursor-pointer"
-                                title="Hapus doingan"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
               </div>
             </div>
           </div>

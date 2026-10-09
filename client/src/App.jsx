@@ -18,7 +18,13 @@ import { LogOut } from 'lucide-react';
 function MainApp() {
   const { user, logout, loading, hasPermission } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('overview');
+  const [autoOpenNewPatient, setAutoOpenNewPatient] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleOpenNewPatientFromDashboard = () => {
+    setAutoOpenNewPatient(true);
+    setActiveTab('patients');
+  };
 
   useEffect(() => {
     if (!user) {
@@ -113,9 +119,21 @@ function MainApp() {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
-        return <DashboardOverview setActiveTab={setActiveTab} />;
+        return (
+          <DashboardOverview
+            setActiveTab={setActiveTab}
+            onOpenNewPatient={handleOpenNewPatientFromDashboard}
+          />
+        );
       case 'patients':
-        return <PatientManagement mode="INTAKE" setActiveTab={setActiveTab} />;
+        return (
+          <PatientManagement
+            mode="INTAKE"
+            setActiveTab={setActiveTab}
+            autoOpenNewPatient={autoOpenNewPatient}
+            setAutoOpenNewPatient={setAutoOpenNewPatient}
+          />
+        );
       case 'master_customer':
         return <PatientManagement mode="RAW_MASTER" setActiveTab={setActiveTab} />;
       case 'customer_database':
@@ -134,7 +152,12 @@ function MainApp() {
         return <WhatsAppGateway setActiveTab={setActiveTab} />;
 
       default:
-        return <DashboardOverview setActiveTab={setActiveTab} />;
+        return (
+          <DashboardOverview
+            setActiveTab={setActiveTab}
+            onOpenNewPatient={handleOpenNewPatientFromDashboard}
+          />
+        );
     }
   };
 

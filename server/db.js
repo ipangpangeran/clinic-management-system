@@ -50,18 +50,23 @@ async function initDb() {
         email TEXT,
         logo_url TEXT,
         tax_rate_percent REAL DEFAULT 11.0,
+        is_tax_enabled INTEGER DEFAULT 1,
         wa_api_url TEXT DEFAULT 'https://api-wa.ipangpangeran.com/send?api_key=ipang-super-secret-key-123456',
         idle_timeout_minutes INTEGER DEFAULT 15
       )
     `);
 
-    // Migration: Add wa_api_url and idle_timeout_minutes if missing in existing DB
+    // Migration: Add wa_api_url, idle_timeout_minutes, and is_tax_enabled if missing in existing DB
     try {
       await runQuery(`ALTER TABLE clinic_profile ADD COLUMN wa_api_url TEXT DEFAULT 'https://api-wa.ipangpangeran.com/send?api_key=ipang-super-secret-key-123456'`);
     } catch (e) { }
 
     try {
       await runQuery(`ALTER TABLE clinic_profile ADD COLUMN idle_timeout_minutes INTEGER DEFAULT 15`);
+    } catch (e) { }
+
+    try {
+      await runQuery(`ALTER TABLE clinic_profile ADD COLUMN is_tax_enabled INTEGER DEFAULT 1`);
     } catch (e) { }
 
 
@@ -229,6 +234,10 @@ async function initDb() {
     try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_name TEXT`); } catch(e){}
     try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_kuota INTEGER DEFAULT 0`); } catch(e){}
     try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_total INTEGER DEFAULT 0`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN is_billed INTEGER DEFAULT 0`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN transaksi_id TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN marketing_id TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN komisi_marketing REAL DEFAULT 0`); } catch(e){}
 
     // 6. Patient Package Usage History
     await runQuery(`
@@ -622,31 +631,31 @@ async function seedDefaultData() {
 
   // Seed the 19 Nurse treatments & 3 Beautician treatments requested
   const requestedTreatments = [
-    // Nurse Treatments (19)
-    ['tnd-1', 'Platelet-Rich Plasma (PRP)', 'NURSE', 150000, 1200000, 17000, 5, 20, 15000],
-    ['tnd-2', 'DNA Salmon', 'NURSE', 150000, 1500000, 17000, 5, 20, 15000],
-    ['tnd-3', 'Laser Pico', 'NURSE', 150000, 1000000, 17000, 5, 20, 15000],
-    ['tnd-4', 'Laser DPL', 'NURSE', 0, 800000, 17000, 5, 15, 15000],
-    ['tnd-5', 'Laser Blackdoll4', 'NURSE', 0, 850000, 17000, 5, 15, 15000],
-    ['tnd-6', 'Laser Underarmd', 'NURSE', 0, 450000, 17000, 5, 15, 13000],
-    ['tnd-7', 'Peeling Acne', 'NURSE', 0, 350000, 17000, 5, 10, 13000],
-    ['tnd-8', 'Peeling Baru', 'NURSE', 0, 400000, 17000, 5, 10, 13000],
-    ['tnd-9', 'Vittaran Poly Booster', 'NURSE', 150000, 1800000, 17000, 5, 20, 15000],
-    ['tnd-10', 'JuveLook', 'NURSE', 150000, 2500000, 17000, 5, 20, 15000],
-    ['tnd-11', 'Cauter', 'NURSE', 100000, 500000, 17000, 5, 15, 13000],
-    ['tnd-12', 'Benang Hidung', 'NURSE', 200000, 2000000, 17000, 5, 25, 20000],
-    ['tnd-13', 'Benang Pipi', 'NURSE', 200000, 3000000, 17000, 5, 25, 20000],
-    ['tnd-14', 'Infus Whitening', 'NURSE', 0, 600000, 17000, 5, 15, 13000],
-    ['tnd-15', 'Infus Choromosome', 'NURSE', 0, 1200000, 17000, 5, 20, 15000],
-    ['tnd-16', 'Botox', 'NURSE', 150000, 1800000, 17000, 5, 20, 15000],
-    ['tnd-17', 'Messo', 'NURSE', 100000, 750000, 17000, 5, 15, 13000],
-    ['tnd-18', 'Filter Dagu', 'NURSE', 200000, 2500000, 17000, 5, 20, 15000],
-    ['tnd-19', 'Filter Hidung', 'NURSE', 200000, 2500000, 17000, 5, 20, 15000],
+    // Nurse Treatments (19) - Komisi khusus Nurse, komisi BTC = 0
+    ['tnd-1', 'Platelet-Rich Plasma (PRP)', 'NURSE', 150000, 1200000, 0, 0, 0, 15000],
+    ['tnd-2', 'DNA Salmon', 'NURSE', 150000, 1500000, 0, 0, 0, 15000],
+    ['tnd-3', 'Laser Pico', 'NURSE', 150000, 1000000, 0, 0, 0, 15000],
+    ['tnd-4', 'Laser DPL', 'NURSE', 0, 800000, 0, 0, 0, 15000],
+    ['tnd-5', 'Laser Blackdoll4', 'NURSE', 0, 850000, 0, 0, 0, 15000],
+    ['tnd-6', 'Laser Underarmd', 'NURSE', 0, 450000, 0, 0, 0, 13000],
+    ['tnd-7', 'Peeling Acne', 'NURSE', 0, 350000, 0, 0, 0, 13000],
+    ['tnd-8', 'Peeling Baru', 'NURSE', 0, 400000, 0, 0, 0, 13000],
+    ['tnd-9', 'Vittaran Poly Booster', 'NURSE', 150000, 1800000, 0, 0, 0, 15000],
+    ['tnd-10', 'JuveLook', 'NURSE', 150000, 2500000, 0, 0, 0, 15000],
+    ['tnd-11', 'Cauter', 'NURSE', 100000, 500000, 0, 0, 0, 13000],
+    ['tnd-12', 'Benang Hidung', 'NURSE', 200000, 2000000, 0, 0, 0, 20000],
+    ['tnd-13', 'Benang Pipi', 'NURSE', 200000, 3000000, 0, 0, 0, 20000],
+    ['tnd-14', 'Infus Whitening', 'NURSE', 0, 600000, 0, 0, 0, 13000],
+    ['tnd-15', 'Infus Choromosome', 'NURSE', 0, 1200000, 0, 0, 0, 15000],
+    ['tnd-16', 'Botox', 'NURSE', 150000, 1800000, 0, 0, 0, 15000],
+    ['tnd-17', 'Messo', 'NURSE', 100000, 750000, 0, 0, 0, 13000],
+    ['tnd-18', 'Filter Dagu', 'NURSE', 200000, 2500000, 0, 0, 0, 15000],
+    ['tnd-19', 'Filter Hidung', 'NURSE', 200000, 2500000, 0, 0, 0, 15000],
 
-    // Beautician Treatments (3)
-    ['tnd-20', 'Oxy & PDT', 'BEAUTICIAN', 0, 250000, 17000, 5, 0, 0],
-    ['tnd-21', 'Oxy,pdt,micro,organic,detox,Hf', 'BEAUTICIAN', 0, 450000, 17000, 5, 0, 0],
-    ['tnd-22', 'RF', 'BEAUTICIAN', 0, 300000, 17000, 5, 0, 0]
+    // Beautician Treatments (3) - Komisi khusus Beautician, komisi Nurse = 0
+    ['tnd-20', 'Oxy & PDT', 'BEAUTICIAN', 0, 250000, 17000, 0, 0, 0],
+    ['tnd-21', 'Oxy,pdt,micro,organic,detox,Hf', 'BEAUTICIAN', 0, 450000, 17000, 0, 0, 0],
+    ['tnd-22', 'RF', 'BEAUTICIAN', 0, 300000, 17000, 0, 0, 0]
   ];
 
   for (const t of requestedTreatments) {
@@ -654,9 +663,13 @@ async function seedDefaultData() {
     if (!existing) {
       await runQuery('INSERT INTO tindakan_medis (id, nama_tindakan, kategori_petugas, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', t);
     } else {
-      await runQuery('UPDATE tindakan_medis SET kategori_petugas = ? WHERE id = ?', [t[2], existing.id]);
+      await runQuery('UPDATE tindakan_medis SET kategori_petugas = ?, komisi_fix_therapist = ?, nominal_nurse_tindakan = ? WHERE id = ?', [t[2], t[5], t[8], existing.id]);
     }
   }
+
+  // Ensure strict separation: Nurse treatments have 0 BTC commission, Beautician treatments have 0 Nurse commission
+  await runQuery("UPDATE tindakan_medis SET komisi_fix_therapist = 0 WHERE kategori_petugas = 'NURSE'");
+  await runQuery("UPDATE tindakan_medis SET nominal_nurse_tindakan = 0 WHERE kategori_petugas = 'BEAUTICIAN'");
 
   // Seed initial doingan sample records if empty
   const dRow = await getQuery('SELECT COUNT(*) as count FROM doingan');

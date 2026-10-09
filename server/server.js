@@ -34,6 +34,14 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// Helper for proper EYD Title Case capitalization of person names
+function formatPersonName(value) {
+  if (!value || typeof value !== 'string') return value;
+  return value.trim().replace(/\b([a-zA-ZÀ-ÿ])([a-zA-ZÀ-ÿ]*)/g, (match, firstLetter, restOfWord) => {
+    return firstLetter.toUpperCase() + restOfWord.toLowerCase();
+  });
+}
+
 // --- AUTH ROUTES ---
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -118,13 +126,14 @@ app.post('/api/users', authenticateToken, async (req, res) => {
     const salt = bcrypt.genSaltSync(10);
     const passwordHash = bcrypt.hashSync(password, salt);
     const id = 'usr-' + Date.now();
+    const formattedFullName = formatPersonName(full_name);
 
     const salaryVal = role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik' ? 0 : parseFloat(gaji_pokok || 0);
 
     await runQuery(`
       INSERT INTO users (id, username, password, full_name, role, phone, gaji_pokok, is_training)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, username, passwordHash, full_name, role, phone || null, salaryVal, is_training ? 1 : 0]);
+    `, [id, username, passwordHash, formattedFullName, role, phone || null, salaryVal, is_training ? 1 : 0]);
 
     const newUser = await getQuery('SELECT id, username, full_name, role, phone, gaji_pokok, is_training FROM users WHERE id = ?', [id]);
     res.status(201).json({ message: 'User baru berhasil dibuat', user: newUser });
@@ -147,6 +156,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Username sudah digunakan oleh user lain' });
     }
 
+    const formattedFullName = formatPersonName(full_name);
     const salaryVal = role === 'Super Admin' || role === 'Admin System' || role === 'Admin Klinik' ? 0 : parseFloat(gaji_pokok || 0);
 
     if (password && password.trim() !== '') {
@@ -154,11 +164,11 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       const passwordHash = bcrypt.hashSync(password, salt);
       await runQuery(`
         UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ?, is_training = ? WHERE id = ?
-      `, [username, passwordHash, full_name, role, phone || null, salaryVal, is_training ? 1 : 0, id]);
+      `, [username, passwordHash, formattedFullName, role, phone || null, salaryVal, is_training ? 1 : 0, id]);
     } else {
       await runQuery(`
         UPDATE users SET username = ?, full_name = ?, role = ?, phone = ?, gaji_pokok = ?, is_training = ? WHERE id = ?
-      `, [username, full_name, role, phone || null, salaryVal, is_training ? 1 : 0, id]);
+      `, [username, formattedFullName, role, phone || null, salaryVal, is_training ? 1 : 0, id]);
     }
 
     const updated = await getQuery('SELECT id, username, full_name, role, phone, gaji_pokok, is_training FROM users WHERE id = ?', [id]);
@@ -310,7 +320,7 @@ app.get('/api/doingan/staff/active', authenticateToken, async (req, res) => {
       FROM doingan d
       JOIN pasien p ON d.pasien_id = p.id
       WHERE d.petugas_id = ? AND d.status_pengerjaan = 'COMPLETED'
-      ORDER BY d.completed_at DESC LIMIT 10
+      ORDER BY d.completed_at DESC
     `, [req.user.id]);
 
     res.json({ active_doingan: active || null, history: history || [] });
@@ -356,15 +366,25 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
         finalNamaTindakan = selectedTreatments.map(t => t.nama_tindakan).join(', ');
         mainTindakanId = selectedTreatments[0]?.id || null;
 
+        const isNurse = (petugas?.lini_profesi === 'Nurse' || petugas?.role === 'Nurse' || doi.role_petugas === 'Nurse');
         selectedTreatments.forEach(t => {
-          if (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') {
-            totalKomisi += (t.komisi_fix_therapist || commBtcMember);
+          if (isNurse) {
+            totalKomisi += (t.nominal_nurse_tindakan != null && t.nominal_nurse_tindakan > 0 ? t.nominal_nurse_tindakan : (commMap['NURSE_TINDAKAN'] ?? 15000));
           } else {
-            totalKomisi += (t.komisi_fix_therapist || commBtcTrial);
+            if (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') {
+              totalKomisi += (t.komisi_fix_therapist != null && t.komisi_fix_therapist > 0 ? t.komisi_fix_therapist : commBtcMember);
+            } else {
+              totalKomisi += (t.komisi_fix_therapist != null && t.komisi_fix_therapist > 0 ? t.komisi_fix_therapist : commBtcTrial);
+            }
           }
         });
       } else {
-        totalKomisi = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') ? commBtcMember : (isTraining ? commBtcTraining : commBtcTrial);
+        const isNurse = (petugas?.lini_profesi === 'Nurse' || petugas?.role === 'Nurse' || doi.role_petugas === 'Nurse');
+        if (isNurse) {
+          totalKomisi = commMap['NURSE_TINDAKAN'] ?? 15000;
+        } else {
+          totalKomisi = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') ? commBtcMember : (isTraining ? commBtcTraining : commBtcTrial);
+        }
       }
     }
 
@@ -388,6 +408,36 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
     res.json({ message: 'Pengerjaan tindakan berhasil dikonfirmasi selesai!', komisi: totalKomisi });
   } catch (err) {
     res.status(500).json({ message: 'Error completing doingan', error: err.message });
+  }
+});
+
+// POST /api/doingan/:id/cancel -> Nurse cancels doingan session if doctor doesn't recommend or patient goes home
+app.post('/api/doingan/:id/cancel', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const doi = await getQuery('SELECT * FROM doingan WHERE id = ?', [id]);
+    if (!doi) return res.status(404).json({ message: 'Pengerjaan doingan tidak ditemukan' });
+
+    const cancelReason = reason || 'Tidak direkomendasikan dokter / Pasien minta pulang';
+
+    await runQuery(`
+      UPDATE doingan
+      SET status_pengerjaan = 'CANCELLED',
+          komisi = 0,
+          is_billed = 1,
+          notes = CASE 
+            WHEN notes IS NULL OR notes = '' THEN ? 
+            ELSE notes || ' [DIBATALKAN: ' || ? || ']' 
+          END,
+          completed_at = datetime('now', '+7 hours')
+      WHERE id = ?
+    `, [cancelReason, cancelReason, id]);
+
+    res.json({ message: 'Tindakan berhasil dibatalkan. Pasien tidak akan masuk tagihan kasir/POS.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal membatalkan tindakan', error: err.message });
   }
 });
 
@@ -425,6 +475,13 @@ app.get('/api/doingan/recap', authenticateToken, async (req, res) => {
       query += " AND d.status_pengerjaan = ?";
       params.push(status_pengerjaan);
     }
+    if (req.query.lini === 'BEAUTICIAN') {
+      query += " AND (u.role = 'Beautician' OR u.role = 'BTC' OR u.role = 'Therapist / BTC' OR u.lini_profesi = 'Beautician' OR d.kategori_layanan LIKE '%Beautician%' OR d.kategori_layanan LIKE '%Facial%')";
+      query += " AND (u.role != 'Nurse' AND u.role != 'Dokter' AND (u.lini_profesi IS NULL OR u.lini_profesi != 'Nurse'))";
+    } else if (req.query.lini === 'NURSE') {
+      query += " AND (u.role = 'Nurse' OR u.role = 'Dokter' OR u.lini_profesi = 'Nurse' OR d.kategori_layanan LIKE '%Nurse%' OR d.kategori_layanan LIKE '%Medis%')";
+      query += " AND (u.role != 'Beautician' AND (u.lini_profesi IS NULL OR u.lini_profesi != 'Beautician'))";
+    }
 
     query += " ORDER BY d.created_at DESC";
 
@@ -444,6 +501,101 @@ app.get('/api/doingan/recap', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ message: 'Error fetching doingan recap', error: err.message });
+  }
+});
+
+// GET /api/marketing/recap-detail -> Detailed transaction log for marketing commissions (Packages & Trial Acquisitions)
+app.get('/api/marketing/recap-detail', authenticateToken, async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    let dateFilterPkg = "";
+    let dateFilterDoi = "";
+    const paramsPkg = [];
+    const paramsDoi = [];
+
+    if (start_date) {
+      dateFilterPkg += " AND pp.created_at >= ?";
+      paramsPkg.push(`${start_date} 00:00:00`);
+      dateFilterDoi += " AND d.created_at >= ?";
+      paramsDoi.push(`${start_date} 00:00:00`);
+    }
+    if (end_date) {
+      dateFilterPkg += " AND pp.created_at <= ?";
+      paramsPkg.push(`${end_date} 23:59:59`);
+      dateFilterDoi += " AND d.created_at <= ?";
+      paramsDoi.push(`${end_date} 23:59:59`);
+    }
+
+    // 1. Package purchases linked to marketing
+    const rawPackages = await allQuery(`
+      SELECT 
+        pp.id,
+        pp.created_at,
+        COALESCE(pp.marketing_id, p.marketing_id) as marketing_id,
+        COALESCE(u.full_name, 'Marketing Staff') as marketing_nama,
+        COALESCE(u.role, 'Marketing') as marketing_role,
+        p.id as pasien_id,
+        p.nama_lengkap as pasien_nama,
+        p.no_hp as pasien_hp,
+        p.tipe_pasien,
+        'PEMBELIAN_PAKET' as jenis_komisi,
+        pp.nama_paket as detail_transaksi,
+        pp.harga_paket as nominal_pembayaran,
+        pp.komisi_marketing as komisi,
+        COALESCE(pp.is_billed, 0) as is_billed
+      FROM pasien_paket pp
+      JOIN pasien p ON pp.pasien_id = p.id
+      LEFT JOIN users u ON COALESCE(pp.marketing_id, p.marketing_id) = u.id
+      WHERE (pp.marketing_id IS NOT NULL OR p.marketing_id IS NOT NULL) ${dateFilterPkg}
+    `, paramsPkg);
+
+    const packages = rawPackages.map(pkg => {
+      let comm = pkg.komisi;
+      const price = Number(pkg.nominal_pembayaran) || 0;
+      if (comm == null || comm === 0) {
+        if (price > 0) {
+          if (price < 600000) comm = 30000;
+          else if (price < 2000000) comm = 50000;
+          else if (price < 10000000) comm = 70000;
+          else comm = 150000;
+        } else {
+          comm = 0;
+        }
+      }
+      return { ...pkg, komisi: comm };
+    });
+
+    // 2. Completed trial acquisitions linked to marketing
+    const trials = await allQuery(`
+      SELECT 
+        d.id,
+        COALESCE(d.completed_at, d.created_at) as created_at,
+        COALESCE(d.marketing_id, p.marketing_id) as marketing_id,
+        COALESCE(u.full_name, 'Marketing Staff') as marketing_nama,
+        COALESCE(u.role, 'Marketing') as marketing_role,
+        p.id as pasien_id,
+        p.nama_lengkap as pasien_nama,
+        p.no_hp as pasien_hp,
+        p.tipe_pasien,
+        'AKUISISI_TRIAL' as jenis_komisi,
+        COALESCE(d.nama_tindakan, 'Perawatan Pasien Trial') as detail_transaksi,
+        0 as nominal_pembayaran,
+        10000 as komisi,
+        1 as is_billed
+      FROM doingan d
+      JOIN pasien p ON d.pasien_id = p.id
+      LEFT JOIN users u ON COALESCE(d.marketing_id, p.marketing_id) = u.id
+      WHERE (d.marketing_id IS NOT NULL OR p.marketing_id IS NOT NULL)
+        AND d.status_pengerjaan = 'COMPLETED'
+        AND (d.status_doingan = 'Trial' OR d.status_doingan = 'TRIAL' OR p.tipe_pasien = 'TRIAL')
+        ${dateFilterDoi}
+    `, paramsDoi);
+
+    const combined = [...packages, ...trials].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    res.json(combined);
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching marketing detailed recap', error: err.message });
   }
 });
 
@@ -488,12 +640,41 @@ app.get('/api/doingan/today', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/doingan/unbilled -> Unbilled completed treatment sessions for POS cashier
+// GET /api/doingan/unbilled -> Unbilled completed treatment sessions & purchased packages for POS cashier
 app.get('/api/doingan/unbilled', authenticateToken, async (req, res) => {
   try {
+    const unbilledPackages = await allQuery(`
+      SELECT 
+        pp.id,
+        pp.id as paket_id,
+        pp.pasien_id,
+        NULL as petugas_id,
+        'Admin FO' as role_petugas,
+        'Pembelian Paket Treatment' as kategori_layanan,
+        NULL as tindakan_id,
+        pp.nama_paket as nama_tindakan,
+        'COMPLETED' as status_pengerjaan,
+        'MEMBER' as status_doingan,
+        0 as komisi,
+        p.marketing_id,
+        'PAKET' as item_type,
+        pp.harga_paket,
+        p.nama_lengkap as pasien_nama,
+        p.no_hp as pasien_hp,
+        p.tipe_pasien,
+        'Front Office' as petugas_nama,
+        'Admin FO' as petugas_role,
+        'FO' as lini_profesi
+      FROM pasien_paket pp
+      JOIN pasien p ON pp.pasien_id = p.id
+      WHERE (pp.is_billed IS NULL OR pp.is_billed = 0)
+      ORDER BY pp.created_at DESC
+    `);
+
     const list = await allQuery(`
       SELECT 
         d.id,
+        NULL as paket_id,
         d.pasien_id,
         d.petugas_id,
         d.role_petugas,
@@ -504,10 +685,14 @@ app.get('/api/doingan/unbilled', authenticateToken, async (req, res) => {
         d.status_doingan,
         d.komisi,
         d.marketing_id,
+        'TINDAKAN' as item_type,
+        0 as harga_paket,
         p.nama_lengkap as pasien_nama,
         p.no_hp as pasien_hp,
         p.tipe_pasien,
-        u.full_name as petugas_nama
+        u.full_name as petugas_nama,
+        u.role as petugas_role,
+        u.lini_profesi
       FROM doingan d
       JOIN pasien p ON d.pasien_id = p.id
       JOIN users u ON d.petugas_id = u.id
@@ -516,7 +701,7 @@ app.get('/api/doingan/unbilled', authenticateToken, async (req, res) => {
         AND (u.role IS NULL OR u.role != 'Marketing')
       ORDER BY d.created_at DESC
     `);
-    res.json(list || []);
+    res.json([...unbilledPackages, ...list]);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching unbilled doingan list', error: err.message });
   }
@@ -535,20 +720,24 @@ app.post('/api/doingan', authenticateToken, async (req, res) => {
     let finalNamaTindakan = nama_tindakan || 'Tindakan Klinik';
 
     let nurseNominal = 15000;
+    let btcNominal = 17000;
     if (tindakan_id) {
-      const tm = await getQuery('SELECT nama_tindakan, nominal_nurse_tindakan FROM tindakan_medis WHERE id = ?', [tindakan_id]);
+      const tm = await getQuery('SELECT nama_tindakan, komisi_fix_therapist, nominal_nurse_tindakan FROM tindakan_medis WHERE id = ?', [tindakan_id]);
       if (tm) {
         finalNamaTindakan = tm.nama_tindakan;
-        nurseNominal = tm.nominal_nurse_tindakan || 15000;
+        if (tm.nominal_nurse_tindakan) nurseNominal = tm.nominal_nurse_tindakan;
+        if (tm.komisi_fix_therapist) btcNominal = tm.komisi_fix_therapist;
       }
     }
 
-    if (role === 'Beautician' || status_doingan === 'Mbr' || status_doingan === 'Member') {
+    if (role === 'Beautician' || role === 'Therapist / BTC') {
       if (status_doingan === 'Mbr' || status_doingan === 'Member') {
-        komisi = 17000;
+        komisi = btcNominal;
       } else if (status_doingan === 'Trial') {
         komisi = 13000;
       }
+    } else if (role === 'Nurse') {
+      komisi = nurseNominal;
     }
 
     if (role === 'Marketing' || status_doingan === 'Membership' || status_doingan === 'DP Membership') {
@@ -598,15 +787,15 @@ app.get('/api/clinic-profile', async (req, res) => {
 
 app.put('/api/clinic-profile', authenticateToken, async (req, res) => {
   try {
-    const { clinic_name, tagline, address, map_latitude, map_longitude, phone, whatsapp, email, logo_url, tax_rate_percent, wa_api_url, idle_timeout_minutes } = req.body;
+    const { clinic_name, tagline, address, map_latitude, map_longitude, phone, whatsapp, email, logo_url, tax_rate_percent, is_tax_enabled, wa_api_url, idle_timeout_minutes } = req.body;
     
     await runQuery(`
       UPDATE clinic_profile
       SET clinic_name = ?, tagline = ?, address = ?, map_latitude = ?, map_longitude = ?,
-          phone = ?, whatsapp = ?, email = ?, logo_url = ?, tax_rate_percent = ?, wa_api_url = ?,
+          phone = ?, whatsapp = ?, email = ?, logo_url = ?, tax_rate_percent = ?, is_tax_enabled = ?, wa_api_url = ?,
           idle_timeout_minutes = ?
       WHERE id = 1
-    `, [clinic_name, tagline, address, map_latitude, map_longitude, phone, whatsapp, email, logo_url, tax_rate_percent, wa_api_url, idle_timeout_minutes || 15]);
+    `, [clinic_name, tagline, address, map_latitude, map_longitude, phone, whatsapp, email, logo_url, Number(tax_rate_percent) || 0, is_tax_enabled !== undefined ? (is_tax_enabled ? 1 : 0) : 1, wa_api_url, idle_timeout_minutes || 15]);
 
     const updated = await getQuery('SELECT * FROM clinic_profile WHERE id = 1');
     res.json({ message: 'Profil klinik & Pengaturan Sesi berhasil diperbarui', profile: updated });
@@ -726,6 +915,7 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
     }
 
     const id = 'pasien-' + Date.now();
+    const formattedNama = formatPersonName(nama_lengkap);
     const hasTrial = normalizedTipe === 'TRIAL' ? 1 : 0;
     const initialTipe = normalizedTipe;
 
@@ -735,7 +925,7 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
         riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id, has_trial_history, initial_tipe_pasien
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      id, no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, 
+      id, no_ktp || null, no_hp, formattedNama, normalizedTipe, alamat || null, tgl_lahir || null, 
       riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, 
       referrer_pasien_id || null, marketing_id || null, hasTrial, initialTipe
     ]);
@@ -780,10 +970,24 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
       if (existingHp) return res.status(400).json({ message: 'data sudah terdaftar (No. HP sudah digunakan oleh pasien lain)' });
     }
 
-    const currentPatient = await getQuery('SELECT has_trial_history, tipe_pasien, initial_tipe_pasien FROM pasien WHERE id = ?', [id]);
-    const wasTrial = (currentPatient && (currentPatient.tipe_pasien === 'TRIAL' || currentPatient.has_trial_history === 1 || currentPatient.initial_tipe_pasien === 'TRIAL'));
-    const hasTrial = (normalizedTipe === 'TRIAL' || wasTrial) ? 1 : 0;
-    const finalInitialTipe = (currentPatient && currentPatient.initial_tipe_pasien) ? currentPatient.initial_tipe_pasien : (wasTrial ? 'TRIAL' : normalizedTipe);
+    const currentPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
+    if (!currentPatient) return res.status(404).json({ message: 'Pasien tidak ditemukan' });
+
+    const formattedNama = nama_lengkap ? formatPersonName(nama_lengkap) : currentPatient.nama_lengkap;
+    const finalHp = (no_hp !== undefined && no_hp !== null) ? no_hp : currentPatient.no_hp;
+    const finalKtp = no_ktp !== undefined ? (no_ktp || null) : currentPatient.no_ktp;
+    const finalTipe = (tipe_pasien !== undefined && tipe_pasien !== null) ? normalizedTipe : currentPatient.tipe_pasien;
+    const finalAlamat = alamat !== undefined ? alamat : currentPatient.alamat;
+    const finalTglLahir = tgl_lahir !== undefined ? tgl_lahir : currentPatient.tgl_lahir;
+    const finalAlergi = riwayat_alergi !== undefined ? riwayat_alergi : currentPatient.riwayat_alergi;
+    const finalKulit = jenis_kulit !== undefined ? jenisKulit : currentPatient.jenis_kulit;
+    const finalDokter = rekomendasi_dokter !== undefined ? rekomendasiDokter : currentPatient.rekomendasi_dokter;
+    const finalReferrer = referrer_pasien_id !== undefined ? referrer_pasien_id : currentPatient.referrer_pasien_id;
+    const finalMarketing = marketing_id !== undefined ? marketing_id : currentPatient.marketing_id;
+
+    const wasTrial = (currentPatient.tipe_pasien === 'TRIAL' || currentPatient.has_trial_history === 1 || currentPatient.initial_tipe_pasien === 'TRIAL');
+    const hasTrial = (finalTipe === 'TRIAL' || wasTrial) ? 1 : 0;
+    const finalInitialTipe = currentPatient.initial_tipe_pasien ? currentPatient.initial_tipe_pasien : (wasTrial ? 'TRIAL' : finalTipe);
 
     await runQuery(`
       UPDATE pasien
@@ -792,9 +996,9 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
           has_trial_history = ?, initial_tipe_pasien = ?
       WHERE id = ?
     `, [
-      no_ktp || null, no_hp, nama_lengkap, normalizedTipe, alamat || null, tgl_lahir || null, 
-      riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null, 
-      referrer_pasien_id || null, marketing_id || null, hasTrial, finalInitialTipe, id
+      finalKtp, finalHp, formattedNama, finalTipe, finalAlamat, finalTglLahir, 
+      finalAlergi, finalKulit, finalDokter, finalReferrer, finalMarketing, 
+      hasTrial, finalInitialTipe, id
     ]);
 
     const updated = await getQuery(`
@@ -914,36 +1118,70 @@ app.get('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
 app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket } = req.body;
+    const { packages, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket, marketing_id } = req.body;
 
-    const totalKuota = (Number(item_a_kuota) || 0) + (Number(item_b_kuota) || 0);
-    const paketId = 'pkg-' + Date.now();
-    const pkgPrice = Number(harga_paket) || 0;
+    const pkgList = Array.isArray(packages) && packages.length > 0 
+      ? packages 
+      : [{ nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket }];
 
-    await runQuery(`
-      INSERT INTO pasien_paket (
-        id, pasien_id, nama_paket, item_a_name, item_a_kuota, item_a_total, 
-        item_b_name, item_b_kuota, item_b_total, sisa_kuota, total_kuota, harga_paket
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      paketId, id, nama_paket, 
-      item_a_name || 'Tindakan A', Number(item_a_kuota)||0, Number(item_a_kuota)||0,
-      item_b_name || '', Number(item_b_kuota)||0, Number(item_b_kuota)||0,
-      totalKuota, totalKuota, pkgPrice
-    ]);
-
-    // MGM Referral 5% Point Calculation
     const targetPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
-    let mgmMsg = '';
-    if (targetPatient && targetPatient.referrer_pasien_id && pkgPrice > 0) {
-      const bonusPoints = Math.round(pkgPrice * 0.05);
-      await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [bonusPoints, targetPatient.referrer_pasien_id]);
-      const referrer = await getQuery('SELECT nama_lengkap FROM pasien WHERE id = ?', [targetPatient.referrer_pasien_id]);
-      mgmMsg = ` [MGM Bonus: +${bonusPoints.toLocaleString('id-ID')} Poin diberikan ke ${referrer?.nama_lengkap || 'Pereferensi'}]`;
+    const finalMarketingId = marketing_id || targetPatient?.marketing_id || null;
+
+    let totalPointsAwarded = 0;
+
+    for (const pkg of pkgList) {
+      if (!pkg.nama_paket) continue;
+      const totalKuota = (Number(pkg.item_a_kuota) || 0) + (Number(pkg.item_b_kuota) || 0);
+      const paketId = 'pkg-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+      const pkgPrice = Number(pkg.harga_paket) || 0;
+
+      // Hitung komisi marketing berjenjang berdasarkan harga penjualan paket:
+      // < 600.000 -> 30.000
+      // 600.000 s/d < 2.000.000 -> 50.000
+      // 2.000.000 s/d < 10.000.000 -> 70.000
+      // >= 10.000.000 -> 150.000
+      let mktComm = 0;
+      if (finalMarketingId && pkgPrice > 0) {
+        if (pkgPrice < 600000) {
+          mktComm = 30000;
+        } else if (pkgPrice < 2000000) {
+          mktComm = 50000;
+        } else if (pkgPrice < 10000000) {
+          mktComm = 70000;
+        } else {
+          mktComm = 150000;
+        }
+      }
+
+      await runQuery(`
+        INSERT INTO pasien_paket (
+          id, pasien_id, nama_paket, item_a_name, item_a_kuota, item_a_total, 
+          item_b_name, item_b_kuota, item_b_total, sisa_kuota, total_kuota, harga_paket, is_billed,
+          marketing_id, komisi_marketing
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      `, [
+        paketId, id, pkg.nama_paket, 
+        pkg.item_a_name || 'Tindakan A', Number(pkg.item_a_kuota)||0, Number(pkg.item_a_kuota)||0,
+        pkg.item_b_name || '', Number(pkg.item_b_kuota)||0, Number(pkg.item_b_kuota)||0,
+        totalKuota, totalKuota, pkgPrice,
+        finalMarketingId, mktComm
+      ]);
+
+      if (targetPatient && targetPatient.referrer_pasien_id && pkgPrice > 0) {
+        const bonusPoints = Math.round(pkgPrice * 0.05);
+        totalPointsAwarded += bonusPoints;
+      }
     }
 
-    res.status(201).json({ message: `Paket ${nama_paket} berhasil ditambahkan ke pasien!${mgmMsg}` });
+    let mgmMsg = '';
+    if (targetPatient && targetPatient.referrer_pasien_id && totalPointsAwarded > 0) {
+      await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [totalPointsAwarded, targetPatient.referrer_pasien_id]);
+      const referrer = await getQuery('SELECT nama_lengkap FROM pasien WHERE id = ?', [targetPatient.referrer_pasien_id]);
+      mgmMsg = ` [MGM Bonus: +${totalPointsAwarded.toLocaleString('id-ID')} Poin diberikan ke ${referrer?.nama_lengkap || 'Pereferensi'}]`;
+    }
+
+    res.status(201).json({ message: `${pkgList.length} Paket treatment berhasil ditambahkan ke pasien! Tagihan paket masuk ke POS.${mgmMsg}` });
   } catch (err) {
     res.status(500).json({ message: 'Error adding package', error: err.message });
   }
@@ -1075,7 +1313,7 @@ app.post('/api/settings/toggle-wa-reminder', authenticateToken, async (req, res)
   }
 });
 
-// --- MARKETING TRIAL ACQUISITION RECAP ---
+// --- MARKETING TRIAL ACQUISITION & PACKAGE COMMISSION RECAP ---
 app.get('/api/marketing/recap', authenticateToken, async (req, res) => {
   try {
     const mktCommRow = await getQuery("SELECT nominal_komisi FROM role_commissions WHERE role_key = 'MARKETING'");
@@ -1087,10 +1325,21 @@ app.get('/api/marketing/recap', authenticateToken, async (req, res) => {
         u.full_name as marketing_nama,
         u.role as marketing_role,
         COUNT(DISTINCT d.id) as total_trial_count,
-        (COUNT(DISTINCT d.id) * ${mktCommNominal}) as total_komisi_marketing
+        (COUNT(DISTINCT d.id) * ${mktCommNominal}) as total_komisi_trial,
+        COALESCE(pkg.total_paket_count, 0) as total_paket_count,
+        COALESCE(pkg.total_komisi_paket, 0) as total_komisi_paket,
+        ((COUNT(DISTINCT d.id) * ${mktCommNominal}) + COALESCE(pkg.total_komisi_paket, 0)) as total_komisi_marketing
       FROM users u
       LEFT JOIN doingan d ON d.marketing_id = u.id AND d.status_pengerjaan = 'COMPLETED' AND (d.status_doingan = 'Trial' OR d.status_doingan = 'TRIAL')
-      WHERE u.role = 'Marketing' OR u.lini_profesi = 'Marketing' OR u.id IN (SELECT DISTINCT marketing_id FROM doingan WHERE marketing_id IS NOT NULL)
+      LEFT JOIN (
+        SELECT marketing_id, COUNT(id) as total_paket_count, SUM(komisi_marketing) as total_komisi_paket
+        FROM pasien_paket
+        WHERE marketing_id IS NOT NULL
+        GROUP BY marketing_id
+      ) pkg ON pkg.marketing_id = u.id
+      WHERE u.role = 'Marketing' OR u.lini_profesi = 'Marketing' 
+         OR u.id IN (SELECT DISTINCT marketing_id FROM doingan WHERE marketing_id IS NOT NULL)
+         OR u.id IN (SELECT DISTINCT marketing_id FROM pasien_paket WHERE marketing_id IS NOT NULL)
       GROUP BY u.id
     `);
     res.json(recap);
@@ -1385,16 +1634,20 @@ app.post('/api/tindakan', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Akses ditolak: Hanya Super Admin & Admin Klinik yang dapat menambah jenis tindakan' });
     }
 
-    const { nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan } = req.body;
+    const { nama_tindakan, kategori_petugas, tarif_tindakan_medis, komisi_fix_therapist, nominal_nurse_tindakan } = req.body;
     if (!nama_tindakan || nama_tindakan.trim() === '') {
       return res.status(400).json({ message: 'Nama jenis tindakan wajib diisi' });
     }
     
+    const kat = kategori_petugas === 'BEAUTICIAN' ? 'BEAUTICIAN' : 'NURSE';
+    const btcComm = kat === 'BEAUTICIAN' ? parseFloat(komisi_fix_therapist || 0) : 0;
+    const nurseComm = kat === 'NURSE' ? parseFloat(nominal_nurse_tindakan || 0) : 0;
+
     const id = 'tnd-' + Date.now();
     await runQuery(`
-      INSERT INTO tindakan_medis (id, nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, nama_tindakan.trim(), parseFloat(tarif_konsul_dokter || 0), parseFloat(tarif_tindakan_medis || 0), parseFloat(komisi_fix_therapist || 0), parseFloat(percent_btc_bonus || 0), parseFloat(percent_jasa_medis_dokter || 0), parseFloat(nominal_nurse_tindakan || 0)]);
+      INSERT INTO tindakan_medis (id, nama_tindakan, kategori_petugas, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, nama_tindakan.trim(), kat, 0, parseFloat(tarif_tindakan_medis || 0), btcComm, 0, 0, nurseComm]);
 
     res.status(201).json({ message: 'Jenis tindakan medis berhasil ditambahkan' });
   } catch (err) {
@@ -1409,13 +1662,17 @@ app.put('/api/tindakan/:id', authenticateToken, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { nama_tindakan, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan } = req.body;
+    const { nama_tindakan, kategori_petugas, tarif_tindakan_medis, komisi_fix_therapist, nominal_nurse_tindakan } = req.body;
+
+    const kat = kategori_petugas === 'BEAUTICIAN' ? 'BEAUTICIAN' : 'NURSE';
+    const btcComm = kat === 'BEAUTICIAN' ? parseFloat(komisi_fix_therapist || 0) : 0;
+    const nurseComm = kat === 'NURSE' ? parseFloat(nominal_nurse_tindakan || 0) : 0;
 
     await runQuery(`
       UPDATE tindakan_medis
-      SET nama_tindakan = ?, tarif_konsul_dokter = ?, tarif_tindakan_medis = ?, komisi_fix_therapist = ?, percent_btc_bonus = ?, percent_jasa_medis_dokter = ?, nominal_nurse_tindakan = ?
+      SET nama_tindakan = ?, kategori_petugas = ?, tarif_konsul_dokter = 0, tarif_tindakan_medis = ?, komisi_fix_therapist = ?, percent_btc_bonus = 0, percent_jasa_medis_dokter = 0, nominal_nurse_tindakan = ?
       WHERE id = ?
-    `, [nama_tindakan.trim(), parseFloat(tarif_konsul_dokter || 0), parseFloat(tarif_tindakan_medis || 0), parseFloat(komisi_fix_therapist || 0), parseFloat(percent_btc_bonus || 0), parseFloat(percent_jasa_medis_dokter || 0), parseFloat(nominal_nurse_tindakan || 0), id]);
+    `, [nama_tindakan.trim(), kat, parseFloat(tarif_tindakan_medis || 0), btcComm, nurseComm, id]);
 
     res.json({ message: 'Jenis tindakan medis berhasil diperbarui' });
   } catch (err) {
@@ -1449,8 +1706,10 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
     const pasien = await getQuery('SELECT * FROM pasien WHERE id = ?', [pasien_id]);
     if (!pasien) return res.status(404).json({ message: 'Pasien tidak ditemukan' });
 
-    const profile = await getQuery('SELECT tax_rate_percent FROM clinic_profile WHERE id = 1');
-    const taxRate = (profile && profile.tax_rate_percent) ? profile.tax_rate_percent / 100 : 0.11;
+    const profile = await getQuery('SELECT tax_rate_percent, is_tax_enabled FROM clinic_profile WHERE id = 1');
+    const isTaxEnabled = profile ? (profile.is_tax_enabled === 1 || profile.is_tax_enabled === true || profile.is_tax_enabled === '1') : true;
+    const taxRatePercent = profile && profile.tax_rate_percent !== null && profile.tax_rate_percent !== undefined ? Number(profile.tax_rate_percent) : 11;
+    const taxRate = isTaxEnabled ? (taxRatePercent / 100) : 0;
 
     let subtotal = 0;
     items.forEach(item => {
@@ -1459,12 +1718,12 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
 
     const discount = Number(discount_amount) || 0;
     const taxableAmount = Math.max(0, subtotal - discount);
-    const taxAmount = Math.round(taxableAmount * taxRate);
+    const taxAmount = isTaxEnabled && taxRate > 0 ? Math.round(taxableAmount * taxRate) : 0;
     const grandTotal = taxableAmount + taxAmount;
     const payment = Number(payment_amount) || grandTotal;
     const changeAmount = Math.max(0, payment - grandTotal);
 
-    const earnedPoints = Math.floor(grandTotal / 50000);
+    const earnedPoints = 0;
 
     const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
     const randNum = Math.floor(1000 + Math.random() * 9000);
@@ -1487,6 +1746,13 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
       if (item.jenis_item === 'RETAIL' && item.produk_id) {
         await runQuery('UPDATE stok_produk SET sisa_stok = sisa_stok - ? WHERE id = ?', [item.jumlah, item.produk_id]);
       }
+
+      if (item.jenis_item === 'PAKET') {
+        const pId = item.paket_id || item.item_id;
+        if (pId) {
+          await runQuery('UPDATE pasien_paket SET is_billed = 1, transaksi_id = ? WHERE id = ?', [trxId, pId]);
+        }
+      }
     }
 
     await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [earnedPoints, pasien_id]);
@@ -1498,6 +1764,9 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
     } else {
       await runQuery('UPDATE doingan SET is_billed = 1 WHERE pasien_id = ? AND status_pengerjaan = "COMPLETED" AND (is_billed IS NULL OR is_billed = 0)', [pasien_id]);
     }
+
+    // Mark unbilled packages for this patient as billed
+    await runQuery('UPDATE pasien_paket SET is_billed = 1, transaksi_id = ? WHERE pasien_id = ? AND (is_billed IS NULL OR is_billed = 0)', [trxId, pasien_id]);
 
     res.status(201).json({
       message: 'Transaksi berhasil disimpan',
@@ -1643,17 +1912,24 @@ app.get('/api/payroll/summary', authenticateToken, async (req, res) => {
         trxDetails.forEach(d => {
           if (d.therapist_id === u.id) {
             const fixInc = d.komisi_fix_therapist || 17000;
-            const pct = (d.percent_btc_bonus || 5) / 100;
-            komisiTindakan += (fixInc * d.jumlah) + (d.subtotal_item * pct);
+            komisiTindakan += (fixInc * d.jumlah);
           }
         });
       }
 
       if (u.role === 'Marketing') {
-        trxs.forEach(t => {
-          if (t.marketing_id === u.id) {
-            komisiTindakan += 50000 + (t.grand_total * 0.03);
-          }
+        const trialDoingan = doinganLogs.filter(d => d.marketing_id === u.id && d.status_pengerjaan === 'COMPLETED' && (d.status_doingan === 'Trial' || d.status_doingan === 'TRIAL'));
+        komisiTindakan += (trialDoingan.length * 10000);
+
+        const userPackages = await allQuery(`
+          SELECT komisi_marketing 
+          FROM pasien_paket 
+          WHERE marketing_id = ? 
+            AND strftime('%m', created_at) = ? 
+            AND strftime('%Y', created_at) = ?
+        `, [u.id, String(currentMonth).padStart(2, '0'), String(currentYear)]);
+        userPackages.forEach(p => {
+          komisiTindakan += (p.komisi_marketing || 0);
         });
       }
 
@@ -1661,12 +1937,6 @@ app.get('/api/payroll/summary', authenticateToken, async (req, res) => {
         trxs.forEach(t => {
           if (t.doctor_id === u.id) {
             komisiTindakan += 150000;
-          }
-        });
-        trxDetails.forEach(d => {
-          if (d.jenis_item === 'TINDAKAN') {
-            const pct = (d.percent_jasa_medis_dokter || 20) / 100;
-            komisiTindakan += d.subtotal_item * pct;
           }
         });
       }

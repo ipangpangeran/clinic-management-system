@@ -36,11 +36,10 @@ export default function FinancialCommissionMatrix() {
   const [selectedTreatmentId, setSelectedTreatmentId] = useState(null);
   const [namaTindakan, setNamaTindakan] = useState('');
   const [tarifTindakanMedis, setTarifTindakanMedis] = useState(0);
-  const [tarifKonsulDokter, setTarifKonsulDokter] = useState(0);
   const [komisiFixTherapist, setKomisiFixTherapist] = useState(17000);
   const [nominalNurseTindakan, setNominalNurseTindakan] = useState(15000);
-  const [percentBtcBonus, setPercentBtcBonus] = useState(5);
-  const [percentJasaMedisDokter, setPercentJasaMedisDokter] = useState(20);
+  const [kategoriPetugas, setKategoriPetugas] = useState('BEAUTICIAN');
+  const [catalogFilterCategory, setCatalogFilterCategory] = useState('ALL');
   const [treatmentSearch, setTreatmentSearch] = useState('');
   const [submittingTreatment, setSubmittingTreatment] = useState(false);
 
@@ -115,26 +114,22 @@ export default function FinancialCommissionMatrix() {
   const openAddTreatmentModal = () => {
     setEditTreatmentMode(false);
     setSelectedTreatmentId(null);
+    setKategoriPetugas('BEAUTICIAN');
     setNamaTindakan('');
     setTarifTindakanMedis(150000);
-    setTarifKonsulDokter(50000);
     setKomisiFixTherapist(17000);
-    setNominalNurseTindakan(15000);
-    setPercentBtcBonus(5);
-    setPercentJasaMedisDokter(20);
+    setNominalNurseTindakan(0);
     setShowTreatmentModal(true);
   };
 
   const openEditTreatmentModal = (t) => {
     setEditTreatmentMode(true);
     setSelectedTreatmentId(t.id);
+    setKategoriPetugas(t.kategori_petugas === 'NURSE' ? 'NURSE' : 'BEAUTICIAN');
     setNamaTindakan(t.nama_tindakan);
     setTarifTindakanMedis(t.tarif_tindakan_medis || 0);
-    setTarifKonsulDokter(t.tarif_konsul_dokter || 0);
     setKomisiFixTherapist(t.komisi_fix_therapist || 0);
     setNominalNurseTindakan(t.nominal_nurse_tindakan || 0);
-    setPercentBtcBonus(t.percent_btc_bonus || 0);
-    setPercentJasaMedisDokter(t.percent_jasa_medis_dokter || 0);
     setShowTreatmentModal(true);
   };
 
@@ -148,12 +143,12 @@ export default function FinancialCommissionMatrix() {
     try {
       const payload = {
         nama_tindakan: namaTindakan,
+        kategori_petugas: kategoriPetugas,
         tarif_tindakan_medis: Number(tarifTindakanMedis) || 0,
-        tarif_konsul_dokter: Number(tarifKonsulDokter) || 0,
-        komisi_fix_therapist: Number(komisiFixTherapist) || 0,
-        nominal_nurse_tindakan: Number(nominalNurseTindakan) || 0,
-        percent_btc_bonus: Number(percentBtcBonus) || 0,
-        percent_jasa_medis_dokter: Number(percentJasaMedisDokter) || 0
+        komisi_fix_therapist: kategoriPetugas === 'BEAUTICIAN' ? (Number(komisiFixTherapist) || 0) : 0,
+        nominal_nurse_tindakan: kategoriPetugas === 'NURSE' ? (Number(nominalNurseTindakan) || 0) : 0,
+        percent_btc_bonus: 0,
+        percent_jasa_medis_dokter: 0
       };
 
       if (editTreatmentMode && selectedTreatmentId) {
@@ -250,7 +245,7 @@ export default function FinancialCommissionMatrix() {
                 onChange={(e) => setSelectedBulan(Number(e.target.value))}
                 className="py-1.5 px-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15] flex-1 sm:flex-initial"
               >
-                {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => (
                   <option key={m} value={m}>Bulan {m}</option>
                 ))}
               </select>
@@ -297,11 +292,10 @@ export default function FinancialCommissionMatrix() {
                     <td className="py-3 px-4">
                       <button
                         onClick={() => togglePaymentStatus(item)}
-                        className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
-                          item.status_pembayaran === 'PAID'
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
-                        }`}
+                        className={`px-3 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-all ${item.status_pembayaran === 'PAID'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
+                          }`}
                       >
                         {item.status_pembayaran === 'PAID' ? '✓ PAID (LUNAS)' : '⌛ PENDING (BAYAR)'}
                       </button>
@@ -388,17 +382,24 @@ export default function FinancialCommissionMatrix() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
                 <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">1. Team Marketing</div>
-                <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  Komisi = Total Akuisisi Pasien Trial × Nominal Parameter (Rp 10.000 / Pasien)
+                <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200 space-y-1">
+                  <div>• Akuisisi Pasien Trial : Rp 10.000 / Pasien</div>
+                  <div className="pt-1 font-bold text-[#7d5141]">• Komisi Penjualan Paket Member:</div>
+                  <div className="pl-2 space-y-0.5 text-[11px]">
+                    <div>- Penjualan &lt; Rp 600.000 : Rp 30.000</div>
+                    <div>- Penjualan &gt; Rp 800.000 s/d &lt; Rp 2.000.000 : Rp 50.000</div>
+                    <div>- Penjualan &gt; Rp 2.000.000 s/d &lt; Rp 5.000.000 : Rp 70.000</div>
+                    <div>- Penjualan &ge; Rp 10.000.000 : Rp 150.000</div>
+                  </div>
                 </div>
-                <p className="text-[11px] text-[#514440]">Mendapatkan insentif per pasien trial baru yang didaftarkan ke sistem.</p>
+                <p className="text-[11px] text-[#514440]">Mendapatkan insentif per pasien trial baru dan komisi bertingkat dari setiap paket treatment member yang terjual.</p>
               </div>
 
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
                 <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">2. Beautician & Nurse (Terapis & Medis)</div>
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
-                  - Pasien Trial    : Rp 13.000 / Doingan<br/>
-                  - Pasien Member   : Rp 17.000 / Doingan<br/>
+                  - Pasien Trial    : Rp 13.000 / Doingan<br />
+                  - Pasien Member   : Rp 17.000 / Doingan<br />
                   - Staff Training : Rp 10.000 / Doingan
                 </div>
                 <p className="text-[11px] text-[#514440]">Komisi tindakan perawatan otomatis terhitung sesuai status pasien & status terapis.</p>
@@ -412,11 +413,45 @@ export default function FinancialCommissionMatrix() {
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
               <div>
-                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Katalog Jenis Tindakan / Treatment Resmi DEFLOW</h3>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Katalog Jenis Tindakan</h3>
                 <p className="text-xs text-[#514440]">Kelola jenis tindakan medis, penyesuaian tarif, serta skema komisi insentif.</p>
               </div>
-              
+
               <div className="flex flex-wrap items-center gap-2">
+                {/* Category Filter Tabs */}
+                <div className="flex bg-[#faf3e8] p-1 rounded-xl border border-[#d6c2bd] text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setCatalogFilterCategory('ALL')}
+                    className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'ALL'
+                      ? 'bg-[#7d5141] text-white shadow-xs'
+                      : 'text-[#514440] hover:text-[#7d5141]'
+                      }`}
+                  >
+                    Semua ({treatments.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCatalogFilterCategory('BEAUTICIAN')}
+                    className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'BEAUTICIAN'
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'text-emerald-800 hover:bg-emerald-50'
+                      }`}
+                  >
+                    💆 Beautician / BTC ({treatments.filter(t => t.kategori_petugas === 'BEAUTICIAN').length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCatalogFilterCategory('NURSE')}
+                    className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'NURSE'
+                      ? 'bg-blue-700 text-white shadow-xs'
+                      : 'text-blue-800 hover:bg-blue-50'
+                      }`}
+                  >
+                    🩺 Nurse ({treatments.filter(t => t.kategori_petugas === 'NURSE').length})
+                  </button>
+                </div>
+
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -444,24 +479,50 @@ export default function FinancialCommissionMatrix() {
                   <tr>
                     <th className="py-3 px-4">No</th>
                     <th className="py-3 px-4">Nama Jenis Tindakan / Treatment</th>
-                    <th className="py-3 px-4">Tarif Konsul Dokter</th>
                     <th className="py-3 px-4">Tarif Tindakan Medis</th>
-                    <th className="py-3 px-4">Komisi Beautician (Fix)</th>
-                    <th className="py-3 px-4">Komisi Nurse (Fix)</th>
-                    {canManageTreatments && <th className="py-3 px-4 text-center">Aksi / Adjust</th>}
+                    <th className="py-3 px-4">Komisi BTC</th>
+                    <th className="py-3 px-4">Komisi Nurse</th>
+                    <th className="py-3 px-4">Kategori Petugas</th>
+                    {canManageTreatments && <th className="py-3 px-4 text-center">Aksi</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
                   {treatments
-                    .filter(t => t.nama_tindakan.toLowerCase().includes(treatmentSearch.toLowerCase()))
+                    .filter(t => {
+                      const matchSearch = t.nama_tindakan.toLowerCase().includes(treatmentSearch.toLowerCase());
+                      const matchCat = catalogFilterCategory === 'ALL' || t.kategori_petugas === catalogFilterCategory;
+                      return matchSearch && matchCat;
+                    })
                     .map((t, index) => (
                       <tr key={t.id} className="hover:bg-[#fff8f0]">
                         <td className="py-3 px-4 text-[#83746f] font-bold">{index + 1}</td>
                         <td className="py-3 px-4 font-bold text-[#1e1b15] text-sm">{t.nama_tindakan}</td>
-                        <td className="py-3 px-4 text-[#514440]">Rp {t.tarif_konsul_dokter.toLocaleString('id-ID')}</td>
                         <td className="py-3 px-4 font-bold text-[#7d5141]">Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}</td>
-                        <td className="py-3 px-4 text-emerald-700 font-semibold">Rp {t.komisi_fix_therapist.toLocaleString('id-ID')}</td>
-                        <td className="py-3 px-4 text-blue-700 font-semibold">Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}</td>
+                        <td className="py-3 px-4">
+                          {t.kategori_petugas === 'BEAUTICIAN' && t.komisi_fix_therapist > 0 ? (
+                            <span className="font-bold text-emerald-700">Rp {t.komisi_fix_therapist.toLocaleString('id-ID')}</span>
+                          ) : (
+                            <span className="text-gray-300 font-bold">-</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          {t.kategori_petugas === 'NURSE' && t.nominal_nurse_tindakan > 0 ? (
+                            <span className="font-bold text-blue-700">Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}</span>
+                          ) : (
+                            <span className="text-gray-300 font-bold">-</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          {t.kategori_petugas === 'BEAUTICIAN' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              💆 BTC
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                              🩺 Nurse
+                            </span>
+                          )}
+                        </td>
                         {canManageTreatments && (
                           <td className="py-3 px-4">
                             <div className="flex items-center justify-center gap-1.5">
@@ -469,7 +530,7 @@ export default function FinancialCommissionMatrix() {
                                 onClick={() => openEditTreatmentModal(t)}
                                 className="p-1.5 bg-[#faf3e8] hover:bg-[#eee7dd] border border-[#d6c2bd] text-[#7d5141] rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
                               >
-                                <Edit className="w-3.5 h-3.5" /> Edit / Adjust
+                                <Edit className="w-3.5 h-3.5" /> Edit
                               </button>
                               <button
                                 onClick={() => handleDeleteTreatment(t)}
@@ -508,19 +569,19 @@ export default function FinancialCommissionMatrix() {
 
               <div className="grid grid-cols-2 gap-2 text-xs border-b border-gray-300 pb-3">
                 <div>
-                  <span className="text-gray-500">Nama Karyawan:</span><br/>
+                  <span className="text-gray-500">Nama Karyawan:</span><br />
                   <strong className="text-sm font-serif text-[#1e1b15]">{selectedSlip.full_name}</strong>
                 </div>
                 <div>
-                  <span className="text-gray-500">Posisi / Role:</span><br/>
+                  <span className="text-gray-500">Posisi / Role:</span><br />
                   <strong className="text-[#7d5141]">{selectedSlip.role}</strong>
                 </div>
                 <div>
-                  <span className="text-gray-500">Status Bayar:</span><br/>
+                  <span className="text-gray-500">Status Bayar:</span><br />
                   <span className="font-bold text-emerald-700 uppercase">{selectedSlip.status_pembayaran}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Tanggal Cetak:</span><br/>
+                  <span className="text-gray-500">Tanggal Cetak:</span><br />
                   <span>{new Date().toLocaleDateString('id-ID')}</span>
                 </div>
               </div>
@@ -595,69 +656,89 @@ export default function FinancialCommissionMatrix() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-[#514440] mb-1">Tarif Tindakan Medis (Rp) *</label>
-                  <input
-                    type="number"
-                    value={tarifTindakanMedis}
-                    onChange={(e) => setTarifTindakanMedis(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-[#514440] mb-1">Tarif Konsul Dokter (Rp)</label>
-                  <input
-                    type="number"
-                    value={tarifKonsulDokter}
-                    onChange={(e) => setTarifKonsulDokter(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
-                  />
+              <div>
+                <label className="block font-semibold text-[#514440] mb-1">Tarif Tindakan Medis (Rp) *</label>
+                <input
+                  type="number"
+                  value={tarifTindakanMedis}
+                  onChange={(e) => setTarifTindakanMedis(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141]"
+                />
+              </div>
+
+              {/* Kategori Petugas Pelaksana */}
+              <div>
+                <label className="block font-semibold text-[#514440] mb-1.5">Kategori Petugas Pelaksana Tindakan *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKategoriPetugas('BEAUTICIAN');
+                      setNominalNurseTindakan(0);
+                      if (!komisiFixTherapist) setKomisiFixTherapist(17000);
+                    }}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${kategoriPetugas === 'BEAUTICIAN'
+                      ? 'bg-emerald-50 border-emerald-400 text-emerald-800 shadow-xs ring-1 ring-emerald-300'
+                      : 'bg-white border-[#d6c2bd] text-[#514440] hover:bg-[#faf3e8]'
+                      }`}
+                  >
+                    <span>💆 Tindakan BTC</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKategoriPetugas('NURSE');
+                      setKomisiFixTherapist(0);
+                      if (!nominalNurseTindakan) setNominalNurseTindakan(15000);
+                    }}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${kategoriPetugas === 'NURSE'
+                      ? 'bg-blue-50 border-blue-400 text-blue-800 shadow-xs ring-1 ring-blue-300'
+                      : 'bg-white border-[#d6c2bd] text-[#514440] hover:bg-[#faf3e8]'
+                      }`}
+                  >
+                    <span>🩺 Tindakan Nurse</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-3">
-                <div className="font-bold text-[#7d5141] uppercase tracking-wider text-[11px]">Skema Komisi & Insentif Staff (Per Action)</div>
+              {/* Commission Amount */}
+              <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-2">
+                <div className="font-bold text-[#7d5141] uppercase tracking-wider text-[11px]">
+                  Skema Komisi Petugas ({kategoriPetugas === 'BEAUTICIAN' ? 'Khusus Beautician' : 'Khusus Nurse'})
+                </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                {kategoriPetugas === 'BEAUTICIAN' ? (
                   <div>
-                    <label className="block font-semibold text-[#514440] mb-1">Fix Komisi Beautician (Rp)</label>
+                    <label className="block font-semibold text-[#514440] mb-1">Nominal Komisi Beautician / BTC (Rp) *</label>
                     <input
                       type="number"
                       value={komisiFixTherapist}
                       onChange={(e) => setKomisiFixTherapist(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-emerald-800"
+                      placeholder="17000"
+                      required
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-emerald-800"
                     />
+                    <p className="text-[10px] text-gray-500 mt-1 italic">
+                      * Tindakan ini dialokasikan khusus Beautician (BTC). Nurse tidak mendapatkan komisi dari tindakan ini.
+                    </p>
                   </div>
+                ) : (
                   <div>
-                    <label className="block font-semibold text-[#514440] mb-1">Fix Komisi Nurse (Rp)</label>
+                    <label className="block font-semibold text-[#514440] mb-1">Nominal Komisi Nurse (Rp) *</label>
                     <input
                       type="number"
                       value={nominalNurseTindakan}
                       onChange={(e) => setNominalNurseTindakan(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-blue-800"
+                      placeholder="15000"
+                      required
+                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-blue-800"
                     />
+                    <p className="text-[10px] text-gray-500 mt-1 italic">
+                      * Tindakan ini dialokasikan khusus Nurse. Beautician (BTC) tidak mendapatkan komisi dari tindakan ini.
+                    </p>
                   </div>
-                  <div>
-                    <label className="block font-semibold text-[#514440] mb-1">% Bonus BTC</label>
-                    <input
-                      type="number"
-                      value={percentBtcBonus}
-                      onChange={(e) => setPercentBtcBonus(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-[#514440] mb-1">% Jasa Medis Dokter</label>
-                    <input
-                      type="number"
-                      value={percentJasaMedisDokter}
-                      onChange={(e) => setPercentJasaMedisDokter(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-semibold text-[#1e1b15]"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-[#e5ded4]">

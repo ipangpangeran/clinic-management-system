@@ -20,7 +20,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, module: null },
     { id: 'patients', label: 'Pendaftaran Pasien & Treatment', icon: UserPlus, module: 'patient_intake' },
     { id: 'customer_database', label: 'Detail Data Pelanggan', icon: Users, module: 'patient_management' },
-    { id: 'doingan', label: 'Doingan & Aktivitas Perawatan', icon: Sparkles, module: 'doingan' },
+    { id: 'doingan', label: 'Doingan & Aktivitas Petugas', icon: Sparkles, module: 'doingan' },
     { id: 'master_customer', label: 'Master Data Pelanggan', icon: Database, module: 'patient_management' },
     { id: 'pos', label: 'POS & Billing Counter', icon: ShoppingBag, module: 'patient_packages' },
     { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'] },
