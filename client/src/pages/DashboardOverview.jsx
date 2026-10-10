@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Users, ShoppingBag, PackageCheck, MessageSquare, AlertCircle, Clock, CheckCircle2, UserPlus } from 'lucide-react';
+import { Users, ShoppingBag, PackageCheck, MessageSquare, AlertCircle, Clock, CheckCircle2, UserPlus, Search } from 'lucide-react';
 
-export default function DashboardOverview({ setActiveTab, onOpenNewPatient }) {
+export default function DashboardOverview({ setActiveTab, onOpenNewPatient, onOpenRepeatVisit }) {
   const [todayPatients, setTodayPatients] = useState([]);
   const [products, setProducts] = useState([]);
   const [reminders, setReminders] = useState([]);
@@ -60,10 +60,23 @@ export default function DashboardOverview({ setActiveTab, onOpenNewPatient }) {
         <div className="space-y-2">
           <h1 className="font-serif text-2xl font-bold tracking-tight">Selamat Datang di DEFLOW Aesthetic Clinic</h1>
           <p className="text-amber-100 text-sm max-w-xl">
-            Sistem manajemen internal terintegrasi untuk pendaftaran pasien, kasir POS, insentif komisi 5 lini, dan logistik stok.
+            Sistem manajemen internal terintegrasi untuk pendaftaran pasien, kasir POS, insentif komisi, dan logistik stok.
           </p>
         </div>
         <div className="hidden md:flex gap-3">
+          <button
+            onClick={() => {
+              if (onOpenRepeatVisit) {
+                onOpenRepeatVisit();
+              } else {
+                setActiveTab('patients');
+              }
+            }}
+            className="px-4 py-2.5 bg-white text-[#7d5141] font-semibold text-xs rounded-xl shadow-xs hover:bg-[#fff8f0] transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <Search className="w-4 h-4 text-[#7d5141]" />
+            Cari Pasien Lama
+          </button>
           <button
             onClick={() => {
               if (onOpenNewPatient) {
@@ -82,7 +95,7 @@ export default function DashboardOverview({ setActiveTab, onOpenNewPatient }) {
             className="px-4 py-2.5 bg-[#514440] hover:bg-[#333029] text-white font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
           >
             <ShoppingBag className="w-4 h-4" />
-            Buka Kasir POS
+            Kasir POS
           </button>
         </div>
       </div>
@@ -152,7 +165,7 @@ export default function DashboardOverview({ setActiveTab, onOpenNewPatient }) {
           <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
             <div>
               <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Daftar Pasien Ditangani Hari Ini</h3>
-              <p className="text-xs text-[#83746f]">Menampilkan status pengerjaan, petugas penanggung jawab, serta waktu mulai & selesai.</p>
+              <p className="text-xs text-[#83746f]">Menampilkan status pengerjaan, petugas, serta waktu mulai & selesai.</p>
             </div>
           </div>
 
@@ -184,7 +197,7 @@ export default function DashboardOverview({ setActiveTab, onOpenNewPatient }) {
                         <td className="py-3 px-3 font-bold text-[#1e1b15]">{p.pasien_nama}</td>
                         <td className="py-3 px-3 text-[#514440]">{p.pasien_hp}</td>
                         <td className="py-3 px-3">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${p.tipe_pasien === 'TRIAL'
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${p.tipe_pasien === 'TRIAL'
                             ? 'bg-amber-100 text-amber-800 border border-amber-300'
                             : 'bg-blue-100 text-blue-800 border border-blue-300'
                             }`}>
@@ -196,12 +209,12 @@ export default function DashboardOverview({ setActiveTab, onOpenNewPatient }) {
                         </td>
                         <td className="py-3 px-3">
                           {isInProgress ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-300">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-300">
                               <Clock className="w-3 h-3 animate-spin" />
                               Sedang Ditangani
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
                               <CheckCircle2 className="w-3 h-3" />
                               Sudah Selesai
                             </span>

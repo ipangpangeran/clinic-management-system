@@ -38,6 +38,7 @@ export default function FinancialCommissionMatrix() {
   const [tarifTindakanMedis, setTarifTindakanMedis] = useState(0);
   const [komisiFixTherapist, setKomisiFixTherapist] = useState(17000);
   const [nominalNurseTindakan, setNominalNurseTindakan] = useState(15000);
+  const [isPerBenang, setIsPerBenang] = useState(false);
   const [kategoriPetugas, setKategoriPetugas] = useState('BEAUTICIAN');
   const [catalogFilterCategory, setCatalogFilterCategory] = useState('ALL');
   const [treatmentSearch, setTreatmentSearch] = useState('');
@@ -119,6 +120,7 @@ export default function FinancialCommissionMatrix() {
     setTarifTindakanMedis(150000);
     setKomisiFixTherapist(17000);
     setNominalNurseTindakan(0);
+    setIsPerBenang(false);
     setShowTreatmentModal(true);
   };
 
@@ -130,6 +132,7 @@ export default function FinancialCommissionMatrix() {
     setTarifTindakanMedis(t.tarif_tindakan_medis || 0);
     setKomisiFixTherapist(t.komisi_fix_therapist || 0);
     setNominalNurseTindakan(t.nominal_nurse_tindakan || 0);
+    setIsPerBenang(t.is_per_benang === 1 || (t.nama_tindakan || '').toLowerCase().includes('benang'));
     setShowTreatmentModal(true);
   };
 
@@ -141,12 +144,15 @@ export default function FinancialCommissionMatrix() {
     }
     setSubmittingTreatment(true);
     try {
+      const perBenang = isPerBenang || namaTindakan.toLowerCase().includes('benang');
       const payload = {
         nama_tindakan: namaTindakan,
         kategori_petugas: kategoriPetugas,
         tarif_tindakan_medis: Number(tarifTindakanMedis) || 0,
         komisi_fix_therapist: kategoriPetugas === 'BEAUTICIAN' ? (Number(komisiFixTherapist) || 0) : 0,
         nominal_nurse_tindakan: kategoriPetugas === 'NURSE' ? (Number(nominalNurseTindakan) || 0) : 0,
+        is_per_benang: perBenang ? 1 : 0,
+        satuan_hitung: perBenang ? 'benang' : 'sesi',
         percent_btc_bonus: 0,
         percent_jasa_medis_dokter: 0
       };
@@ -382,17 +388,25 @@ export default function FinancialCommissionMatrix() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
                 <div className="text-xs font-bold text-[#7d5141] uppercase tracking-wider">1. Team Marketing</div>
-                <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200 space-y-1">
-                  <div>• Akuisisi Pasien Trial : Rp 10.000 / Pasien</div>
-                  <div className="pt-1 font-bold text-[#7d5141]">• Komisi Penjualan Paket Member:</div>
-                  <div className="pl-2 space-y-0.5 text-[11px]">
-                    <div>- Penjualan &lt; Rp 600.000 : Rp 30.000</div>
-                    <div>- Penjualan &gt; Rp 800.000 s/d &lt; Rp 2.000.000 : Rp 50.000</div>
-                    <div>- Penjualan &gt; Rp 2.000.000 s/d &lt; Rp 5.000.000 : Rp 70.000</div>
-                    <div>- Penjualan &ge; Rp 10.000.000 : Rp 150.000</div>
+                <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200 space-y-1.5">
+                  <div>
+                    <div className="font-bold text-[#7d5141]">• 1. Akumulasi Pasien Bulanan:</div>
+                    <div className="pl-2 space-y-0.5 text-[11px]">
+                      <div>- 1 s/d 99 Pasien : <strong>Rp 8.000</strong> / Pasien</div>
+                      <div>- &ge; 100 Pasien : <strong>Rp 10.000</strong> / Pasien</div>
+                    </div>
+                  </div>
+                  <div className="pt-1 border-t border-gray-100">
+                    <div className="font-bold text-[#7d5141]">• 2. Tiering Sukses Penjualan Paket:</div>
+                    <div className="pl-2 space-y-0.5 text-[11px]">
+                      <div>- &lt; 600.000 : <strong>Rp 30.000</strong></div>
+                      <div>- 800.000 s/d &lt; 2.000.000 : <strong>Rp 50.000</strong></div>
+                      <div>- 2.000.000 s/d &lt; 5.000.000 : <strong>Rp 70.000</strong></div>
+                      <div>- &ge; 10.000.000 : <strong>Rp 150.000</strong></div>
+                    </div>
                   </div>
                 </div>
-                <p className="text-[11px] text-[#514440]">Mendapatkan insentif per pasien trial baru dan komisi bertingkat dari setiap paket treatment member yang terjual.</p>
+                <p className="text-[11px] text-[#514440]">Total komisi marketing diakumulasi dari total pasien yang didapatkan serta bonus tiering dari paket member yang terjual.</p>
               </div>
 
               <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-2xl space-y-2">
@@ -400,7 +414,7 @@ export default function FinancialCommissionMatrix() {
                 <div className="p-3 bg-white rounded-xl text-xs font-mono text-[#1e1b15] border border-gray-200">
                   - Pasien Trial    : Rp 13.000 / Doingan<br />
                   - Pasien Member   : Rp 17.000 / Doingan<br />
-                  - Staff Training : Rp 10.000 / Doingan
+                  - Staff Trainee : Rp 10.000 / Doingan
                 </div>
                 <p className="text-[11px] text-[#514440]">Komisi tindakan perawatan otomatis terhitung sesuai status pasien & status terapis.</p>
               </div>
@@ -411,65 +425,70 @@ export default function FinancialCommissionMatrix() {
         {/* PRICING & 15 TINDAKAN CATALOG */}
         {activeTab === 'PRICING' && canReadPricing && (
           <div className="space-y-4">
+            {/* Header Title & Action Button */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#e5ded4] pb-3">
               <div>
                 <h3 className="font-serif font-bold text-base text-[#1e1b15]">Daftar Katalog Jenis Tindakan</h3>
                 <p className="text-xs text-[#514440]">Kelola jenis tindakan medis, penyesuaian tarif, serta skema komisi insentif.</p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Category Filter Tabs */}
-                <div className="flex bg-[#faf3e8] p-1 rounded-xl border border-[#d6c2bd] text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setCatalogFilterCategory('ALL')}
-                    className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'ALL'
-                      ? 'bg-[#7d5141] text-white shadow-xs'
-                      : 'text-[#514440] hover:text-[#7d5141]'
-                      }`}
-                  >
-                    Semua ({treatments.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCatalogFilterCategory('BEAUTICIAN')}
-                    className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'BEAUTICIAN'
-                      ? 'bg-emerald-700 text-white shadow-xs'
-                      : 'text-emerald-800 hover:bg-emerald-50'
-                      }`}
-                  >
-                    💆 Beautician / BTC ({treatments.filter(t => t.kategori_petugas === 'BEAUTICIAN').length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCatalogFilterCategory('NURSE')}
-                    className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'NURSE'
-                      ? 'bg-blue-700 text-white shadow-xs'
-                      : 'text-blue-800 hover:bg-blue-50'
-                      }`}
-                  >
-                    🩺 Nurse ({treatments.filter(t => t.kategori_petugas === 'NURSE').length})
-                  </button>
-                </div>
+              {canManageTreatments && (
+                <button
+                  onClick={openAddTreatmentModal}
+                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5 shrink-0 self-start sm:self-auto transition-all active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Jenis Tindakan</span>
+                </button>
+              )}
+            </div>
 
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Cari jenis tindakan..."
-                    value={treatmentSearch}
-                    onChange={(e) => setTreatmentSearch(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none"
-                  />
-                </div>
-                {canManageTreatments && (
-                  <button
-                    onClick={openAddTreatmentModal}
-                    className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Plus className="w-4 h-4" /> + Tambah Jenis Tindakan
-                  </button>
-                )}
+            {/* Toolbar: Search (Left) & Category Filter Tabs (Right) */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Search Bar on Left (below subtitle) */}
+              <div className="relative w-full md:w-80">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#83746f]" />
+                <input
+                  type="text"
+                  placeholder="Cari jenis tindakan..."
+                  value={treatmentSearch}
+                  onChange={(e) => setTreatmentSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] placeholder:text-[#83746f] focus:outline-none focus:border-[#7d5141]"
+                />
+              </div>
+
+              {/* Category Filter Tabs on Right */}
+              <div className="flex flex-wrap items-center bg-[#faf3e8] p-1 rounded-xl border border-[#d6c2bd] text-xs self-start md:self-auto gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCatalogFilterCategory('ALL')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'ALL'
+                    ? 'bg-[#7d5141] text-white shadow-xs'
+                    : 'text-[#514440] hover:text-[#7d5141]'
+                    }`}
+                >
+                  Semua ({treatments.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogFilterCategory('BEAUTICIAN')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'BEAUTICIAN'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-emerald-800 hover:bg-emerald-50'
+                    }`}
+                >
+                  💆 Beautician / BTC ({treatments.filter(t => t.kategori_petugas === 'BEAUTICIAN').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogFilterCategory('NURSE')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${catalogFilterCategory === 'NURSE'
+                    ? 'bg-blue-700 text-white shadow-xs'
+                    : 'text-blue-800 hover:bg-blue-50'
+                    }`}
+                >
+                  🩺 Nurse ({treatments.filter(t => t.kategori_petugas === 'NURSE').length})
+                </button>
               </div>
             </div>
 
@@ -496,8 +515,18 @@ export default function FinancialCommissionMatrix() {
                     .map((t, index) => (
                       <tr key={t.id} className="hover:bg-[#fff8f0]">
                         <td className="py-3 px-4 text-[#83746f] font-bold">{index + 1}</td>
-                        <td className="py-3 px-4 font-bold text-[#1e1b15] text-sm">{t.nama_tindakan}</td>
-                        <td className="py-3 px-4 font-bold text-[#7d5141]">Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}</td>
+                        <td className="py-3 px-4 font-bold text-[#1e1b15] text-sm">
+                          {t.nama_tindakan}
+                          {(t.is_per_benang === 1 || t.nama_tindakan.toLowerCase().includes('benang')) && (
+                            <span className="block text-[10px] font-semibold text-amber-800">
+                              (Dihitung per benang)
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-[#7d5141]">
+                          Rp {t.tarif_tindakan_medis?.toLocaleString('id-ID')}
+                          {(t.is_per_benang === 1 || t.nama_tindakan.toLowerCase().includes('benang')) ? ' / benang' : ''}
+                        </td>
                         <td className="py-3 px-4">
                           {t.kategori_petugas === 'BEAUTICIAN' && t.komisi_fix_therapist > 0 ? (
                             <span className="font-bold text-emerald-700">Rp {t.komisi_fix_therapist.toLocaleString('id-ID')}</span>
@@ -507,7 +536,10 @@ export default function FinancialCommissionMatrix() {
                         </td>
                         <td className="py-3 px-4">
                           {t.kategori_petugas === 'NURSE' && t.nominal_nurse_tindakan > 0 ? (
-                            <span className="font-bold text-blue-700">Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}</span>
+                            <span className="font-bold text-blue-700">
+                              Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}
+                              {(t.is_per_benang === 1 || t.nama_tindakan.toLowerCase().includes('benang')) ? ' / benang' : ''}
+                            </span>
                           ) : (
                             <span className="text-gray-300 font-bold">-</span>
                           )}
@@ -657,7 +689,9 @@ export default function FinancialCommissionMatrix() {
               </div>
 
               <div>
-                <label className="block font-semibold text-[#514440] mb-1">Tarif Tindakan Medis (Rp) *</label>
+                <label className="block font-semibold text-[#514440] mb-1">
+                  Tarif Tindakan Medis (Rp) {isPerBenang ? '/ benang' : ''} *
+                </label>
                 <input
                   type="number"
                   value={tarifTindakanMedis}
@@ -665,6 +699,20 @@ export default function FinancialCommissionMatrix() {
                   required
                   className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl font-bold text-[#7d5141]"
                 />
+              </div>
+
+              {/* Checkbox Per Benang */}
+              <div className="flex items-center gap-2 p-2.5 bg-amber-50 rounded-xl border border-amber-200">
+                <input
+                  type="checkbox"
+                  id="isPerBenangToggle"
+                  checked={isPerBenang}
+                  onChange={(e) => setIsPerBenang(e.target.checked)}
+                  className="w-4 h-4 accent-[#7d5141] cursor-pointer"
+                />
+                <label htmlFor="isPerBenangToggle" className="text-xs font-semibold text-amber-950 cursor-pointer select-none">
+                  Hitung Tarif & Komisi <strong>Per Benang</strong> (Khusus Benang Hidung & Benang Pipi)
+                </label>
               </div>
 
               {/* Kategori Petugas Pelaksana */}

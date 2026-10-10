@@ -75,35 +75,49 @@ export default function LogisticsInventory() {
     setMpItemAName('');
     setMpItemAKuota(3);
     setMpItemBName('');
-    setMpItemBKuota(2);
-    setMpHarga(0);
+    setMpItemBKuota(0);
+    setMpHarga('');
     setShowMasterPaketModal(true);
   };
 
   const openEditMasterPaketModal = (mp) => {
     setEditingMasterPaket(mp);
-    setMpNama(mp.nama_paket);
-    setMpItemAName(mp.item_a_name);
-    setMpItemAKuota(mp.item_a_kuota);
+    setMpNama(mp.nama_paket || '');
+    setMpItemAName(mp.item_a_name || '');
+    setMpItemAKuota(mp.item_a_kuota || 0);
     setMpItemBName(mp.item_b_name || '');
     setMpItemBKuota(mp.item_b_kuota || 0);
-    setMpHarga(mp.harga_paket);
+    setMpHarga(mp.harga_paket || 0);
     setShowMasterPaketModal(true);
   };
 
   const handleSaveMasterPaket = async (e) => {
     e.preventDefault();
-    if (!mpNama || !mpItemAName) {
-      alert('Nama Paket dan Nama Item A wajib diisi!');
+    if (!mpNama || !mpNama.trim()) {
+      alert('Nama Template Paket wajib diisi!');
       return;
     }
+
+    let itemAName = mpItemAName ? mpItemAName.trim() : '';
+    let itemAKuota = Number(mpItemAKuota) || 0;
+    let itemBName = mpItemBName ? mpItemBName.trim() : '';
+    let itemBKuota = Number(mpItemBKuota) || 0;
+
+    const hasA = itemAName && itemAKuota > 0;
+    const hasB = itemBName && itemBKuota > 0;
+
+    if (!hasA && !hasB) {
+      alert('Mohon isi minimal 1 Item Tindakan/Perawatan (Tindakan Utama Dokter A atau Facial BTC B) dengan kuota sesi minimal 1!');
+      return;
+    }
+
     try {
       const payload = {
-        nama_paket: mpNama,
-        item_a_name: mpItemAName,
-        item_a_kuota: Number(mpItemAKuota) || 1,
-        item_b_name: mpItemBName || null,
-        item_b_kuota: Number(mpItemBKuota) || 0,
+        nama_paket: mpNama.trim(),
+        item_a_name: hasA ? itemAName : '',
+        item_a_kuota: hasA ? itemAKuota : 0,
+        item_b_name: hasB ? itemBName : '',
+        item_b_kuota: hasB ? itemBKuota : 0,
         harga_paket: Number(mpHarga) || 0
       };
 
@@ -488,8 +502,7 @@ export default function LogisticsInventory() {
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
               <div>
-                <strong>Master Template Paket Treatment:</strong>
-                <span className="ml-1">Kelola master template paket bundling tindakan/perawatan. Penambahan dan perubahan template langsung tersimpan <strong>tanpa memerlukan approval</strong>.</span>
+                <span className="ml-1">Manage daftar paket tindakan/perawatan.</span>
               </div>
               <button
                 onClick={openNewMasterPaketModal}
@@ -507,7 +520,7 @@ export default function LogisticsInventory() {
                     <th className="py-3 px-4">Tindakan / Item Utama (A)</th>
                     <th className="py-3 px-4">Tindakan / Item Tambahan (B)</th>
                     <th className="py-3 px-4">Harga Paket</th>
-                    <th className="py-3 px-4 text-center">Aksi (Langsung / No Approval)</th>
+                    <th className="py-3 px-4 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
@@ -527,13 +540,19 @@ export default function LogisticsInventory() {
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <span className="font-semibold text-emerald-800">{mp.item_a_name}</span>
-                          <span className="ml-1.5 text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
-                            {mp.item_a_kuota} Sesi
-                          </span>
+                          {mp.item_a_name && mp.item_a_kuota > 0 ? (
+                            <>
+                              <span className="font-semibold text-emerald-800">{mp.item_a_name}</span>
+                              <span className="ml-1.5 text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
+                                {mp.item_a_kuota} Sesi
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">- Tidak Ada -</span>
+                          )}
                         </td>
                         <td className="py-3 px-4">
-                          {mp.item_b_name ? (
+                          {mp.item_b_name && mp.item_b_kuota > 0 ? (
                             <>
                               <span className="font-semibold text-indigo-800">{mp.item_b_name}</span>
                               <span className="ml-1.5 text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-md">
@@ -834,23 +853,25 @@ export default function LogisticsInventory() {
                   type="text"
                   value={mpNama}
                   onChange={(e) => setMpNama(e.target.value)}
-                  placeholder="Misal: Paket Glowing Skin 5x Sesi"
+                  placeholder="Tulis nama paket"
                   required
                   className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-medium"
                 />
               </div>
 
               <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2">
-                <label className="block text-xs font-bold text-emerald-900">Item Tindakan / Perawatan Utama (A) *</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-emerald-900">Tindakan / Item Utama (A) - Dokter / Nurse</label>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md font-semibold">Tindakan Dokter (Bisa Kosong)</span>
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-2">
                     <input
                       type="text"
                       value={mpItemAName}
                       onChange={(e) => setMpItemAName(e.target.value)}
-                      placeholder="Nama Tindakan A (mis. Facial Detox)"
-                      required
-                      className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs"
+                      placeholder="mis. Tindakan Dokter (kosongkan jika hanya Facial)"
+                      className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-medium"
                     />
                   </div>
                   <div>
@@ -859,8 +880,7 @@ export default function LogisticsInventory() {
                       value={mpItemAKuota}
                       onChange={(e) => setMpItemAKuota(e.target.value)}
                       placeholder="Kuota Sesi"
-                      min="1"
-                      required
+                      min="0"
                       className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-center"
                     />
                   </div>
@@ -868,15 +888,18 @@ export default function LogisticsInventory() {
               </div>
 
               <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
-                <label className="block text-xs font-bold text-indigo-900">Item Tindakan / Perawatan Tambahan (B) (Opsional)</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-indigo-900">Tindakan / Item Tambahan (B) - Khusus Facial (BTC)</label>
+                  <span className="text-[10px] text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-md font-semibold">Ditangani BTC / Beautician</span>
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-2">
                     <input
                       type="text"
                       value={mpItemBName}
                       onChange={(e) => setMpItemBName(e.target.value)}
-                      placeholder="Nama Tindakan B (mis. Masker Gold)"
-                      className="w-full px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs"
+                      placeholder="mis. Facial Premium (kosongkan jika hanya Dokter)"
+                      className="w-full px-3 py-2 bg-white border border-indigo-300 rounded-xl text-xs font-medium"
                     />
                   </div>
                   <div>
@@ -893,12 +916,14 @@ export default function LogisticsInventory() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Harga Paket Total (Rp)</label>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Harga Paket Total (Rp) *</label>
                 <input
                   type="number"
                   value={mpHarga}
                   onChange={(e) => setMpHarga(e.target.value)}
-                  placeholder="Harga Paket (Rp)"
+                  placeholder="Contoh: 800000"
+                  required
+                  min="0"
                   className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-emerald-800"
                 />
               </div>

@@ -63,8 +63,8 @@ export default function Header({ setActiveTab, setIsMobileMenuOpen }) {
 
         <div>
           <h2 className="font-serif text-base sm:text-xl font-bold text-[#1e1b15] tracking-tight flex items-center gap-2">
-            <span>{clinic?.clinic_name || 'DEFLOW'}</span> 
-            <span className="font-sans text-[10px] sm:text-xs font-bold text-[#7d5141] tracking-widest uppercase border-l border-[#d6c2bd] pl-2">
+            <span>{clinic?.clinic_name || 'DEFLOW'}</span>
+            <span className="font-sans text-[10px] sm:text-xl font-bold text-[#7d5141] tracking-widest uppercase border-l border-[#d6c2bd] pl-2">
               {clinic?.tagline || 'AESTHETIC CLINIC'}
             </span>
           </h2>
@@ -118,8 +118,8 @@ export default function Header({ setActiveTab, setIsMobileMenuOpen }) {
                   </div>
                 ) : (
                   lowStockItems.map(item => (
-                    <div 
-                      key={item.id} 
+                    <div
+                      key={item.id}
                       onClick={canManageStock ? handleGoToInventory : undefined}
                       className={`p-2.5 bg-red-50/70 border border-red-200 rounded-xl flex items-center justify-between text-xs ${canManageStock ? 'cursor-pointer hover:border-red-400' : ''}`}
                     >

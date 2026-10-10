@@ -3,7 +3,7 @@ import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import {
   LayoutDashboard, UserPlus, ShoppingBag, PackageCheck,
-  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles, X, Users, Database
+  DollarSign, ShieldCheck, MessageSquare, LogOut, ChevronRight, Sparkles, X, Users, Database, History
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, setIsMobileMenuOpen }) {
@@ -20,9 +20,10 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
     { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard, module: null },
     { id: 'patients', label: 'Pendaftaran Pasien & Treatment', icon: UserPlus, module: 'patient_intake' },
     { id: 'customer_database', label: 'Detail Data Pelanggan', icon: Users, module: 'patient_management' },
+    { id: 'package_claims', label: 'Histori Klaim Paket Pasien', icon: History, module: 'patient_management' },
     { id: 'doingan', label: 'Doingan & Aktivitas Petugas', icon: Sparkles, module: 'doingan' },
     { id: 'master_customer', label: 'Master Data Pelanggan', icon: Database, module: 'patient_management' },
-    { id: 'pos', label: 'POS & Billing Counter', icon: ShoppingBag, module: 'patient_packages' },
+    { id: 'pos', label: 'Kasir POS & Transaksi', icon: ShoppingBag, module: 'patient_packages' },
     { id: 'inventory', label: 'Logistik & Stok Barang', icon: PackageCheck, module: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'] },
     { id: 'financial', label: 'Keuangan & Komisi Gaji', icon: DollarSign, module: ['payroll', 'commission_formulas', 'pricing'] },
     { id: 'acl', label: 'Kelola User & Dynamic ACL', icon: ShieldCheck, module: 'acl' },
@@ -50,7 +51,7 @@ export default function Sidebar({ activeTab, setActiveTab, isMobileMenuOpen, set
         <div className="px-6 py-5 border-b border-[#e5ded4] relative flex items-center justify-center bg-[#2a241e]">
           <div className="flex items-center justify-center w-full">
             <img
-              src="/logo/DEFLOW_LOGO_TAGLINE.png"
+              src="/logo/DEFLOW_LOGO_TAGLINE_BIG.png"
               alt="DEFLOW Aesthetic Clinic"
               className="h-16 sm:h-20 max-w-[85%] object-contain transition-all hover:scale-105 mx-auto"
               onError={(e) => {

@@ -191,7 +191,7 @@ async function initDb() {
       CREATE TABLE IF NOT EXISTS master_paket (
         id TEXT PRIMARY KEY,
         nama_paket TEXT NOT NULL,
-        item_a_name TEXT NOT NULL,
+        item_a_name TEXT,
         item_a_kuota INTEGER DEFAULT 0,
         item_b_name TEXT,
         item_b_kuota INTEGER DEFAULT 0,
@@ -200,12 +200,37 @@ async function initDb() {
       )
     `);
 
-    // Seed master_paket if empty
-    const mpCount = await getQuery('SELECT COUNT(*) as count FROM master_paket');
-    if (mpCount.count === 0) {
-      await runQuery(`INSERT INTO master_paket (id, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket) VALUES ('mp-1', 'Ultimate 1', 'Tindakan Dokter A', 3, 'Facial', 2, 2500000)`);
-      await runQuery(`INSERT INTO master_paket (id, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket) VALUES ('mp-2', 'Ultimate 2', 'Tindakan Dokter B', 3, 'Facial', 2, 2800000)`);
-      await runQuery(`INSERT INTO master_paket (id, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket) VALUES ('mp-3', 'Botox', 'Tindakan Dokter C (Botox)', 1, '', 0, 1500000)`);
+    // Sync official master_paket templates
+    const defaultMasterPakets = [
+      { id: 'mp-glowup-1', nama_paket: 'Glow up 1', item_a_name: '', item_a_kuota: 0, item_b_name: 'Facial Premium', item_b_kuota: 3, harga_paket: 800000 },
+      { id: 'mp-glowup-2', nama_paket: 'Glow up 2', item_a_name: 'Tindakan Dokter', item_a_kuota: 1, item_b_name: 'Facial Premium', item_b_kuota: 2, harga_paket: 900000 },
+      { id: 'mp-ultimate-1', nama_paket: 'Ultimate 1', item_a_name: 'Tindakan Dokter', item_a_kuota: 2, item_b_name: 'Facial Premium', item_b_kuota: 3, harga_paket: 1600000 },
+      { id: 'mp-ultimate-2', nama_paket: 'Ultimate 2', item_a_name: 'Tindakan Dokter', item_a_kuota: 4, item_b_name: 'Facial Premium', item_b_kuota: 4, harga_paket: 2300000 },
+      { id: 'mp-premium-1', nama_paket: 'Premium 1', item_a_name: 'Tindakan Dokter', item_a_kuota: 8, item_b_name: 'Facial Premium', item_b_kuota: 8, harga_paket: 4100000 },
+      { id: 'mp-premium-2', nama_paket: 'Premium 2', item_a_name: 'Tindakan Dokter', item_a_kuota: 12, item_b_name: 'Facial Premium', item_b_kuota: 12, harga_paket: 6100000 }
+    ];
+
+    try {
+      // Remove old dummy seed records if still present
+      await runQuery(`DELETE FROM master_paket WHERE id IN ('mp-1', 'mp-2', 'mp-3') AND (item_a_name LIKE '%Tindakan Dokter A%' OR item_a_name LIKE '%Tindakan Dokter B%' OR item_a_name LIKE '%Botox%')`);
+
+      for (const dmp of defaultMasterPakets) {
+        const existing = await getQuery('SELECT id FROM master_paket WHERE LOWER(TRIM(nama_paket)) = LOWER(TRIM(?)) OR id = ?', [dmp.nama_paket, dmp.id]);
+        if (existing) {
+          await runQuery(`
+            UPDATE master_paket
+            SET nama_paket = ?, item_a_name = ?, item_a_kuota = ?, item_b_name = ?, item_b_kuota = ?, harga_paket = ?
+            WHERE id = ?
+          `, [dmp.nama_paket, dmp.item_a_name, dmp.item_a_kuota, dmp.item_b_name, dmp.item_b_kuota, dmp.harga_paket, existing.id]);
+        } else {
+          await runQuery(`
+            INSERT INTO master_paket (id, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `, [dmp.id, dmp.nama_paket, dmp.item_a_name, dmp.item_a_kuota, dmp.item_b_name, dmp.item_b_kuota, dmp.harga_paket]);
+        }
+      }
+    } catch (e) {
+      console.error('[DB] Error syncing default master packages:', e);
     }
 
     // 5b. Patient Packages
@@ -228,16 +253,16 @@ async function initDb() {
       )
     `);
 
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_name TEXT`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_kuota INTEGER DEFAULT 0`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_total INTEGER DEFAULT 0`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_name TEXT`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_kuota INTEGER DEFAULT 0`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_total INTEGER DEFAULT 0`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN is_billed INTEGER DEFAULT 0`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN transaksi_id TEXT`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN marketing_id TEXT`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN komisi_marketing REAL DEFAULT 0`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_name TEXT`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_kuota INTEGER DEFAULT 0`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_a_total INTEGER DEFAULT 0`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_name TEXT`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_kuota INTEGER DEFAULT 0`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN item_b_total INTEGER DEFAULT 0`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN is_billed INTEGER DEFAULT 0`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN transaksi_id TEXT`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN marketing_id TEXT`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN komisi_marketing REAL DEFAULT 0`); } catch (e) { }
 
     // 6. Patient Package Usage History
     await runQuery(`
@@ -256,11 +281,11 @@ async function initDb() {
       )
     `);
 
-    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN pasien_id TEXT`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN item_claimed TEXT`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN doingan_id TEXT`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN petugas_id TEXT`); } catch(e){}
-    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN petugas_nama TEXT`); } catch(e){}
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN pasien_id TEXT`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN item_claimed TEXT`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN doingan_id TEXT`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN petugas_id TEXT`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket_usage ADD COLUMN petugas_nama TEXT`); } catch (e) { }
 
     // 6b. System Settings (Feature Toggles) & Role Commission Matrix
     await runQuery(`
@@ -365,6 +390,14 @@ async function initDb() {
 
     try {
       await runQuery(`ALTER TABLE tindakan_medis ADD COLUMN kategori_petugas TEXT DEFAULT 'NURSE'`);
+    } catch (e) { }
+
+    try {
+      await runQuery(`ALTER TABLE tindakan_medis ADD COLUMN is_per_benang INTEGER DEFAULT 0`);
+    } catch (e) { }
+
+    try {
+      await runQuery(`ALTER TABLE tindakan_medis ADD COLUMN satuan_hitung TEXT DEFAULT 'sesi'`);
     } catch (e) { }
 
     // 11. Transactions
@@ -489,6 +522,16 @@ async function initDb() {
     }
     try {
       await runQuery(`ALTER TABLE doingan ADD COLUMN marketing_id TEXT`);
+    } catch (e) {
+      // column already exists
+    }
+    try {
+      await runQuery(`ALTER TABLE doingan ADD COLUMN qty_benang INTEGER DEFAULT 1`);
+    } catch (e) {
+      // column already exists
+    }
+    try {
+      await runQuery(`ALTER TABLE doingan ADD COLUMN total_tarif REAL DEFAULT 0`);
     } catch (e) {
       // column already exists
     }
@@ -629,41 +672,64 @@ async function seedDefaultData() {
     }
   }
 
-  // Seed the 19 Nurse treatments & 3 Beautician treatments requested
+  // Seed the 31 official treatments from DEFLOW catalog
   const requestedTreatments = [
-    // Nurse Treatments (19) - Komisi khusus Nurse, komisi BTC = 0
-    ['tnd-1', 'Platelet-Rich Plasma (PRP)', 'NURSE', 150000, 1200000, 0, 0, 0, 15000],
-    ['tnd-2', 'DNA Salmon', 'NURSE', 150000, 1500000, 0, 0, 0, 15000],
-    ['tnd-3', 'Laser Pico', 'NURSE', 150000, 1000000, 0, 0, 0, 15000],
-    ['tnd-4', 'Laser DPL', 'NURSE', 0, 800000, 0, 0, 0, 15000],
-    ['tnd-5', 'Laser Blackdoll4', 'NURSE', 0, 850000, 0, 0, 0, 15000],
-    ['tnd-6', 'Laser Underarmd', 'NURSE', 0, 450000, 0, 0, 0, 13000],
-    ['tnd-7', 'Peeling Acne', 'NURSE', 0, 350000, 0, 0, 0, 13000],
-    ['tnd-8', 'Peeling Baru', 'NURSE', 0, 400000, 0, 0, 0, 13000],
-    ['tnd-9', 'Vittaran Poly Booster', 'NURSE', 150000, 1800000, 0, 0, 0, 15000],
-    ['tnd-10', 'JuveLook', 'NURSE', 150000, 2500000, 0, 0, 0, 15000],
-    ['tnd-11', 'Cauter', 'NURSE', 100000, 500000, 0, 0, 0, 13000],
-    ['tnd-12', 'Benang Hidung', 'NURSE', 200000, 2000000, 0, 0, 0, 20000],
-    ['tnd-13', 'Benang Pipi', 'NURSE', 200000, 3000000, 0, 0, 0, 20000],
-    ['tnd-14', 'Infus Whitening', 'NURSE', 0, 600000, 0, 0, 0, 13000],
-    ['tnd-15', 'Infus Choromosome', 'NURSE', 0, 1200000, 0, 0, 0, 15000],
-    ['tnd-16', 'Botox', 'NURSE', 150000, 1800000, 0, 0, 0, 15000],
-    ['tnd-17', 'Messo', 'NURSE', 100000, 750000, 0, 0, 0, 13000],
-    ['tnd-18', 'Filter Dagu', 'NURSE', 200000, 2500000, 0, 0, 0, 15000],
-    ['tnd-19', 'Filter Hidung', 'NURSE', 200000, 2500000, 0, 0, 0, 15000],
-
-    // Beautician Treatments (3) - Komisi khusus Beautician, komisi Nurse = 0
-    ['tnd-20', 'Oxy & PDT', 'BEAUTICIAN', 0, 250000, 17000, 0, 0, 0],
-    ['tnd-21', 'Oxy,pdt,micro,organic,detox,Hf', 'BEAUTICIAN', 0, 450000, 17000, 0, 0, 0],
-    ['tnd-22', 'RF', 'BEAUTICIAN', 0, 300000, 17000, 0, 0, 0]
+    // [id, nama_tindakan, kategori_petugas, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan, is_per_benang, satuan_hitung]
+    ['tnd-1', 'Benang Hidung', 'NURSE', 0, 599000, 0, 0, 0, 20000, 1, 'benang'],
+    ['tnd-2', 'Benang Pipi', 'NURSE', 0, 999000, 0, 0, 0, 20000, 1, 'benang'],
+    ['tnd-3', 'Botox Dahi 50 Unit', 'NURSE', 0, 1500000, 0, 0, 0, 20000, 0, 'sesi'],
+    ['tnd-4', 'Botox Rahang 50 Unit', 'NURSE', 0, 1500000, 0, 0, 0, 20000, 0, 'sesi'],
+    ['tnd-5', 'Cauter', 'NURSE', 0, 500000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-6', 'DNA Salmon', 'NURSE', 0, 1000000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-7', 'Detox', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
+    ['tnd-8', 'Filler Dagu', 'NURSE', 0, 2000000, 0, 0, 0, 20000, 0, 'sesi'],
+    ['tnd-9', 'Filler Hidung', 'NURSE', 0, 2000000, 0, 0, 0, 20000, 0, 'sesi'],
+    ['tnd-10', 'HF', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
+    ['tnd-11', 'Infus Choromosome', 'NURSE', 0, 1000000, 0, 0, 0, 15000, 0, 'sesi'],
+    ['tnd-12', 'Infus Whitening', 'NURSE', 0, 700000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-13', 'JuveLook', 'NURSE', 0, 8000000, 0, 0, 0, 30000, 0, 'sesi'],
+    ['tnd-14', 'JuveLook Volume', 'NURSE', 0, 11000000, 0, 0, 0, 30000, 0, 'sesi'],
+    ['tnd-15', 'Laser Blackdoll', 'NURSE', 0, 1000000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-16', 'Laser DPL', 'NURSE', 0, 1000000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-17', 'Laser Pico', 'NURSE', 0, 1500000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-18', 'Laser Underarmd', 'NURSE', 0, 700000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-19', 'Messo Lippo', 'NURSE', 0, 750000, 0, 0, 0, 6000, 0, 'sesi'],
+    ['tnd-20', 'Micro', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
+    ['tnd-21', 'Organic', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
+    ['tnd-22', 'Oxy', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
+    ['tnd-23', 'PDT', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
+    ['tnd-24', 'Peeling Acne', 'NURSE', 0, 799000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-25', 'Peeling Llaha', 'NURSE', 0, 1000000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-26', 'Platelet-Rich Plasma (PRP)', 'NURSE', 0, 1000000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-27', 'RF', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
+    ['tnd-28', 'Subsisi', 'NURSE', 0, 1200000, 0, 0, 0, 10000, 0, 'sesi'],
+    ['tnd-29', 'Vittaran PN', 'NURSE', 0, 5999000, 0, 0, 0, 20000, 0, 'sesi'],
+    ['tnd-30', 'Vittaran Poly Booster', 'NURSE', 0, 6999000, 0, 0, 0, 20000, 0, 'sesi']
   ];
 
+  // Clean up previous typos in names
+  try {
+    await runQuery("UPDATE tindakan_medis SET nama_tindakan = 'Laser Blackdoll' WHERE nama_tindakan LIKE 'Laser Blackdoll%'");
+    await runQuery("UPDATE tindakan_medis SET nama_tindakan = 'Filler Dagu' WHERE nama_tindakan = 'Filter Dagu'");
+    await runQuery("UPDATE tindakan_medis SET nama_tindakan = 'Filler Hidung' WHERE nama_tindakan = 'Filter Hidung'");
+    await runQuery("UPDATE tindakan_medis SET nama_tindakan = 'Messo Lippo' WHERE nama_tindakan = 'Messo'");
+    await runQuery("DELETE FROM tindakan_medis WHERE nama_tindakan = 'Peeling Baru'");
+    await runQuery("DELETE FROM tindakan_medis WHERE nama_tindakan = 'Oxy & PDT'");
+    await runQuery("DELETE FROM tindakan_medis WHERE nama_tindakan = 'Botox'");
+  } catch (e) { }
+
+  let offIdx = 1;
   for (const t of requestedTreatments) {
-    const existing = await getQuery('SELECT id FROM tindakan_medis WHERE id = ? OR nama_tindakan = ?', [t[0], t[1]]);
+    const existing = await getQuery('SELECT id FROM tindakan_medis WHERE nama_tindakan = ?', [t[1]]);
     if (!existing) {
-      await runQuery('INSERT INTO tindakan_medis (id, nama_tindakan, kategori_petugas, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', t);
+      const newId = 'tnd-off-' + Date.now() + '-' + (offIdx++);
+      await runQuery('INSERT INTO tindakan_medis (id, nama_tindakan, kategori_petugas, tarif_konsul_dokter, tarif_tindakan_medis, komisi_fix_therapist, percent_btc_bonus, percent_jasa_medis_dokter, nominal_nurse_tindakan, is_per_benang, satuan_hitung) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [newId, t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8], t[9], t[10]]);
     } else {
-      await runQuery('UPDATE tindakan_medis SET kategori_petugas = ?, komisi_fix_therapist = ?, nominal_nurse_tindakan = ? WHERE id = ?', [t[2], t[5], t[8], existing.id]);
+      await runQuery(`
+        UPDATE tindakan_medis 
+        SET kategori_petugas = ?, tarif_tindakan_medis = ?, komisi_fix_therapist = ?, nominal_nurse_tindakan = ?, is_per_benang = ?, satuan_hitung = ?
+        WHERE id = ?
+      `, [t[2], t[4], t[5], t[8], t[9], t[10], existing.id]);
     }
   }
 

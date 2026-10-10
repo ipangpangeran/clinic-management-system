@@ -165,6 +165,13 @@ export default function LoginPage() {
             >
               💆‍♀️ BTC Anggun
             </button>
+            <button
+              type="button"
+              onClick={() => { setUsername('btc-training'); setPassword('admin1234'); }}
+              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
+            >
+              💆‍♀️ BTC Trainee
+            </button>
           </div>
         </div>
       </div>

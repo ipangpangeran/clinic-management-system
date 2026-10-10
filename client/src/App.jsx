@@ -19,10 +19,16 @@ function MainApp() {
   const { user, logout, loading, hasPermission } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('overview');
   const [autoOpenNewPatient, setAutoOpenNewPatient] = useState(false);
+  const [autoOpenRepeatVisit, setAutoOpenRepeatVisit] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleOpenNewPatientFromDashboard = () => {
     setAutoOpenNewPatient(true);
+    setActiveTab('patients');
+  };
+
+  const handleOpenRepeatVisitFromDashboard = () => {
+    setAutoOpenRepeatVisit(true);
     setActiveTab('patients');
   };
 
@@ -36,6 +42,7 @@ function MainApp() {
       patients: 'patient_intake',
       master_customer: 'patient_management',
       customer_database: 'patient_management',
+      package_claims: 'patient_management',
       doingan: 'doingan',
       pos: 'patient_packages',
       inventory: ['inventory_retail', 'inventory_btc', 'inventory_non_medical'],
@@ -123,6 +130,7 @@ function MainApp() {
           <DashboardOverview
             setActiveTab={setActiveTab}
             onOpenNewPatient={handleOpenNewPatientFromDashboard}
+            onOpenRepeatVisit={handleOpenRepeatVisitFromDashboard}
           />
         );
       case 'patients':
@@ -132,12 +140,16 @@ function MainApp() {
             setActiveTab={setActiveTab}
             autoOpenNewPatient={autoOpenNewPatient}
             setAutoOpenNewPatient={setAutoOpenNewPatient}
+            autoOpenRepeatVisit={autoOpenRepeatVisit}
+            setAutoOpenRepeatVisit={setAutoOpenRepeatVisit}
           />
         );
       case 'master_customer':
         return <PatientManagement mode="RAW_MASTER" setActiveTab={setActiveTab} />;
       case 'customer_database':
         return <PatientManagement mode="DETAIL" setActiveTab={setActiveTab} />;
+      case 'package_claims':
+        return <PatientManagement mode="HISTORICAL_KLAIM" setActiveTab={setActiveTab} />;
       case 'doingan':
         return <DoinganActivity />;
       case 'pos':
@@ -156,6 +168,7 @@ function MainApp() {
           <DashboardOverview
             setActiveTab={setActiveTab}
             onOpenNewPatient={handleOpenNewPatientFromDashboard}
+            onOpenRepeatVisit={handleOpenRepeatVisitFromDashboard}
           />
         );
     }

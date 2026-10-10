@@ -7,7 +7,7 @@ import { formatPersonName } from '../utils/formatters';
 export default function ClinicSettingsAcl() {
   const { user: currentUser } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('PROFILE'); // 'PROFILE', 'USERS', 'ACL'
-  
+
   // Profil Klinik State
   const [profile, setProfile] = useState({
     clinic_name: 'DEFLOW',
@@ -44,7 +44,7 @@ export default function ClinicSettingsAcl() {
   // ACL Matrix State
   const [aclMatrix, setAclMatrix] = useState([]);
   const [waReminderEnabled, setWaReminderEnabled] = useState(false);
-  
+
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -74,7 +74,7 @@ export default function ClinicSettingsAcl() {
   };
 
   const rolesList = ['Super Admin', 'Admin Klinik', 'Manager', 'Admin FO', 'Beautician', 'Nurse', 'Marketing'];
-  
+
   const modulesList = [
     { key: 'clinic_profile', name: 'Detail Profil Klinik' },
     { key: 'acl', name: 'Konfigurasi Dynamic ACL & Users' },
@@ -153,7 +153,7 @@ export default function ClinicSettingsAcl() {
     setRole(u.role);
     setLiniProfesi(u.lini_profesi || 'Beautician');
     setGajiPokok(u.gaji_pokok || 0);
-    setIsTraining(u.is_training === 1);
+    setIsTraining(Boolean(u.is_training === 1 || u.is_training === '1'));
     setMsg('');
     setErrorMsg('');
     setShowUserModal(true);
@@ -317,11 +317,10 @@ export default function ClinicSettingsAcl() {
                   <button
                     type="button"
                     onClick={handleToggleWaReminder}
-                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer whitespace-nowrap shadow-xs ${
-                      waReminderEnabled 
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                    className={`px-4 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer whitespace-nowrap shadow-xs ${waReminderEnabled
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                         : 'bg-gray-400 hover:bg-gray-500 text-white'
-                    }`}
+                      }`}
                   >
                     {waReminderEnabled ? '🟢 FITUR ON (AKTIF)' : '🔴 FITUR OFF (NON-AKTIF)'}
                   </button>
@@ -330,223 +329,220 @@ export default function ClinicSettingsAcl() {
             )}
 
             <form onSubmit={handleSaveProfile} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Utama Klinik *</label>
-                <input
-                  type="text"
-                  value={profile.clinic_name}
-                  onChange={(e) => setProfile({ ...profile, clinic_name: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">Nama Utama Klinik *</label>
+                  <input
+                    type="text"
+                    value={profile.clinic_name}
+                    onChange={(e) => setProfile({ ...profile, clinic_name: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">Tagline Klinik *</label>
+                  <input
+                    type="text"
+                    value={profile.tagline}
+                    onChange={(e) => setProfile({ ...profile, tagline: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141]"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Tagline Klinik *</label>
-                <input
-                  type="text"
-                  value={profile.tagline}
-                  onChange={(e) => setProfile({ ...profile, tagline: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141]"
-                />
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[#514440] mb-1">Alamat Lengkap Klinik *</label>
-              <textarea
-                value={profile.address}
-                onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                rows="2"
-                required
-                className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">No. WhatsApp Resmi *</label>
-                <input
-                  type="text"
-                  value={profile.whatsapp}
-                  onChange={(e) => setProfile({ ...profile, whatsapp: e.target.value })}
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Alamat Lengkap Klinik *</label>
+                <textarea
+                  value={profile.address}
+                  onChange={(e) => setProfile({ ...profile, address: e.target.value })}
+                  rows="2"
                   required
                   className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#514440] mb-1">Email Resmi Klinik</label>
-                <input
-                  type="email"
-                  value={profile.email}
-                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
-                />
-              </div>
-            </div>
 
-            {/* WA REMINDER FEATURE TOGGLE SWITCH (SUPER ADMIN & SYSTEM ADMIN) */}
-            {isSuperAdmin && (
-              <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 font-bold text-xs text-[#1e1b15]">
-                    <MessageSquare className="w-4 h-4 text-[#7d5141]" />
-                    <span>Fitur WhatsApp Gateway & Reminder Jadwal Kontrol Pasien</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">No. WhatsApp Resmi *</label>
+                  <input
+                    type="text"
+                    value={profile.whatsapp}
+                    onChange={(e) => setProfile({ ...profile, whatsapp: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#514440] mb-1">Email Resmi Klinik</label>
+                  <input
+                    type="email"
+                    value={profile.email}
+                    onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
+                  />
+                </div>
+              </div>
+
+              {/* WA REMINDER FEATURE TOGGLE SWITCH (SUPER ADMIN & SYSTEM ADMIN) */}
+              {isSuperAdmin && (
+                <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 font-bold text-xs text-[#1e1b15]">
+                      <MessageSquare className="w-4 h-4 text-[#7d5141]" />
+                      <span>Fitur WhatsApp Gateway & Reminder Jadwal Kontrol Pasien</span>
+                    </div>
+                    <p className="text-[11px] text-[#514440]">
+                      Jika dimatikan (OFF), seluruh jadwal kontrol, reminder H-1, dan menu WhatsApp Gateway disembunyikan dari sistem.
+                    </p>
                   </div>
-                  <p className="text-[11px] text-[#514440]">
-                    Jika dimatikan (OFF), seluruh jadwal kontrol, reminder H-1, dan menu WhatsApp Gateway disembunyikan dari sistem.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleToggleWaReminder}
-                  className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 ${
-                    waReminderEnabled
-                      ? 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm'
-                      : 'bg-gray-400 hover:bg-gray-500 text-white'
-                  }`}
-                >
-                  {waReminderEnabled ? (
-                    <>
-                      <ToggleRight className="w-5 h-5 text-white" />
-                      <span>FITUR WA: AKTIF (ON)</span>
-                    </>
-                  ) : (
-                    <>
-                      <ToggleLeft className="w-5 h-5 text-white" />
-                      <span>FITUR WA: NON-AKTIF (OFF)</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* WA API KEY / ENDPOINT POINTING CONFIGURATION (HIDDEN FOR ADMIN KLINIK - ONLY SUPER ADMIN CAN SEE) */}
-            {isSuperAdmin && (
-              <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-2">
-                <div className="flex items-center gap-1.5 font-bold text-xs text-[#7d5141] uppercase tracking-wider">
-                  <Link2 className="w-4 h-4" />
-                  <span>Konfigurasi Pointing WhatsApp Gateway API & API Key (Khusus Super Admin)</span>
-                </div>
-                <p className="text-[11px] text-[#514440]">
-                  Endpoint URL API Key ini hanya dapat diakses dan diubah oleh Super Admin. User Admin Klinik tidak melihat menu ini.
-                </p>
-                <input
-                  type="text"
-                  value={profile.wa_api_url || ''}
-                  onChange={(e) => setProfile({ ...profile, wa_api_url: e.target.value })}
-                  placeholder="https://api-wa.ipangpangeran.com/send?api_key=..."
-                  required
-                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-mono text-[#1e1b15]"
-                />
-              </div>
-            )}
-
-            {/* FITUR PPN (PAJAK PERTAMBAHAN NILAI) ON / OFF & RATE SETTING */}
-            <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-3 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2 font-bold text-xs text-[#1e1b15]">
-                    <ShieldCheck className="w-4 h-4 text-[#7d5141]" />
-                    <span>Fitur Pajak PPN Transaksi Kasir POS (Khusus Super Admin & Admin Klinik)</span>
-                  </div>
-                  <p className="text-[11px] text-[#514440]">
-                    Atur status aktif (ON) atau nonaktif (OFF) serta persentase tarif pajak PPN untuk seluruh tagihan di kasir POS & struk.
-                  </p>
-                </div>
-
-                {isSuperAdminOrClinicAdmin ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      const nextState = !(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true);
-                      setProfile({ ...profile, is_tax_enabled: nextState ? 1 : 0 });
-                    }}
-                    className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 shadow-xs ${
-                      (profile.is_tax_enabled === 1 || profile.is_tax_enabled === true)
-                        ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                    onClick={handleToggleWaReminder}
+                    className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 ${waReminderEnabled
+                        ? 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-sm'
                         : 'bg-gray-400 hover:bg-gray-500 text-white'
-                    }`}
+                      }`}
                   >
-                    {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? (
+                    {waReminderEnabled ? (
                       <>
                         <ToggleRight className="w-5 h-5 text-white" />
-                        <span>PPN: AKTIF (ON)</span>
+                        <span>FITUR WA: AKTIF (ON)</span>
                       </>
                     ) : (
                       <>
                         <ToggleLeft className="w-5 h-5 text-white" />
-                        <span>PPN: NONAKTIF (OFF)</span>
+                        <span>FITUR WA: NON-AKTIF (OFF)</span>
                       </>
                     )}
                   </button>
+                </div>
+              )}
+
+              {/* WA API KEY / ENDPOINT POINTING CONFIGURATION (HIDDEN FOR ADMIN KLINIK - ONLY SUPER ADMIN CAN SEE) */}
+              {isSuperAdmin && (
+                <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-2">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-[#7d5141] uppercase tracking-wider">
+                    <Link2 className="w-4 h-4" />
+                    <span>Konfigurasi Pointing WhatsApp Gateway API & API Key (Khusus Super Admin)</span>
+                  </div>
+                  <p className="text-[11px] text-[#514440]">
+                    Endpoint URL API Key ini hanya dapat diakses dan diubah oleh Super Admin. User Admin Klinik tidak melihat menu ini.
+                  </p>
+                  <input
+                    type="text"
+                    value={profile.wa_api_url || ''}
+                    onChange={(e) => setProfile({ ...profile, wa_api_url: e.target.value })}
+                    placeholder="https://api-wa.ipangpangeran.com/send?api_key=..."
+                    required
+                    className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-mono text-[#1e1b15]"
+                  />
+                </div>
+              )}
+
+              {/* FITUR PPN (PAJAK PERTAMBAHAN NILAI) ON / OFF & RATE SETTING */}
+              <div className="p-4 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-3 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 font-bold text-xs text-[#1e1b15]">
+                      <ShieldCheck className="w-4 h-4 text-[#7d5141]" />
+                      <span>Fitur Pajak PPN Transaksi Kasir POS (Khusus Super Admin & Admin Klinik)</span>
+                    </div>
+                    <p className="text-[11px] text-[#514440]">
+                      Atur status aktif (ON) atau nonaktif (OFF) serta persentase tarif pajak PPN untuk seluruh tagihan di kasir POS & struk.
+                    </p>
+                  </div>
+
+                  {isSuperAdminOrClinicAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextState = !(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true);
+                        setProfile({ ...profile, is_tax_enabled: nextState ? 1 : 0 });
+                      }}
+                      className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0 shadow-xs ${(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true)
+                          ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                          : 'bg-gray-400 hover:bg-gray-500 text-white'
+                        }`}
+                    >
+                      {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? (
+                        <>
+                          <ToggleRight className="w-5 h-5 text-white" />
+                          <span>PPN: AKTIF (ON)</span>
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-5 h-5 text-white" />
+                          <span>PPN: NONAKTIF (OFF)</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                      {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? 'PPN ON' : 'PPN OFF'}
+                    </span>
+                  )}
+                </div>
+
+                {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#d6c2bd]/60 items-center">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#514440] mb-1">
+                        Tarif Persentase PPN (%) *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          disabled={!isSuperAdminOrClinicAdmin}
+                          value={profile.tax_rate_percent}
+                          onChange={(e) => setProfile({ ...profile, tax_rate_percent: Number(e.target.value) })}
+                          className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
+                          placeholder="11"
+                          required
+                        />
+                        <span className="absolute right-3 top-2 text-xs font-bold text-[#83746f]">%</span>
+                      </div>
+                    </div>
+                    <div className="p-2.5 bg-white border border-[#d6c2bd]/60 rounded-xl text-[11px] text-[#514440]">
+                      Pajak PPN sebesar <strong>{profile.tax_rate_percent || 0}%</strong> akan otomatis ditambahkan ke total transaksi di kasir POS dan dicetak pada struk.
+                    </div>
+                  </div>
                 ) : (
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
-                    (profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? 'PPN ON' : 'PPN OFF'}
-                  </span>
+                  <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-medium">
+                    Status PPN saat ini <strong>NONAKTIF (OFF)</strong>. Menu POS & cetak struk tidak akan memunculkan baris PPN, dan total bayar murni sesuai harga item.
+                  </div>
                 )}
               </div>
 
-              {(profile.is_tax_enabled === 1 || profile.is_tax_enabled === true) ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[#d6c2bd]/60 items-center">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#514440] mb-1">
-                      Tarif Persentase PPN (%) *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        disabled={!isSuperAdminOrClinicAdmin}
-                        value={profile.tax_rate_percent}
-                        onChange={(e) => setProfile({ ...profile, tax_rate_percent: Number(e.target.value) })}
-                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#1e1b15]"
-                        placeholder="11"
-                        required
-                      />
-                      <span className="absolute right-3 top-2 text-xs font-bold text-[#83746f]">%</span>
-                    </div>
-                  </div>
-                  <div className="p-2.5 bg-white border border-[#d6c2bd]/60 rounded-xl text-[11px] text-[#514440]">
-                    Pajak PPN sebesar <strong>{profile.tax_rate_percent || 0}%</strong> akan otomatis ditambahkan ke total transaksi di kasir POS dan dicetak pada struk.
-                  </div>
-                </div>
-              ) : (
-                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-medium">
-                  Status PPN saat ini <strong>NONAKTIF (OFF)</strong>. Menu POS & cetak struk tidak akan memunculkan baris PPN, dan total bayar murni sesuai harga item.
-                </div>
-              )}
-            </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#514440] mb-1">Auto Logout Idle Sesi (Menit) *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="480"
+                  value={profile.idle_timeout_minutes || 15}
+                  onChange={(e) => setProfile({ ...profile, idle_timeout_minutes: Number(e.target.value) })}
+                  required
+                  className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141]"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[#514440] mb-1">Auto Logout Idle Sesi (Menit) *</label>
-              <input
-                type="number"
-                min="1"
-                max="480"
-                value={profile.idle_timeout_minutes || 15}
-                onChange={(e) => setProfile({ ...profile, idle_timeout_minutes: Number(e.target.value) })}
-                required
-                className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-bold text-[#7d5141]"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              {saving ? 'Menyimpan...' : 'Simpan Perubahan Profil'}
-            </button>
-          </form>
-        </div>
-      )}
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-6 py-2.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Menyimpan...' : 'Simpan Perubahan Profil'}
+              </button>
+            </form>
+          </div>
+        )}
 
         {/* TAB 2: USER MANAGEMENT (CREATE, EDIT, DELETE USER) */}
         {activeTab === 'USERS' && (
@@ -583,9 +579,19 @@ export default function ClinicSettingsAcl() {
                       <td className="py-3 px-4 font-bold text-[#1e1b15]">{u.full_name}</td>
                       <td className="py-3 px-4 font-mono font-semibold text-[#7d5141]">{u.username}</td>
                       <td className="py-3 px-4">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#faf3e8] text-[#7d5141] border border-[#d6c2bd]">
-                          {u.role}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#faf3e8] text-[#7d5141] border border-[#d6c2bd]">
+                            {u.role}
+                          </span>
+                          {(u.role === 'Beautician' || u.role === 'Nurse' || u.lini_profesi === 'Beautician' || u.lini_profesi === 'Nurse') && (
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${(u.is_training === 1 || u.is_training === '1')
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                              }`}>
+                              {(u.is_training === 1 || u.is_training === '1') ? 'Training' : 'Regular'}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 font-semibold text-[#1e1b15]">
                         {u.role === 'Super Admin' || u.role === 'Admin System' || u.role === 'Admin Klinik' ? (
@@ -659,11 +665,10 @@ export default function ClinicSettingsAcl() {
                             <button
                               type="button"
                               onClick={() => togglePermission(r, m.key, 'can_read')}
-                              className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${
-                                canR 
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                              className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all ${canR
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                   : 'bg-gray-100 text-gray-400 border border-gray-200 hover:bg-gray-200'
-                              }`}
+                                }`}
                             >
                               {canR ? 'Akses (R)' : 'No Access'}
                             </button>

@@ -6,9 +6,13 @@ import { Sparkles, User, CheckCircle2, Clock, AlertCircle, History, RefreshCw, F
 export default function StaffMobilePortal() {
   const { user } = useContext(AuthContext);
   const [activeSession, setActiveSession] = useState(null);
+  const [activeList, setActiveList] = useState([]);
+  const [waitingList, setWaitingList] = useState([]);
+  const [selectedNurseDoinganId, setSelectedNurseDoinganId] = useState('');
   const [history, setHistory] = useState([]);
   const [treatments, setTreatments] = useState([]);
   const [selectedTreatments, setSelectedTreatments] = useState([]);
+  const [treatmentQuantities, setTreatmentQuantities] = useState({});
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -43,6 +47,17 @@ export default function StaffMobilePortal() {
       ]);
 
       const newActive = sessRes.data.active_doingan;
+      const newActiveList = sessRes.data.active_list || (newActive ? [newActive] : []);
+      const newWaitingList = sessRes.data.waiting_list || [];
+
+      setActiveList(newActiveList);
+      setWaitingList(newWaitingList);
+
+      // Auto select current patient for Nurse
+      setSelectedNurseDoinganId(prev => {
+        if (prev && newActiveList.some(item => item.id === prev)) return prev;
+        return newActiveList[0]?.id || '';
+      });
 
       // Show alert message if a new session was just assigned to staff
       setActiveSession(prev => {
@@ -70,18 +85,40 @@ export default function StaffMobilePortal() {
     }
   };
 
+  // Determine which patient session is currently active/being completed
+  const currentActiveSession = isNurse
+    ? (activeList.find(item => item.id === selectedNurseDoinganId) || activeList[0] || null)
+    : activeSession;
+
   const toggleTreatmentSelect = (treatmentId) => {
     if (selectedTreatments.includes(treatmentId)) {
       setSelectedTreatments(selectedTreatments.filter(id => id !== treatmentId));
     } else {
       setSelectedTreatments([...selectedTreatments, treatmentId]);
+      if (!treatmentQuantities[treatmentId]) {
+        setTreatmentQuantities(prev => ({ ...prev, [treatmentId]: 1 }));
+      }
     }
+  };
+
+  const updateTreatmentQuantity = (treatmentId, delta) => {
+    setTreatmentQuantities(prev => {
+      const current = prev[treatmentId] || 1;
+      const nextVal = Math.max(1, current + delta);
+      return { ...prev, [treatmentId]: nextVal };
+    });
+  };
+
+  const setTreatmentQty = (treatmentId, val) => {
+    const num = Math.max(1, parseInt(val, 10) || 1);
+    setTreatmentQuantities(prev => ({ ...prev, [treatmentId]: num }));
   };
 
   const handleCompleteTreatment = async (e) => {
     e.preventDefault();
-    if (!activeSession) return;
-    const isTrial = activeSession.tipe_pasien === 'TRIAL' || activeSession.status_doingan === 'Trial';
+    const target = currentActiveSession;
+    if (!target) return;
+    const isTrial = target.tipe_pasien === 'TRIAL' || target.status_doingan === 'Trial';
 
     if (!isTrial && selectedTreatments.length === 0) {
       setErrorMsg('Pilih minimal 1 detail tindakan yang telah Anda kerjakan pada pasien.');
@@ -93,13 +130,15 @@ export default function StaffMobilePortal() {
     setErrorMsg('');
 
     try {
-      const res = await axios.post(`/api/doingan/${activeSession.id}/complete`, {
+      const res = await axios.post(`/api/doingan/${target.id}/complete`, {
         tindakan_ids: selectedTreatments,
+        item_quantities: treatmentQuantities,
         notes
       });
 
-      setMsg(`✓ ${res.data.message} Est. Komisi: Rp ${res.data.komisi?.toLocaleString('id-ID')}`);
+      setMsg(`✓ Tindakan pasien "${target.pasien_nama}" berhasil diselesaikan! Est. Komisi: Rp ${res.data.komisi?.toLocaleString('id-ID')}`);
       setSelectedTreatments([]);
+      setTreatmentQuantities({});
       setNotes('');
       fetchSessionData();
     } catch (err) {
@@ -110,18 +149,18 @@ export default function StaffMobilePortal() {
   };
 
   const handleCancelTreatment = async () => {
-    if (!activeSession) return;
+    const target = currentActiveSession;
+    if (!target) return;
     setCancelling(true);
     setMsg('');
     setErrorMsg('');
     try {
-      const res = await axios.post(`/api/doingan/${activeSession.id}/cancel`, {
+      const res = await axios.post(`/api/doingan/${target.id}/cancel`, {
         reason: cancelReason || 'Dokter tidak merekomendasikan tindakan / Pasien minta pulang'
       });
-      setMsg(`✓ ${res.data.message}`);
+      setMsg(`✓ Sesi tindakan pasien "${target.pasien_nama}" berhasil dibatalkan.`);
       setShowCancelModal(false);
       setCancelReason('');
-      setActiveSession(null);
       fetchSessionData();
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Gagal membatalkan tindakan');
@@ -205,17 +244,36 @@ export default function StaffMobilePortal() {
 
         {/* Live Status Badge */}
         <div className="pt-2 border-t border-white/10 flex items-center justify-between">
-          <span className="text-xs text-gray-300">Status:</span>
-          {activeSession ? (
-            <span className="px-3 py-1 bg-red-500/20 text-red-200 border border-red-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5 animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-red-400"></span>
-              SEDANG MENANGANI PASIEN
-            </span>
+          <span className="text-xs text-gray-300">Status Petugas:</span>
+          {isNurse ? (
+            activeList.length > 0 ? (
+              <span className="px-3 py-1 bg-red-500/20 text-red-200 border border-red-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5 animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                MELAYANI ({activeList.length} PASIEN)
+              </span>
+            ) : waitingList.length > 0 ? (
+              <span className="px-3 py-1 bg-amber-500/20 text-amber-200 border border-amber-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                {waitingList.length} PASIEN ANTRE DI BTC
+              </span>
+            ) : (
+              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                AVAILABLE (SIAP MELAYANI)
+              </span>
+            )
           ) : (
-            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              AVAILABLE
-            </span>
+            activeSession ? (
+              <span className="px-3 py-1 bg-red-500/20 text-red-200 border border-red-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5 animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                SEDANG MENANGANI PASIEN
+              </span>
+            ) : (
+              <span className="px-3 py-1 bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 rounded-full text-xs font-extrabold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                AVAILABLE
+              </span>
+            )
           )}
         </div>
       </div>
@@ -234,41 +292,147 @@ export default function StaffMobilePortal() {
         </div>
       )}
 
-      {/* ACTIVE PASIEN CARD */}
-      {activeSession ? (
+      {/* SPECIAL NURSE SECTION: LIST SEMUA PASIEN MASUK DARI ADMIN FO */}
+      {isNurse && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-serif font-bold text-sm text-[#1e1b15] flex items-center gap-1.5">
+              <User className="w-4 h-4 text-[#7d5141]" />
+              <span>Daftar Pasien dari FO ({activeList.length} Pasien Aktif)</span>
+            </h3>
+            <span className="text-[10.5px] text-[#7d5141] font-semibold">Pilih untuk diselesaikan</span>
+          </div>
+
+          {activeList.length === 0 ? (
+            <div className="p-4 bg-white rounded-2xl border border-[#e5ded4] text-center text-xs text-gray-400 italic">
+              Belum ada pasien aktif yang masuk dari admin FO.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {activeList.map((pasienItem, idx) => {
+                const isSelected = (pasienItem.id === (currentActiveSession?.id));
+                return (
+                  <div
+                    key={pasienItem.id}
+                    onClick={() => {
+                      setSelectedNurseDoinganId(pasienItem.id);
+                      setSelectedTreatments([]);
+                      setTreatmentQuantities({});
+                    }}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${isSelected
+                      ? 'bg-[#faf3e8] border-[#7d5141] shadow-xs ring-2 ring-[#7d5141]'
+                      : 'bg-white border-[#e5ded4] hover:border-[#d6c2bd]'
+                      }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-[#7d5141] text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <h4 className="font-bold text-xs text-[#1e1b15] truncate">{pasienItem.pasien_nama}</h4>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-200 shrink-0">
+                          {pasienItem.tipe_pasien}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-[#7d5141] font-medium mt-1 truncate">
+                        {pasienItem.nama_tindakan || pasienItem.kategori_layanan}
+                      </div>
+                      <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-2">
+                        <span>Mulai: {new Date(pasienItem.started_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>• {calculateDuration(pasienItem.started_at)}</span>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0">
+                      {isSelected ? (
+                        <span className="px-3 py-1.5 bg-[#7d5141] text-white text-[11px] font-bold rounded-xl shadow-2xs flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-amber-200" />
+                          <span>Dipilih</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#514440] text-[11px] font-bold rounded-xl transition-all cursor-pointer"
+                        >
+                          Pilih
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ANTREAN PASIEN YANG SEDANG DI BTC */}
+          {waitingList.length > 0 && (
+            <div className="p-3.5 bg-amber-50/80 border border-amber-300 rounded-2xl space-y-2">
+              <div className="font-bold text-xs text-amber-950 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Antrean Pasien (Sedang Facial di BTC):</span>
+                </span>
+                <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                  {waitingList.length} Pasien
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {waitingList.map(wp => (
+                  <div key={wp.id} className="p-2.5 bg-white/95 rounded-xl border border-amber-200 text-xs flex items-center justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-[#1e1b15]">{wp.pasien_nama}</div>
+                      <div className="text-[10px] text-amber-900">
+                        Sedang ditangani BTC: <strong>{wp.btc_petugas_nama || 'Beautician'}</strong>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-[#7d5141] font-semibold bg-[#faf3e8] border border-[#d6c2bd] px-2 py-1 rounded-lg">
+                      Menunggu BTC Selesai
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ACTIVE PASIEN CARD & FORM PENYELESAIAN */}
+      {currentActiveSession ? (
         <div className="bg-white rounded-3xl border-2 border-[#7d5141] p-5 shadow-md space-y-4">
           <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-[#7d5141]" />
-              <h3 className="font-serif font-bold text-base text-[#1e1b15]">Pasien Active Saat Ini</h3>
+              <h3 className="font-serif font-bold text-base text-[#1e1b15]">
+                {isNurse ? 'Penyelesaian Pasien Terpilih' : 'Pasien Active Saat Ini'}
+              </h3>
             </div>
             <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[#faf3e8] text-[#7d5141] border border-[#d6c2bd]">
-              {activeSession.tipe_pasien === 'MEMBER' ? 'MEMBER DEFLOW' : 'PASIEN TRIAL'}
+              {currentActiveSession.tipe_pasien === 'MEMBER' ? 'MEMBER DEFLOW' : 'PASIEN TRIAL'}
             </span>
           </div>
 
           <div className="bg-[#faf3e8] p-4 rounded-2xl border border-[#d6c2bd] space-y-2">
             <div>
               <span className="text-[10px] text-gray-500 uppercase font-semibold">Nama Pasien</span>
-              <h4 className="font-serif font-bold text-lg text-[#1e1b15]">{activeSession.pasien_nama}</h4>
-              <p className="text-xs text-[#7d5141] font-mono">{activeSession.pasien_hp}</p>
+              <h4 className="font-serif font-bold text-lg text-[#1e1b15]">{currentActiveSession.pasien_nama}</h4>
+              <p className="text-xs text-[#7d5141] font-mono">{currentActiveSession.pasien_hp}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t border-[#d6c2bd]/60 text-[#514440]">
               <div>
                 <span className="text-gray-500 block text-[10px]">Waktu Di-Assign:</span>
-                <strong className="text-[#1e1b15]">{new Date(activeSession.started_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
+                <strong className="text-[#1e1b15]">{new Date(currentActiveSession.started_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
               </div>
               <div>
                 <span className="text-gray-500 block text-[10px]">Kategori Service:</span>
-                <strong className="text-[#7d5141]">{activeSession.kategori_layanan}</strong>
+                <strong className="text-[#7d5141]">{currentActiveSession.kategori_layanan}</strong>
               </div>
             </div>
           </div>
 
           {/* CHECKLIST DETAIL TREATMENT FORM */}
           <form onSubmit={handleCompleteTreatment} className="space-y-4 pt-1">
-            {(activeSession.tipe_pasien === 'TRIAL' || activeSession.status_doingan === 'Trial') ? (
+            {(currentActiveSession.tipe_pasien === 'TRIAL' || currentActiveSession.status_doingan === 'Trial') ? (
               <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl space-y-1.5 text-xs text-amber-900 shadow-2xs">
                 <div className="font-bold text-sm flex items-center gap-1.5 text-amber-800">
                   <Sparkles className="w-4 h-4 text-amber-700" />
@@ -297,50 +461,96 @@ export default function StaffMobilePortal() {
                   Konfirmasi Detail Treatment Yang Dilakukan: *
                 </label>
                 <p className="text-[11px] text-[#514440] mb-2">
-                  Pilih atau centang jenis tindakan yang sudah Anda berikan kepada pasien {activeSession.pasien_nama}:
+                  Pilih atau centang jenis tindakan yang sudah Anda berikan kepada pasien <strong>{currentActiveSession.pasien_nama}</strong>:
                 </p>
 
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {treatments.map(t => {
                     const isSelected = selectedTreatments.includes(t.id);
+                    const isBenang = (t.is_per_benang === 1 || (t.nama_tindakan || '').toLowerCase().includes('benang'));
+                    const qty = treatmentQuantities[t.id] || 1;
+                    const totalTarifItem = (t.tarif_tindakan_medis || 0) * (isBenang ? qty : 1);
+
                     return (
-                      <button
+                      <div
                         key={t.id}
-                        type="button"
-                        onClick={() => toggleTreatmentSelect(t.id)}
-                        className={`w-full text-left p-3 rounded-2xl border text-xs font-semibold transition-all flex items-center justify-between cursor-pointer ${isSelected
+                        className={`w-full rounded-2xl border text-xs font-semibold transition-all select-none overflow-hidden ${isSelected
                           ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
                           : 'bg-[#faf3e8]/60 text-[#1e1b15] border-[#d6c2bd] hover:bg-[#faf3e8]'
                           }`}
                       >
-                        <div className="flex items-center gap-2.5">
-                          {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-white shrink-0" />
-                          ) : (
-                            <Square className="w-4 h-4 text-[#83746f] shrink-0" />
-                          )}
-                          <span>{t.nama_tindakan}</span>
+                        <div
+                          onClick={() => toggleTreatmentSelect(t.id)}
+                          className="p-3 flex items-center justify-between cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-white shrink-0" />
+                            ) : (
+                              <Square className="w-4 h-4 text-[#83746f] shrink-0" />
+                            )}
+                            <div className="text-left">
+                              <span>{t.nama_tindakan}</span>
+                              {isBenang && (
+                                <span className={`block text-[10px] ${isSelected ? 'text-amber-200' : 'text-[#83746f]'}`}>
+                                  (Tarif & Komisi Dihitung Per Benang)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className={`text-[11px] font-bold ${isSelected ? 'text-amber-200' : 'text-[#7d5141]'}`}>
+                              Rp {totalTarifItem.toLocaleString('id-ID')}
+                            </span>
+                            {isBenang && (
+                              <span className={`block text-[9.5px] ${isSelected ? 'text-amber-100/80' : 'text-gray-400'}`}>
+                                @ Rp {t.tarif_tindakan_medis?.toLocaleString('id-ID')}/benang
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span className={`text-[10px] font-bold ${isSelected ? 'text-amber-200' : 'text-[#7d5141]'}`}>
-                          Rp {t.tarif_tindakan_medis.toLocaleString('id-ID')}
-                        </span>
-                      </button>
+
+                        {/* Special Quantity / Benang Selector */}
+                        {isSelected && isBenang && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="px-3 pb-3 pt-1 border-t border-white/20 bg-black/10 flex items-center justify-between"
+                          >
+                            <div className="text-[11px] text-amber-200 font-bold flex items-center gap-1">
+                              <span>Jumlah Benang:</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => updateTreatmentQuantity(t.id, -1)}
+                                className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-sm flex items-center justify-center cursor-pointer active:scale-95"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                min="1"
+                                value={qty}
+                                onChange={(e) => setTreatmentQty(t.id, e.target.value)}
+                                className="w-12 py-1 text-center font-bold text-xs bg-white text-[#1e1b15] rounded-lg border border-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => updateTreatmentQuantity(t.id, 1)}
+                                className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-sm flex items-center justify-center cursor-pointer active:scale-95"
+                              >
+                                +
+                              </button>
+                              <span className="text-[11px] text-amber-100 font-bold ml-1">benang</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
               </div>
             )}
-
-            {/* <div>
-              <label className="block text-xs font-semibold text-[#514440] mb-1">Catatan Pengerjaan (Optional)</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Catatan kondisi kulit pasien / respon treatment..."
-                rows="2"
-                className="w-full px-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15]"
-              />
-            </div> */}
 
             <div className="space-y-2 pt-2">
               <button
@@ -349,7 +559,7 @@ export default function StaffMobilePortal() {
                 className="w-full py-3 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-2xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                {submitting ? 'Memproses Konfirmasi...' : 'SELESAIKAN TINDAKAN'}
+                {submitting ? 'Memproses Konfirmasi...' : `SELESAIKAN TINDAKAN (${currentActiveSession.pasien_nama})`}
               </button>
 
               {/* Cancel Button only for Nurse */}
@@ -375,7 +585,7 @@ export default function StaffMobilePortal() {
           </div>
           <h3 className="font-serif font-bold text-lg text-[#1e1b15]">Anda Saat Ini Sedang Sengang</h3>
           <p className="text-xs text-[#514440] max-w-xs mx-auto">
-            Tidak ada pasien yang sedang ditangani. Apabila Admin FO meng-assign pasien baru, nama pasien akan otomatis muncul di halaman ini.
+            Tidak ada antrean pasien aktif yang ditugaskan ke Anda saat ini. Pasien baru yang masuk dari Admin FO akan otomatis muncul di halaman ini.
           </p>
           <button
             onClick={fetchSessionData}

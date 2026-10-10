@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PosBillingCounter() {
@@ -9,6 +9,13 @@ export default function PosBillingCounter() {
   const [treatments, setTreatments] = useState([]);
   const [users, setUsers] = useState([]);
   const [unbilledList, setUnbilledList] = useState([]);
+  const [masterPackages, setMasterPackages] = useState([]);
+
+  // Migration from Trial to Member Modal in POS
+  const [migratedPatient, setMigratedPatient] = useState(null);
+  const [showMigrationPackageModal, setShowMigrationPackageModal] = useState(false);
+  const [selectedMigrationPackages, setSelectedMigrationPackages] = useState([]);
+  const [submittingMigrationPkg, setSubmittingMigrationPkg] = useState(false);
 
   // Transaction Cart State
   const [selectedPatientId, setSelectedPatientId] = useState('');
@@ -19,6 +26,7 @@ export default function PosBillingCounter() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [clinicProfile, setClinicProfile] = useState(null);
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
   // Selected Professional Lines for Commissions (Auto-assigned)
   const [selectedTherapistId, setSelectedTherapistId] = useState('');
@@ -39,7 +47,25 @@ export default function PosBillingCounter() {
 
   useEffect(() => {
     fetchInitialPosData();
+
+    // Auto-polling antrean tagihan unbilled POS setiap 3 detik
+    const interval = setInterval(() => {
+      fetchUnbilledQueueSilent();
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, []);
+
+  const fetchUnbilledQueueSilent = async () => {
+    try {
+      const [unbilledRes, pRes] = await Promise.all([
+        axios.get('/api/doingan/unbilled'),
+        axios.get('/api/pasien')
+      ]);
+      setUnbilledList(unbilledRes.data || []);
+      setPatients(pRes.data || []);
+    } catch (err) { }
+  };
 
   const fetchTransactionHistory = async () => {
     setLoadingHistory(true);
@@ -125,19 +151,21 @@ export default function PosBillingCounter() {
 
   const fetchInitialPosData = async () => {
     try {
-      const [pRes, prodRes, tRes, uRes, unbilledRes, clinicRes] = await Promise.all([
+      const [pRes, prodRes, tRes, uRes, unbilledRes, clinicRes, masterPkgRes] = await Promise.all([
         axios.get('/api/pasien'),
         axios.get('/api/stok'),
         axios.get('/api/tindakan'),
         axios.get('/api/users'),
         axios.get('/api/doingan/unbilled'),
-        axios.get('/api/clinic-profile')
+        axios.get('/api/clinic-profile'),
+        axios.get('/api/master-paket')
       ]);
       setPatients(pRes.data);
       setProducts(prodRes.data.filter(p => p.tipe_stok === 'RETAIL'));
       setTreatments(tRes.data);
       setUsers(uRes.data);
       setClinicProfile(clinicRes.data || null);
+      setMasterPackages(masterPkgRes.data || []);
       const unbilled = unbilledRes.data || [];
       setUnbilledList(unbilled);
 
@@ -152,59 +180,93 @@ export default function PosBillingCounter() {
     }
   };
 
-  const handleProcessUnbilledDoingan = (doi, tList = treatments) => {
-    setSelectedPatientId(doi.pasien_id);
-
-    if (doi.item_type === 'PAKET') {
-      setSelectedTherapistId('');
-      setActiveDoinganId(null);
-      const newItem = {
-        item_id: doi.id,
-        paket_id: doi.id,
-        jenis_item: 'PAKET',
-        nama_item: 'Paket: ' + doi.nama_tindakan,
-        harga_satuan: Number(doi.harga_paket) || 0,
-        jumlah: 1,
-        therapist_id: null
+  const handleUpgradeTrialToMember = async (doi) => {
+    try {
+      const patient = patients.find(p => p.id === doi.pasien_id) || {
+        id: doi.pasien_id,
+        nama_lengkap: doi.pasien_nama,
+        marketing_id: doi.marketing_id
       };
+      await axios.put(`/api/pasien/${doi.pasien_id}`, {
+        tipe_pasien: 'MEMBER'
+      });
+      setMigratedPatient(patient);
+      setSelectedMigrationPackages([]);
+      setShowMigrationPackageModal(true);
+      fetchInitialPosData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal mengubah status pasien ke Member');
+    }
+  };
 
-      if (selectedPatientId !== doi.pasien_id) {
-        setCart([newItem]);
-      } else {
-        const exists = cart.some(c => c.item_id === doi.id && c.jenis_item === 'PAKET');
-        if (!exists) {
-          setCart(prev => [...prev, newItem]);
-        }
-      }
+  const handleConfirmMigrationPackages = async () => {
+    if (!migratedPatient) return;
+    if (selectedMigrationPackages.length === 0) {
+      alert('Silakan pilih minimal 1 paket treatment yang dibeli oleh pasien member!');
       return;
     }
 
-    setSelectedTherapistId(doi.petugas_id);
-    setActiveDoinganId(doi.id);
+    setSubmittingMigrationPkg(true);
+    try {
+      await axios.post(`/api/pasien/${migratedPatient.id}/paket`, {
+        packages: selectedMigrationPackages,
+        marketing_id: migratedPatient.marketing_id || null
+      });
+      const totalNominal = selectedMigrationPackages.reduce((sum, p) => sum + (Number(p.harga_paket) || 0), 0);
+      alert(`Berhasil! ${selectedMigrationPackages.length} paket telah ditambahkan ke pasien "${migratedPatient.nama_lengkap}". Tagihan sebesar Rp ${totalNominal.toLocaleString('id-ID')} telah diteruskan ke antrian Kasir POS.`);
+      setShowMigrationPackageModal(false);
+      setMigratedPatient(null);
+      setSelectedMigrationPackages([]);
+      fetchInitialPosData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyimpan paket pembelian');
+    } finally {
+      setSubmittingMigrationPkg(false);
+    }
+  };
 
-    const targetPatient = patients.find(p => p.id === doi.pasien_id);
-    const isTrial = (doi.status_doingan === 'Trial' || doi.tipe_pasien === 'TRIAL' || (targetPatient && targetPatient.tipe_pasien === 'TRIAL'));
+  const handleProcessUnbilledDoingan = (doi, tList = treatments) => {
+    setSelectedPatientId(doi.pasien_id);
 
-    const matchingTreatment = tList.find(t => t.id === doi.tindakan_id) || tList.find(t => t.nama_tindakan === doi.nama_tindakan);
-    const basePrice = matchingTreatment ? (matchingTreatment.harga_paket || matchingTreatment.tarif_tindakan_medis || 0) : 0;
-    const finalPrice = isTrial ? 0 : basePrice;
-
-    const newItem = {
-      item_id: doi.tindakan_id || 'doi-' + doi.id,
-      tindakan_id: doi.tindakan_id || null,
-      jenis_item: 'TINDAKAN',
-      nama_item: doi.nama_tindakan || 'Tindakan Treatment',
-      harga_satuan: finalPrice,
-      jumlah: 1,
-      therapist_id: doi.petugas_id
-    };
-
-    if (selectedPatientId !== doi.pasien_id) {
-      setCart([newItem]);
-    } else {
-      const exists = cart.some(c => c.item_id === newItem.item_id && c.jenis_item === 'TINDAKAN');
-      if (!exists) {
-        setCart(prev => [...prev, newItem]);
+    const patientUnbilled = unbilledList.filter(d => d.pasien_id === doi.pasien_id);
+    if (patientUnbilled.length > 0) {
+      const newItems = patientUnbilled.map(d => {
+        if (d.item_type === 'PAKET') {
+          return {
+            item_id: d.id,
+            paket_id: d.id,
+            jenis_item: 'PAKET',
+            nama_item: 'Paket: ' + d.nama_tindakan,
+            harga_satuan: Number(d.harga_paket) || 0,
+            jumlah: 1,
+            therapist_id: null
+          };
+        } else {
+          const targetPatient = patients.find(p => p.id === d.pasien_id);
+          const isTrial = (d.status_doingan === 'Trial' || d.tipe_pasien === 'TRIAL' || (targetPatient && targetPatient.tipe_pasien === 'TRIAL'));
+          const matchingTreatment = (tList || treatments).find(t => t.id === d.tindakan_id) || (tList || treatments).find(t => t.nama_tindakan === d.nama_tindakan) || (tList || treatments).find(t => d.nama_tindakan?.startsWith(t.nama_tindakan));
+          const basePrice = matchingTreatment ? (matchingTreatment.harga_paket || matchingTreatment.tarif_tindakan_medis || 0) : 0;
+          const finalPrice = isTrial ? 0 : basePrice;
+          const qty = (d.qty_benang && d.qty_benang > 1) ? d.qty_benang : 1;
+          return {
+            item_id: d.tindakan_id || 'doi-' + d.id,
+            tindakan_id: d.tindakan_id || null,
+            jenis_item: 'TINDAKAN',
+            nama_item: d.nama_tindakan || 'Tindakan Treatment',
+            harga_satuan: finalPrice,
+            jumlah: isTrial ? 1 : qty,
+            therapist_id: d.petugas_id
+          };
+        }
+      });
+      setCart(newItems);
+      const doiTreatment = patientUnbilled.find(d => d.item_type !== 'PAKET');
+      if (doiTreatment) {
+        setActiveDoinganId(doiTreatment.id);
+        setSelectedTherapistId(doiTreatment.petugas_id);
+      } else {
+        setActiveDoinganId(null);
+        setSelectedTherapistId('');
       }
     }
   };
@@ -228,15 +290,16 @@ export default function PosBillingCounter() {
         } else {
           const targetPatient = patients.find(p => p.id === doi.pasien_id);
           const isTrial = (doi.status_doingan === 'Trial' || doi.tipe_pasien === 'TRIAL' || (targetPatient && targetPatient.tipe_pasien === 'TRIAL'));
-          const matchingTreatment = treatments.find(t => t.id === doi.tindakan_id) || treatments.find(t => t.nama_tindakan === doi.nama_tindakan);
+          const matchingTreatment = treatments.find(t => t.id === doi.tindakan_id) || treatments.find(t => t.nama_tindakan === doi.nama_tindakan) || treatments.find(t => doi.nama_tindakan?.startsWith(t.nama_tindakan));
           const basePrice = matchingTreatment ? (matchingTreatment.harga_paket || matchingTreatment.tarif_tindakan_medis || 0) : 0;
+          const qty = (doi.qty_benang && doi.qty_benang > 1) ? doi.qty_benang : 1;
           return {
             item_id: doi.tindakan_id || 'doi-' + doi.id,
             tindakan_id: doi.tindakan_id || null,
             jenis_item: 'TINDAKAN',
             nama_item: doi.nama_tindakan || 'Tindakan Treatment',
             harga_satuan: isTrial ? 0 : basePrice,
-            jumlah: 1,
+            jumlah: isTrial ? 1 : qty,
             therapist_id: doi.petugas_id
           };
         }
@@ -376,8 +439,8 @@ export default function PosBillingCounter() {
       {/* Page Header & View Mode Switcher */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-[#e5ded4] pb-4">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">POS & Billing Counter</h1>
-          <p className="text-xs text-[#514440]">Point of Sale kasir klinik, tagihan otomatis pasien selesai treatment, hitung poin, PPN 11%, dan cetak struk termal.</p>
+          <h1 className="font-serif text-2xl font-bold text-[#1e1b15]">Kasir POS & Transaksi</h1>
+          <p className="text-xs text-[#514440]">Point of Sale kasir klinik, tagihan otomatis pasien selesai treatment dan cetak struk termal.</p>
         </div>
 
         <div className="flex bg-[#faf3e8] p-1 border border-[#d6c2bd] rounded-2xl text-xs font-bold self-start sm:self-auto shadow-2xs">
@@ -572,11 +635,10 @@ export default function PosBillingCounter() {
                   <div key={doi.id} className="bg-white p-3 rounded-xl border border-amber-200 text-xs space-y-1.5 shadow-2xs">
                     <div className="flex justify-between items-start">
                       <div className="font-bold text-[#1e1b15]">{doi.pasien_nama}</div>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        doi.item_type === 'PAKET'
-                          ? 'bg-purple-100 text-purple-900 border border-purple-300 font-extrabold'
-                          : 'bg-amber-100 text-amber-900'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${doi.item_type === 'PAKET'
+                        ? 'bg-purple-100 text-purple-900 border border-purple-300 font-extrabold'
+                        : 'bg-amber-100 text-amber-900'
+                        }`}>
                         {doi.item_type === 'PAKET' ? '📦 PAKET MEMBER' : (doi.tipe_pasien === 'NON-TRIAL' || doi.tipe_pasien === 'Reguler' ? 'MEMBER' : doi.tipe_pasien)}
                       </span>
                     </div>
@@ -592,13 +654,28 @@ export default function PosBillingCounter() {
                         <strong>Petugas:</strong> {doi.petugas_nama}{(doi.lini_profesi || doi.petugas_role || doi.role_petugas) ? ` (${doi.lini_profesi || doi.petugas_role || doi.role_petugas})` : ''}
                       </div>
                     )}
-                    <button
-                      onClick={() => handleProcessUnbilledDoingan(doi)}
-                      className="w-full mt-1 py-1.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-[11px] rounded-lg cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
-                    >
-                      <ShoppingCart className="w-3.5 h-3.5" />
-                      <span>Proses Tagihan ini ke Kasir</span>
-                    </button>
+
+                    <div className="space-y-1.5 pt-1">
+                      {doi.tipe_pasien === 'TRIAL' && doi.item_type !== 'PAKET' && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpgradeTrialToMember(doi)}
+                          className="w-full py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-[11px] rounded-lg cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
+                          title="Ubah status pasien dari Trial ke Member & Pilih Paket"
+                        >
+                          <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Ubah ke Member (Beli Paket)</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => handleProcessUnbilledDoingan(doi)}
+                        className="w-full py-1.5 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-[11px] rounded-lg cursor-pointer flex items-center justify-center gap-1 shadow-2xs"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Proses Tagihan ini ke Kasir</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -606,31 +683,42 @@ export default function PosBillingCounter() {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column: Product & Service Catalog (7 Cols) */}
-            <div className="lg:col-span-7 space-y-4">
+            {/* Left Column: Patient Selection & Collapsible Catalog (6 Cols) */}
+            <div className="lg:col-span-6 space-y-4">
               {/* Patient Selector Card */}
-              <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-2">
-                <label className="block text-xs font-bold text-[#514440] uppercase tracking-wider">
-                  Pilih Pasien Transaksi *
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
+              <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-[#e5ded4] pb-2">
+                  <label className="block text-xs font-bold text-[#514440] uppercase tracking-wider">
+                    Pilih Pasien Transaksi *
+                  </label>
+                  {selectedPatient && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${selectedPatient.tipe_pasien === 'TRIAL'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      }`}>
+                      {selectedPatient.tipe_pasien === 'NON-TRIAL' || selectedPatient.tipe_pasien === 'Reguler' ? 'MEMBER' : selectedPatient.tipe_pasien}
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="relative">
                     <input
                       type="text"
-                      placeholder="Cari nama / HP pasien..."
+                      placeholder="Ketik cari nama / No. HP pasien..."
                       value={patientSearch}
                       onChange={(e) => setPatientSearch(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
+                      className="w-full pl-8 pr-3 py-2 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-medium focus:outline-none focus:border-[#7d5141]"
                     />
                     <Search className="w-4 h-4 text-[#83746f] absolute left-2.5 top-2.5" />
                   </div>
                   <select
                     value={selectedPatientId}
                     onChange={handlePatientSelectChange}
-                    className="flex-1 py-2 px-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-semibold text-[#1e1b15]"
+                    className="w-full py-2.5 px-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs font-semibold text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
                   >
                     {filteredPatients.length === 0 ? (
-                      <option value="">-- Tidak Ada Pasien Aktif (Belum Ditagih) --</option>
+                      <option value="">-- Tidak Ada Pasien Aktif --</option>
                     ) : (
                       filteredPatients.map(p => (
                         <option key={p.id} value={p.id}>
@@ -640,94 +728,147 @@ export default function PosBillingCounter() {
                     )}
                   </select>
                 </div>
+
                 {selectedPatient && (
-                  <div className="flex items-center justify-between text-xs pt-1 px-1 text-[#7d5141] font-semibold">
-                    <span>Tipe: {selectedPatient.tipe_pasien === 'NON-TRIAL' || selectedPatient.tipe_pasien === 'Reguler' ? 'MEMBER' : selectedPatient.tipe_pasien}</span>
-                    <span>Poin Sekarang: +{selectedPatient.total_poin} Poin</span>
+                  <div className="p-3 bg-[#faf3e8] rounded-xl border border-[#d6c2bd] flex items-center justify-between text-xs text-[#7d5141] font-semibold">
+                    <div>
+                      <span className="text-[11px] text-[#514440] block">Pasien Aktif:</span>
+                      <strong className="text-sm text-[#1e1b15]">{selectedPatient.nama_lengkap}</strong>
+                      <span className="text-[11px] text-gray-500 ml-1.5">({selectedPatient.no_hp})</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-gray-500 uppercase tracking-wider block">Total Poin Pasien</span>
+                      <span className="text-sm font-bold text-emerald-800">+{selectedPatient.total_poin || 0} Poin</span>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Catalog Tabs & Search */}
-              <div className="bg-white p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex gap-1 p-1 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs">
-                    <button
-                      onClick={() => setActiveTab('RETAIL')}
-                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${activeTab === 'RETAIL' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
-                    >
-                      Produk Retail Skincare
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('TINDAKAN')}
-                      className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${activeTab === 'TINDAKAN' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
-                    >
-                      Tindakan & Jasa Medis
-                    </button>
+              {/* Collapsible Product & Service Catalog (Accordion) */}
+              <div className="bg-white rounded-2xl border border-[#e5ded4] shadow-xs overflow-hidden transition-all">
+                <button
+                  type="button"
+                  onClick={() => setIsCatalogOpen(!isCatalogOpen)}
+                  className={`w-full p-4 flex items-center justify-between text-left transition-colors cursor-pointer ${isCatalogOpen ? 'bg-[#faf3e8] border-b border-[#e5ded4]' : 'bg-white hover:bg-[#faf3e8]/70'
+                    }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#faf3e8] border border-[#d6c2bd] text-[#7d5141] flex items-center justify-center shrink-0">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-[#1e1b15] uppercase tracking-wider flex items-center gap-1.5">
+                        <span>+ Katalog Produk & Tindakan</span>
+                        <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.2 rounded-full font-semibold normal-case">Opsional</span>
+                      </div>
+                      <p className="text-[11px] text-[#83746f] mt-0.5">
+                        Buka jika ingin menambah pembelian atau jasa ke keranjang
+                      </p>
+                    </div>
                   </div>
-
-                  <div className="relative w-48">
-                    <input
-                      type="text"
-                      placeholder="Cari item..."
-                      value={itemSearch}
-                      onChange={(e) => setItemSearch(e.target.value)}
-                      className="w-full pl-7 pr-3 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs"
-                    />
-                    <Search className="w-3.5 h-3.5 text-[#83746f] absolute left-2 top-2" />
+                  <div className="flex items-center gap-1 text-xs font-bold text-[#7d5141] bg-white border border-[#d6c2bd] px-2.5 py-1.5 rounded-xl shrink-0 shadow-2xs">
+                    <span>{isCatalogOpen ? 'Tutup Katalog' : 'Buka Katalog'}</span>
+                    {isCatalogOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </div>
-                </div>
+                </button>
 
-                {/* Catalog Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[460px] overflow-y-auto pr-1">
-                  {activeTab === 'RETAIL' ? (
-                    filteredProducts.map(p => (
-                      <div key={p.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex flex-col justify-between hover:border-[#7d5141] transition-all">
-                        <div>
-                          <div className="flex justify-between items-start">
-                            <span className="text-[10px] font-bold text-[#7d5141] uppercase tracking-wider">{p.kode_sku}</span>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${p.sisa_stok > p.minimum_stok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                              Stok: {Math.max(0, p.sisa_stok)} {p.satuan} {p.sisa_stok <= 0 && '(Habis)'}
-                            </span>
+                {isCatalogOpen && (
+                  <div className="p-4 space-y-3 animate-in fade-in duration-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex gap-1 p-1 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('RETAIL')}
+                          className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${activeTab === 'RETAIL' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
+                        >
+                          Produk Retail ({products.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('TINDAKAN')}
+                          className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${activeTab === 'TINDAKAN' ? 'bg-[#7d5141] text-white shadow-xs' : 'text-[#514440] hover:bg-[#eee7dd]'}`}
+                        >
+                          Tindakan Medis ({treatments.length})
+                        </button>
+                      </div>
+
+                      <div className="relative flex-1 sm:max-w-xs">
+                        <input
+                          type="text"
+                          placeholder="Cari item..."
+                          value={itemSearch}
+                          onChange={(e) => setItemSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs focus:outline-none focus:border-[#7d5141]"
+                        />
+                        <Search className="w-3.5 h-3.5 text-[#83746f] absolute left-2.5 top-2" />
+                      </div>
+                    </div>
+
+                    {/* Catalog Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+                      {activeTab === 'RETAIL' ? (
+                        filteredProducts.length === 0 ? (
+                          <div className="sm:col-span-2 text-center py-6 text-gray-400 italic text-xs">
+                            Tidak ada produk retail yang cocok.
                           </div>
-                          <h4 className="font-bold text-xs text-[#1e1b15] mt-1">{p.nama_produk}</h4>
-                          <p className="text-xs font-semibold text-[#7d5141] mt-1">Rp {p.harga_jual.toLocaleString('id-ID')}</p>
-                        </div>
-                        <button
-                          onClick={() => addToCart(p, 'RETAIL')}
-                          disabled={p.sisa_stok <= 0}
-                          className="mt-3 w-full py-1.5 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 text-white font-semibold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Tambah Ke Cart
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    filteredTreatments.map(t => (
-                      <div key={t.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex flex-col justify-between hover:border-[#7d5141] transition-all">
-                        <div>
-                          <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Tindakan Medis</div>
-                          <h4 className="font-bold text-xs text-[#1e1b15] mt-1">{t.nama_tindakan}</h4>
-                          <p className="text-xs font-semibold text-[#7d5141] mt-1">
-                            Rp {(t.tarif_tindakan_medis || 0).toLocaleString('id-ID')}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => addToCart(t, 'TINDAKAN')}
-                          className="mt-3 w-full py-1.5 bg-purple-800 hover:bg-purple-900 text-white font-semibold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Tambah Tindakan
-                        </button>
-                      </div>
-                    ))
-
-                  )}
-                </div>
+                        ) : (
+                          filteredProducts.map(p => (
+                            <div key={p.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex flex-col justify-between hover:border-[#7d5141] transition-all">
+                              <div>
+                                <div className="flex justify-between items-start">
+                                  <span className="text-[10px] font-bold text-[#7d5141] uppercase tracking-wider">{p.kode_sku}</span>
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${p.sisa_stok > p.minimum_stok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                                    Stok: {Math.max(0, p.sisa_stok)} {p.satuan} {p.sisa_stok <= 0 && '(Habis)'}
+                                  </span>
+                                </div>
+                                <h4 className="font-bold text-xs text-[#1e1b15] mt-1">{p.nama_produk}</h4>
+                                <p className="text-xs font-semibold text-[#7d5141] mt-1">Rp {p.harga_jual.toLocaleString('id-ID')}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => addToCart(p, 'RETAIL')}
+                                disabled={p.sisa_stok <= 0}
+                                className="mt-2.5 w-full py-1.5 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 text-white font-semibold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Tambah Ke Cart
+                              </button>
+                            </div>
+                          ))
+                        )
+                      ) : (
+                        filteredTreatments.length === 0 ? (
+                          <div className="sm:col-span-2 text-center py-6 text-gray-400 italic text-xs">
+                            Tidak ada tindakan medis yang cocok.
+                          </div>
+                        ) : (
+                          filteredTreatments.map(t => (
+                            <div key={t.id} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex flex-col justify-between hover:border-[#7d5141] transition-all">
+                              <div>
+                                <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Tindakan Medis</div>
+                                <h4 className="font-bold text-xs text-[#1e1b15] mt-1">{t.nama_tindakan}</h4>
+                                <p className="text-xs font-semibold text-[#7d5141] mt-1">
+                                  Rp {(t.tarif_tindakan_medis || 0).toLocaleString('id-ID')}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => addToCart(t, 'TINDAKAN')}
+                                className="mt-2.5 w-full py-1.5 bg-purple-800 hover:bg-purple-900 text-white font-semibold text-xs rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Tambah Tindakan
+                              </button>
+                            </div>
+                          ))
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Right Column: Checkout Cart & Professional References (5 Cols) */}
-            <div className="lg:col-span-5 space-y-4">
+            {/* Right Column: Checkout Cart & Professional References (6 Cols) */}
+            <div className="lg:col-span-6 space-y-4">
               <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4 sticky top-20">
                 <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
                   <div className="flex items-center gap-2">
@@ -952,6 +1093,147 @@ export default function PosBillingCounter() {
             >
               <Printer className="w-4 h-4" /> Cetak Struk Termal (58mm/80mm)
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PEMBELIAN PAKET PASIEN MIGRASI DARI TRIAL KE MEMBER */}
+      {showMigrationPackageModal && migratedPatient && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xl rounded-2xl border border-[#e5ded4] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in duration-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-gradient-to-r from-emerald-50 via-amber-50 to-[#faf3e8] border-b border-[#e5ded4] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-base text-[#1e1b15]">
+                    Pilih Paket Treatment Pasien Member
+                  </h3>
+                  <p className="text-xs text-emerald-800 font-semibold">
+                    Status pasien "{migratedPatient.nama_lengkap}" berhasil diubah menjadi MEMBER!
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (confirm('Tutup jendela pemilihan paket? Tagihan paket tidak akan diteruskan ke POS jika belum disimpan.')) {
+                    setShowMigrationPackageModal(false);
+                    setMigratedPatient(null);
+                  }
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-[#514440] space-y-1">
+                <div className="font-bold text-amber-900 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-700" />
+                  <span>Penambahan Paket Wajib / Pilihan Pasien Migrasi</span>
+                </div>
+                <p>
+                  Pasien yang bermigrasi dari Trial ke Member perlu memilih paket treatment yang dibeli. Tagihan dari paket yang dipilih akan <strong>langsung muncul di antrean Kasir POS</strong>.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#514440] uppercase tracking-wider mb-2">
+                  Daftar Master Paket (Bisa Pilih &gt; 1 Paket) *
+                </label>
+
+                {masterPackages.length === 0 ? (
+                  <div className="p-4 text-center bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-500 italic">
+                    Belum ada Master Paket yang tersedia.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                    {masterPackages.map(pkg => {
+                      const isSelected = selectedMigrationPackages.some(p => p.id === pkg.id);
+                      return (
+                        <div
+                          key={pkg.id}
+                          onClick={() => {
+                            setSelectedMigrationPackages(prev => {
+                              const exists = prev.some(p => p.id === pkg.id);
+                              if (exists) {
+                                return prev.filter(p => p.id !== pkg.id);
+                              } else {
+                                return [...prev, pkg];
+                              }
+                            });
+                          }}
+                          className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 select-none ${isSelected
+                            ? 'bg-emerald-50 border-emerald-600 shadow-xs ring-1 ring-emerald-600'
+                            : 'bg-white border-[#d6c2bd] hover:border-emerald-600'
+                            }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => { }}
+                            className="mt-0.5 accent-emerald-700 cursor-pointer"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
+                            <div className="text-[10px] text-gray-600 mt-0.5">
+                              {[
+                                pkg.item_a_name && (pkg.item_a_kuota > 0 || !pkg.item_b_name) ? `${pkg.item_a_name} (${pkg.item_a_kuota || 0}x)` : null,
+                                pkg.item_b_name && pkg.item_b_kuota > 0 ? `${pkg.item_b_name} (${pkg.item_b_kuota}x)` : null
+                              ].filter(Boolean).join(' + ')}
+                            </div>
+                            <div className="text-xs font-bold text-emerald-800 mt-1">
+                              Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Total & Summary Card */}
+              <div className="p-3.5 bg-[#faf3e8] rounded-xl border border-[#d6c2bd] flex justify-between items-center text-xs font-bold">
+                <div className="text-[#514440]">
+                  <span>Total Paket Terpilih: </span>
+                  <span className="text-[#7d5141] font-extrabold">{selectedMigrationPackages.length} Paket</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] text-gray-500 font-semibold uppercase">Total Tagihan POS</div>
+                  <div className="text-sm text-emerald-800 font-extrabold">
+                    Rp {selectedMigrationPackages.reduce((sum, p) => sum + (Number(p.harga_paket) || 0), 0).toLocaleString('id-ID')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-[#faf3e8] border-t border-[#e5ded4] flex justify-between items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMigrationPackageModal(false);
+                  setMigratedPatient(null);
+                }}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-[#514440] font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Lewati (Beli Nanti)
+              </button>
+              <button
+                type="button"
+                disabled={submittingMigrationPkg || selectedMigrationPackages.length === 0}
+                onClick={handleConfirmMigrationPackages}
+                className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>{submittingMigrationPkg ? 'Menyimpan...' : 'Simpan & Teruskan Tagihan ke POS'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
