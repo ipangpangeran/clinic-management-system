@@ -132,13 +132,6 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setUsername('rahma'); setPassword('admin1234'); }}
-              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
-            >
-              💆‍♀️ BTC Rahma
-            </button>
-            <button
-              type="button"
               onClick={() => { setUsername('riska.yulia'); setPassword('admin1234'); }}
               className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 font-extrabold rounded-lg text-left truncate cursor-pointer"
             >

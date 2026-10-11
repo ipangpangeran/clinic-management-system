@@ -9,7 +9,7 @@ export default function LogisticsInventory() {
   const [mutations, setMutations] = useState([]);
   const [productApprovals, setProductApprovals] = useState([]);
   const [masterPakets, setMasterPakets] = useState([]);
-  const [activeTab, setActiveTab] = useState('RETAIL'); // 'RETAIL', 'THERAPIST_BTC', 'KLINIK_NON_MEDIS', 'PRODUCT_APPROVALS', 'MUTASI', 'MASTER_PAKET'
+  const [activeTab, setActiveTab] = useState('MASTER_PAKET'); // 'RETAIL', 'THERAPIST_BTC', 'KLINIK_NON_MEDIS', 'PRODUCT_APPROVALS', 'MUTASI', 'MASTER_PAKET'
 
   // Master Paket Modal State
   const [showMasterPaketModal, setShowMasterPaketModal] = useState(false);
@@ -288,6 +288,13 @@ export default function LogisticsInventory() {
       <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-[#e5ded4] shadow-xs space-y-4">
         <div className="flex overflow-x-auto gap-2 border-b border-[#e5ded4] pb-3 text-xs whitespace-nowrap">
           <button
+            onClick={() => setActiveTab('MASTER_PAKET')}
+            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'MASTER_PAKET' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>Master Template Paket ({masterPakets.length})</span>
+          </button>
+          <button
             onClick={() => setActiveTab('RETAIL')}
             className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'RETAIL' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
           >
@@ -321,13 +328,6 @@ export default function LogisticsInventory() {
             className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'MUTASI' ? 'bg-amber-700 text-white shadow-xs' : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'}`}
           >
             Riwayat Mutasi & Approval Stok ({mutations.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('MASTER_PAKET')}
-            className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'MASTER_PAKET' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
-          >
-            <Package className="w-3.5 h-3.5" />
-            <span>Master Template Paket ({masterPakets.length})</span>
           </button>
         </div>
 
@@ -629,7 +629,7 @@ export default function LogisticsInventory() {
                           className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-lg text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1 mx-auto"
                         >
                           <Edit className="w-3 h-3 text-indigo-600" />
-                          <span>Edit Nama/Harga/Stok</span>
+                          <span>Edit Data</span>
                         </button>
                       </td>
                     </tr>

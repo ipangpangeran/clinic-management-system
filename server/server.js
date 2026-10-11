@@ -1462,6 +1462,49 @@ app.delete('/api/pasien/paket/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// UPDATE / ADJUST PRICE FOR PATIENT PACKAGE (DAN HITUNG ULANG KOMISI MARKETING)
+app.put('/api/pasien/paket/:id/price', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { harga_paket } = req.body;
+
+    const pkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ?', [id]);
+    if (!pkg) return res.status(404).json({ message: 'Paket pasien tidak ditemukan' });
+
+    const newPrice = Math.max(0, Number(harga_paket) || 0);
+
+    // Hitung ulang komisi marketing sesuai tiering harga baru
+    const targetPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [pkg.pasien_id]);
+    const finalMarketingId = pkg.marketing_id || targetPatient?.marketing_id || null;
+
+    let mktComm = 0;
+    if (finalMarketingId && newPrice > 0) {
+      if (newPrice < 600000) {
+        mktComm = 30000;
+      } else if (newPrice < 2000000) {
+        mktComm = 50000;
+      } else if (newPrice < 10000000) {
+        mktComm = 70000;
+      } else {
+        mktComm = 150000;
+      }
+    }
+
+    await runQuery(`
+      UPDATE pasien_paket
+      SET harga_paket = ?, komisi_marketing = ?
+      WHERE id = ?
+    `, [newPrice, mktComm, id]);
+
+    res.json({
+      message: `Harga paket "${pkg.nama_paket}" berhasil disesuaikan menjadi Rp ${newPrice.toLocaleString('id-ID')}! Tagihan di Kasir POS otomatis ter-update.`,
+      harga_paket: newPrice
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating package price', error: err.message });
+  }
+});
+
 // CLAIM / PROCESS USE OF PATIENT PACKAGE ITEM -> CREATES DOINGAN (GRATIS/MEMOTONG KUOTA)
 app.post('/api/pasien/paket/:paketId/claim', authenticateToken, async (req, res) => {
   try {

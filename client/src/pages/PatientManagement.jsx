@@ -7,7 +7,7 @@ import {
   UserPlus, Search, Edit, Trash2, Download, Package, Calendar,
   AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet, UserCheck,
   Clock, RefreshCw, Sparkles, Stethoscope, Users, CheckCircle2, UserPlus2, History, Database,
-  ShoppingCart, X, ChevronLeft, ChevronRight, Plus, ChevronDown, ChevronUp
+  ShoppingCart, X, ChevronLeft, ChevronRight, Plus, ChevronDown, ChevronUp, Edit3, Tag
 } from 'lucide-react';
 import { formatPersonName } from '../utils/formatters';
 
@@ -108,6 +108,11 @@ export default function PatientManagement({
   const [showMigrationPackageModal, setShowMigrationPackageModal] = useState(false);
   const [selectedMigrationPackages, setSelectedMigrationPackages] = useState([]);
   const [submittingMigrationPkg, setSubmittingMigrationPkg] = useState(false);
+
+  // Package Price Adjustment State in Manage Package Modal
+  const [editingPkgPriceId, setEditingPkgPriceId] = useState(null);
+  const [editingPkgPriceValue, setEditingPkgPriceValue] = useState('');
+  const [savingPkgPrice, setSavingPkgPrice] = useState(false);
 
   // Claim Modal State
   const [showClaimModal, setShowClaimModal] = useState(false);
@@ -268,9 +273,23 @@ export default function PatientManagement({
       if (exists) {
         return prev.filter(p => p.id !== pkg.id);
       } else {
-        return [...prev, pkg];
+        return [...prev, { ...pkg, harga_paket: pkg.harga_paket }];
       }
     });
+  };
+
+  const handleUpdateRegPkgPrice = (pkgId, newPrice) => {
+    const val = newPrice === '' ? '' : Math.max(0, Number(newPrice));
+    setSelectedRegPackages(prev =>
+      prev.map(p => p.id === pkgId ? { ...p, harga_paket: val } : p)
+    );
+  };
+
+  const handleUpdateMigrationPkgPrice = (pkgId, newPrice) => {
+    const val = newPrice === '' ? '' : Math.max(0, Number(newPrice));
+    setSelectedMigrationPackages(prev =>
+      prev.map(p => p.id === pkgId ? { ...p, harga_paket: val } : p)
+    );
   };
 
   const openNewPatientModal = () => {
@@ -406,7 +425,10 @@ export default function PatientManagement({
     setSubmittingMigrationPkg(true);
     try {
       await axios.post(`/api/pasien/${migratedPatient.id}/paket`, {
-        packages: selectedMigrationPackages,
+        packages: selectedMigrationPackages.map(p => ({
+          ...p,
+          harga_paket: Number(p.harga_paket) || 0
+        })),
         marketing_id: migratedPatient.marketing_id || null
       });
       const totalNominal = selectedMigrationPackages.reduce((sum, p) => sum + (Number(p.harga_paket) || 0), 0);
@@ -776,9 +798,36 @@ export default function PatientManagement({
       const patientPkgs = res.data || [];
       setPackages(patientPkgs);
       setIsAssignPackageOpen(false); // Collapse form after successfully adding package
-      alert(`Paket treatment "${namaPaket}" berhasil ditambahkan ke pasien!`);
+      fetchTodayDoingan();
+      alert(`Paket treatment "${namaPaket}" berhasil ditambahkan ke pasien! Tagihan paket otomatis masuk ke antrean Kasir POS.`);
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menambahkan paket');
+    }
+  };
+
+  const handleSavePackagePrice = async (pkgId) => {
+    if (editingPkgPriceValue === '' || isNaN(Number(editingPkgPriceValue))) {
+      alert('Masukkan nominal harga yang valid!');
+      return;
+    }
+    const newPrice = Math.max(0, Number(editingPkgPriceValue));
+    setSavingPkgPrice(true);
+    try {
+      const res = await axios.put(`/api/pasien/paket/${pkgId}/price`, {
+        harga_paket: newPrice
+      });
+      alert(res.data?.message || `Harga paket berhasil disesuaikan menjadi Rp ${newPrice.toLocaleString('id-ID')}!`);
+      setEditingPkgPriceId(null);
+      setEditingPkgPriceValue('');
+      if (selectedPatient) {
+        const pkgRes = await axios.get(`/api/pasien/${selectedPatient.id}/paket`);
+        setPackages(pkgRes.data || []);
+      }
+      fetchTodayDoingan();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal mengubah harga paket');
+    } finally {
+      setSavingPkgPrice(false);
     }
   };
 
@@ -2502,33 +2551,64 @@ export default function PatientManagement({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-52 overflow-y-auto pr-1">
                       {masterPackages.map(pkg => {
                         const isSelected = selectedRegPackages.some(p => p.id === pkg.id);
+                        const selectedPkgObj = selectedRegPackages.find(p => p.id === pkg.id);
+                        const currentPrice = selectedPkgObj ? selectedPkgObj.harga_paket : pkg.harga_paket;
                         return (
                           <div
                             key={pkg.id}
                             onClick={() => toggleRegPackage(pkg)}
-                            className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 select-none ${isSelected
+                            className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex flex-col justify-between select-none ${isSelected
                               ? 'bg-amber-100 border-[#7d5141] shadow-2xs ring-1 ring-[#7d5141]'
                               : 'bg-white border-[#d6c2bd] hover:border-[#7d5141]'
                               }`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => { }}
-                              className="mt-0.5 accent-[#7d5141] cursor-pointer"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-bold text-[#1e1b15] truncate">{pkg.nama_paket}</div>
-                              <div className="text-[10px] text-gray-500 mt-0.5">
-                                {[
-                                  pkg.item_a_name && (pkg.item_a_kuota > 0 || !pkg.item_b_name) ? `${pkg.item_a_name} (${pkg.item_a_kuota || 0}x)` : null,
-                                  pkg.item_b_name && pkg.item_b_kuota > 0 ? `${pkg.item_b_name} (${pkg.item_b_kuota}x)` : null
-                                ].filter(Boolean).join(' + ')}
-                              </div>
-                              <div className="text-[11px] font-bold text-[#7d5141] mt-1">
-                                Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                            <div className="flex items-start gap-2.5">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => { }}
+                                className="mt-0.5 accent-[#7d5141] cursor-pointer"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-bold text-[#1e1b15] truncate">{pkg.nama_paket}</div>
+                                <div className="text-[10px] text-gray-500 mt-0.5">
+                                  {[
+                                    pkg.item_a_name && (pkg.item_a_kuota > 0 || !pkg.item_b_name) ? `${pkg.item_a_name} (${pkg.item_a_kuota || 0}x)` : null,
+                                    pkg.item_b_name && pkg.item_b_kuota > 0 ? `${pkg.item_b_name} (${pkg.item_b_kuota}x)` : null
+                                  ].filter(Boolean).join(' + ')}
+                                </div>
+                                <div className="text-[11px] font-bold text-[#7d5141] mt-1">
+                                  Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                                </div>
                               </div>
                             </div>
+
+                            {isSelected && (
+                              <div
+                                className="mt-2 pt-1.5 border-t border-amber-300/80 w-full"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-between text-[10px] mb-1">
+                                  <label className="font-bold text-[#7d5141] flex items-center gap-1">
+                                    <Tag className="w-3 h-3 text-amber-700" />
+                                    <span>Sesuaikan Harga (Rp):</span>
+                                  </label>
+                                  {Number(currentPrice) !== Number(pkg.harga_paket) && (
+                                    <span className="text-[9px] text-gray-500 line-through">
+                                      Normal: Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                                    </span>
+                                  )}
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={currentPrice}
+                                  onChange={(e) => handleUpdateRegPkgPrice(pkg.id, e.target.value)}
+                                  placeholder="Harga khusus..."
+                                  className="w-full px-2 py-1 bg-white border border-amber-400 focus:border-[#7d5141] rounded-lg font-bold text-xs text-[#1e1b15] focus:outline-none"
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -2652,13 +2732,8 @@ export default function PatientManagement({
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-xs text-[#7d5141] uppercase tracking-wider flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-amber-600" />
-                  <span>Daftar Paket Treatment Aktif ({packages.length})</span>
+                  <span>Daftar Paket Treatment Aktif ( {packages.length} )</span>
                 </h4>
-                {packages.length > 0 && (
-                  <span className="text-[11px] text-[#83746f]">
-                    Pilih tombol <strong className="text-[#7d5141]">Klaim</strong> untuk mengambil sesi tindakan
-                  </span>
-                )}
               </div>
 
               {packages.length === 0 ? (
@@ -2676,7 +2751,7 @@ export default function PatientManagement({
                   {packages.map(pkg => (
                     <div key={pkg.id} className="p-4 bg-gradient-to-br from-[#faf6f0] to-[#f5ede4] border border-[#d6c2bd] rounded-2xl space-y-3 text-xs shadow-xs">
                       <div className="flex justify-between items-start border-b border-[#d6c2bd]/60 pb-2.5">
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <div className="font-bold text-base text-[#1e1b15] font-serif">{pkg.nama_paket}</div>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold font-mono ${pkg.sisa_kuota > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-gray-200 text-gray-600'
@@ -2689,11 +2764,89 @@ export default function PatientManagement({
                               </span>
                             )}
                           </div>
+
+                          {/* Price & Billing Status Badge & Sesuaikan Harga Button */}
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <div className="px-2.5 py-1 bg-white border border-[#d6c2bd] rounded-lg text-xs font-bold text-[#514440] flex items-center gap-1.5 shadow-2xs">
+                              <span>Harga Tagihan:</span>
+                              <span className="text-emerald-700 font-extrabold text-xs font-mono">
+                                Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                              </span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              pkg.is_billed
+                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                : 'bg-amber-100 text-amber-900 border border-amber-300'
+                            }`}>
+                              {pkg.is_billed ? '✓ Lunas / Selesai di POS' : '⏳ Menunggu di Kasir POS'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editingPkgPriceId === pkg.id) {
+                                  setEditingPkgPriceId(null);
+                                  setEditingPkgPriceValue('');
+                                } else {
+                                  setEditingPkgPriceId(pkg.id);
+                                  setEditingPkgPriceValue(pkg.harga_paket || 0);
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-[#7d5141] hover:text-[#553123] border border-amber-300 font-bold rounded-lg text-xs cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
+                              title="Sesuaikan harga paket ini khusus untuk pasien ini"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                              <span>Sesuaikan Harga</span>
+                            </button>
+                          </div>
+
+                          {/* Inline Edit Form jika sedang menyesuaikan harga */}
+                          {editingPkgPriceId === pkg.id && (
+                            <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-300 rounded-xl space-y-2 animate-in fade-in">
+                              <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-[#7d5141] flex items-center gap-1">
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>Penyesuaian Harga Khusus Pasien Ini:</span>
+                                </label>
+                                <span className="text-[10px] text-amber-800 font-medium italic">
+                                  *Harga baru otomatis masuk ke tagihan Kasir POS
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="relative flex-1">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#514440]">Rp</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={editingPkgPriceValue}
+                                    onChange={(e) => setEditingPkgPriceValue(e.target.value)}
+                                    placeholder="Masukkan nominal harga khusus..."
+                                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-[#d6c2bd] focus:border-[#7d5141] rounded-lg font-bold text-xs text-[#1e1b15] focus:outline-none"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={savingPkgPrice}
+                                  onClick={() => handleSavePackagePrice(pkg.id)}
+                                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center gap-1"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>{savingPkgPrice ? 'Menyimpan...' : 'Simpan'}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingPkgPriceId(null); setEditingPkgPriceValue(''); }}
+                                  className="px-2.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-[#514440] font-semibold text-xs rounded-lg cursor-pointer"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <button
                           type="button"
                           onClick={() => handleDeletePatientPackage(pkg.id, pkg.nama_paket)}
-                          className="px-2.5 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 font-semibold rounded-xl text-xs cursor-pointer transition-colors flex items-center gap-1 shadow-2xs"
+                          className="px-2.5 py-1.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 font-semibold rounded-xl text-xs cursor-pointer transition-colors flex items-center gap-1 shadow-2xs shrink-0"
                           title="Hapus Paket Pasien Ini"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2877,14 +3030,23 @@ export default function PatientManagement({
                   </div>
 
                   <div>
-                    <label className="block text-[#514440] font-semibold mb-1">Harga Paket Total (Rp)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={hargaPaket}
-                      onChange={(e) => setHargaPaket(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
-                    />
+                    <label className="block text-[#514440] font-bold mb-1">
+                      Harga Paket Khusus Pasien Ini (Rp) - Masuk ke Kasir POS *
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-xs text-[#514440]">Rp</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={hargaPaket}
+                        onChange={(e) => setHargaPaket(e.target.value)}
+                        placeholder="Contoh: 800000"
+                        className="w-full pl-9 pr-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Nominal harga ini otomatis ditagihkan di antrean Kasir POS untuk pasien ini.
+                    </p>
                   </div>
 
                   <div className="pt-2 flex justify-end gap-2">
@@ -3383,6 +3545,8 @@ export default function PatientManagement({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
                     {masterPackages.map(pkg => {
                       const isSelected = selectedMigrationPackages.some(p => p.id === pkg.id);
+                      const selectedPkgObj = selectedMigrationPackages.find(p => p.id === pkg.id);
+                      const currentPrice = selectedPkgObj ? selectedPkgObj.harga_paket : pkg.harga_paket;
                       return (
                         <div
                           key={pkg.id}
@@ -3392,33 +3556,68 @@ export default function PatientManagement({
                               if (exists) {
                                 return prev.filter(p => p.id !== pkg.id);
                               } else {
-                                return [...prev, pkg];
+                                return [...prev, { ...pkg, harga_paket: pkg.harga_paket }];
                               }
                             });
                           }}
-                          className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 select-none ${isSelected
+                          className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex flex-col justify-between select-none ${isSelected
                             ? 'bg-emerald-50 border-emerald-600 shadow-xs ring-1 ring-emerald-600'
                             : 'bg-white border-[#d6c2bd] hover:border-emerald-600'
                             }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => { }}
-                            className="mt-0.5 accent-emerald-700 cursor-pointer"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
-                            <div className="text-[10px] text-gray-600 mt-0.5">
-                              {[
-                                pkg.item_a_name && (pkg.item_a_kuota > 0 || !pkg.item_b_name) ? `${pkg.item_a_name} (${pkg.item_a_kuota || 0}x)` : null,
-                                pkg.item_b_name && pkg.item_b_kuota > 0 ? `${pkg.item_b_name} (${pkg.item_b_kuota}x)` : null
-                              ].filter(Boolean).join(' + ')}
-                            </div>
-                            <div className="text-xs font-bold text-emerald-800 mt-1">
-                              Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                          <div className="flex items-start gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => { }}
+                              className="mt-0.5 accent-emerald-700 cursor-pointer"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
+                              <div className="text-[10px] text-gray-600 mt-0.5">
+                                {[
+                                  pkg.item_a_name && (pkg.item_a_kuota > 0 || !pkg.item_b_name) ? `${pkg.item_a_name} (${pkg.item_a_kuota || 0}x)` : null,
+                                  pkg.item_b_name && pkg.item_b_kuota > 0 ? `${pkg.item_b_name} (${pkg.item_b_kuota}x)` : null
+                                ].filter(Boolean).join(' + ')}
+                              </div>
+                              <div className="text-xs font-bold text-emerald-800 mt-1">
+                                Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                              </div>
                             </div>
                           </div>
+
+                          {isSelected && (
+                            <div
+                              className="mt-2.5 pt-2 border-t border-emerald-300/80 w-full"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-between text-[11px] mb-1">
+                                <label className="font-bold text-emerald-900 flex items-center gap-1">
+                                  <Tag className="w-3 h-3 text-emerald-700" />
+                                  <span>Sesuaikan Harga Pasien:</span>
+                                </label>
+                                {Number(currentPrice) !== Number(pkg.harga_paket) && (
+                                  <span className="text-[10px] text-gray-500 line-through">
+                                    Normal: Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-xs text-gray-500">Rp</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={currentPrice}
+                                  onChange={(e) => handleUpdateMigrationPkgPrice(pkg.id, e.target.value)}
+                                  placeholder="Harga khusus..."
+                                  className="w-full pl-8 pr-2.5 py-1.5 bg-white border border-emerald-400 focus:border-emerald-700 rounded-lg font-bold text-xs text-emerald-950 focus:outline-none shadow-2xs"
+                                />
+                              </div>
+                              <div className="text-[10px] text-emerald-800 mt-0.5">
+                                *Nominal ini otomatis diteruskan ke antrean Kasir POS
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

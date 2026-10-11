@@ -90,6 +90,24 @@ export default function StaffMobilePortal() {
     ? (activeList.find(item => item.id === selectedNurseDoinganId) || activeList[0] || null)
     : activeSession;
 
+  const isAllSelected = treatments.length > 0 && treatments.every(t => selectedTreatments.includes(t.id));
+
+  const handleSelectAllTreatments = () => {
+    if (isAllSelected) {
+      setSelectedTreatments([]);
+    } else {
+      const allIds = treatments.map(t => t.id);
+      setSelectedTreatments(allIds);
+      setTreatmentQuantities(prev => {
+        const next = { ...prev };
+        allIds.forEach(id => {
+          if (!next[id]) next[id] = 1;
+        });
+        return next;
+      });
+    }
+  };
+
   const toggleTreatmentSelect = (treatmentId) => {
     if (selectedTreatments.includes(treatmentId)) {
       setSelectedTreatments(selectedTreatments.filter(id => id !== treatmentId));
@@ -457,9 +475,21 @@ export default function StaffMobilePortal() {
                   </div>
                 )}
 
-                <label className="block text-xs font-bold text-[#1e1b15] mb-1.5">
-                  Konfirmasi Detail Treatment Yang Dilakukan: *
-                </label>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                  <label className="block text-xs font-bold text-[#1e1b15]">
+                    Konfirmasi Detail Treatment Yang Dilakukan: *
+                  </label>
+                  {treatments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleSelectAllTreatments}
+                      className="px-2.5 py-1 bg-[#faf3e8] hover:bg-[#7d5141] hover:text-white border border-[#d6c2bd] text-[#7d5141] font-bold text-[11px] rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      <span>{isAllSelected ? 'Batal Centang Semua' : 'Centang Semua'}</span>
+                    </button>
+                  )}
+                </div>
                 <p className="text-[11px] text-[#514440] mb-2">
                   Pilih atau centang jenis tindakan yang sudah Anda berikan kepada pasien <strong>{currentActiveSession.pasien_nama}</strong>:
                 </p>
