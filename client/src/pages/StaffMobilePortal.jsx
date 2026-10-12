@@ -117,13 +117,44 @@ export default function StaffMobilePortal() {
     ? (activeList.find(item => item.id === selectedNurseDoinganId) || activeList[0] || null)
     : activeSession;
 
-  const isAllSelected = treatments.length > 0 && treatments.every(t => selectedTreatments.includes(t.id));
+  const isPackageClaim = Boolean(
+    currentActiveSession?.paket_usage_id ||
+    (currentActiveSession?.nama_tindakan && currentActiveSession.nama_tindakan.includes('Klaim Paket')) ||
+    (currentActiveSession?.notes && currentActiveSession.notes.includes('Klaim'))
+  );
+
+  const PAKET_A_KEYWORDS = [
+    'dna salmon',
+    'platelet-rich plasma',
+    'prp',
+    'blackdoll',
+    'laser dpl',
+    'laser pico',
+    'laser underarm',
+    'peeling acne',
+    'peeling llaha'
+  ];
+
+  // Paketan A (tindakan dokter) HANYA BISA: DNA Salmon, Platelet-Rich Plasma (PRP), Laser Blackdoll, Laser DPL, Laser Pico, Laser Underarms, Peeling Acne dan Peeling Llaha.
+  // Jenis tindakan lain itu hanya bisa treatment tunggal bukan via paket.
+  const displayedTreatments = React.useMemo(() => {
+    if (!isNurse) return treatments;
+    if (isPackageClaim) {
+      return treatments.filter(t => {
+        const name = (t.nama_tindakan || '').toLowerCase();
+        return PAKET_A_KEYWORDS.some(k => name.includes(k));
+      });
+    }
+    return treatments;
+  }, [isNurse, isPackageClaim, treatments]);
+
+  const isAllSelected = displayedTreatments.length > 0 && displayedTreatments.every(t => selectedTreatments.includes(t.id));
 
   const handleSelectAllTreatments = () => {
     if (isAllSelected) {
       setSelectedTreatments([]);
     } else {
-      const allIds = treatments.map(t => t.id);
+      const allIds = displayedTreatments.map(t => t.id);
       setSelectedTreatments(allIds);
       setTreatmentQuantities(prev => {
         const next = { ...prev };
@@ -491,22 +522,24 @@ export default function StaffMobilePortal() {
               <div>
                 {/* Guidance for Nurse */}
                 {isNurse && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-2xl text-[11px] text-blue-900 space-y-1 mb-2.5">
-                    <div className="font-bold flex items-center gap-1.5 text-blue-800">
-                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Panduan Konsultasi Dokter (Nurse):</span>
+                  <div className={`p-3 rounded-2xl text-[11px] space-y-1 mb-2.5 ${isPackageClaim ? 'bg-amber-50 border border-amber-300 text-amber-950' : 'bg-blue-50 border border-blue-200 text-blue-900'}`}>
+                    <div className={`font-bold flex items-center gap-1.5 ${isPackageClaim ? 'text-amber-900' : 'text-blue-800'}`}>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{isPackageClaim ? 'Klaim Paketan A (Tindakan Dokter):' : 'Panduan Konsultasi Dokter (Nurse):'}</span>
                     </div>
-                    <p className="text-blue-900/90 leading-relaxed text-[10.5px]">
-                      Jika dokter merekomendasikan tindakan lain, Anda dapat langsung <strong>beralih (switch)</strong> memilih tindakan di bawah. Jika dokter tidak merekomendasikan dan pasien minta pulang, gunakan tombol <strong>Batalkan Tindakan</strong> agar tidak ditagih di kasir/POS.
+                    <p className="leading-relaxed text-[10.5px]">
+                      {isPackageClaim
+                        ? 'Pasien ini sedang klaim kuota Paketan A. Sesuai ketentuan klinik, paket dokter HANYA bisa 8 tindakan di bawah (DNA Salmon, PRP, Laser Blackdoll, Laser DPL, Laser Pico, Laser Underarms, Peeling Acne, Peeling Llaha). Tindakan medis lain di luar daftar ini adalah treatment tunggal.'
+                        : 'Jika dokter merekomendasikan tindakan lain, Anda dapat langsung beralih (switch) memilih tindakan di bawah. Jika dokter tidak merekomendasikan dan pasien minta pulang, gunakan tombol Batalkan Tindakan agar tidak ditagih di kasir/POS.'}
                     </p>
                   </div>
                 )}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                   <label className="block text-xs font-bold text-[#1e1b15]">
-                    Konfirmasi Detail Yang Dilakukan: *
+                    {isPackageClaim ? 'Pilih Tindakan Paket A Yang Dilakukan: *' : 'Konfirmasi Detail Yang Dilakukan: *'}
                   </label>
-                  {treatments.length > 0 && (
+                  {!isPackageClaim && displayedTreatments.length > 0 && (
                     <button
                       type="button"
                       onClick={handleSelectAllTreatments}
@@ -518,7 +551,10 @@ export default function StaffMobilePortal() {
                   )}
                 </div>
                 <p className="text-[11px] text-[#514440] mb-2">
-                  Centang jenis tindakan yang sudah Anda lakukan kepada pasien <strong>{currentActiveSession.pasien_nama}</strong>:
+                  {isPackageClaim
+                    ? <span>Pilih tindakan dokter dari paket yang telah dilakukan untuk <strong>{currentActiveSession.pasien_nama}</strong>:</span>
+                    : <span>Centang jenis tindakan yang sudah Anda lakukan kepada pasien <strong>{currentActiveSession.pasien_nama}</strong>:</span>
+                  }
                 </p>
 
                 {!isNurse ? (
@@ -555,7 +591,7 @@ export default function StaffMobilePortal() {
                 ) : (
                   /* Nurse Mode: Card List dengan Selector Benang & Tarif Medis jika > 0 */
                   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    {treatments.map(t => {
+                    {displayedTreatments.map(t => {
                       const isSelected = selectedTreatments.includes(t.id);
                       const isBenang = (t.is_per_benang === 1 || (t.nama_tindakan || '').toLowerCase().includes('benang'));
                       const qty = treatmentQuantities[t.id] || 1;
@@ -583,33 +619,50 @@ export default function StaffMobilePortal() {
                                 <span>{t.nama_tindakan}</span>
                                 {isBenang && (
                                   <span className={`block text-[10px] ${isSelected ? 'text-amber-200' : 'text-[#83746f]'}`}>
-                                    (Tarif & Komisi Dihitung Per Benang)
+                                    (Tarif Pasien per Benang, Komisi Nurse per Tindakan)
+                                  </span>
+                                )}
+                                {isPackageClaim && (
+                                  <span className={`block text-[10px] ${isSelected ? 'text-amber-200 font-bold' : 'text-emerald-700 font-medium'}`}>
+                                    ✓ Pilihan Resmi Paket A
                                   </span>
                                 )}
                               </div>
                             </div>
-                            {totalTarifItem > 0 && (
+                            {isPackageClaim ? (
                               <div className="text-right">
-                                <span className={`text-[11px] font-bold ${isSelected ? 'text-amber-200' : 'text-[#7d5141]'}`}>
-                                  Rp {totalTarifItem.toLocaleString('id-ID')}
+                                <span className={`text-[11px] font-bold ${isSelected ? 'text-amber-200' : 'text-emerald-700'}`}>
+                                  Termasuk Paket
                                 </span>
-                                {isBenang && (
-                                  <span className={`block text-[9.5px] ${isSelected ? 'text-amber-100/80' : 'text-gray-400'}`}>
-                                    @ Rp {t.tarif_tindakan_medis?.toLocaleString('id-ID')}/benang
-                                  </span>
-                                )}
+                                <span className={`block text-[9.5px] ${isSelected ? 'text-amber-100/80' : 'text-gray-400'}`}>
+                                  Bebas Tagihan Kasir
+                                </span>
                               </div>
+                            ) : (
+                              totalTarifItem > 0 && (
+                                <div className="text-right">
+                                  <span className={`text-[11px] font-bold ${isSelected ? 'text-amber-200' : 'text-[#7d5141]'}`}>
+                                    Rp {totalTarifItem.toLocaleString('id-ID')}
+                                  </span>
+                                  {isBenang && (
+                                    <span className={`block text-[9.5px] ${isSelected ? 'text-amber-100/80' : 'text-gray-400'}`}>
+                                      @ Rp {t.tarif_tindakan_medis?.toLocaleString('id-ID')}/benang
+                                    </span>
+                                  )}
+                                </div>
+                              )
                             )}
                           </div>
 
                           {/* Special Quantity / Benang Selector */}
-                          {isSelected && isBenang && (
+                          {isSelected && isBenang && !isPackageClaim && (
                             <div
                               onClick={(e) => e.stopPropagation()}
                               className="px-3 pb-3 pt-1 border-t border-white/20 bg-black/10 flex items-center justify-between"
                             >
-                              <div className="text-[11px] text-amber-200 font-bold flex items-center gap-1">
-                                <span>Jumlah Benang:</span>
+                              <div className="text-[11px] text-amber-200 font-bold flex flex-col">
+                                <span>Jumlah Benang (Billing Pasien):</span>
+                                <span className="text-[9.5px] text-amber-100/80 font-normal">Komisi Nurse tetap 1x per tindakan</span>
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <button

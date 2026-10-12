@@ -799,6 +799,7 @@ export default function PatientManagement({
       setPackages(patientPkgs);
       setIsAssignPackageOpen(false); // Collapse form after successfully adding package
       fetchTodayDoingan();
+      fetchPatients();
       alert(`Paket treatment "${namaPaket}" berhasil ditambahkan ke pasien! Tagihan paket otomatis masuk ke antrean Kasir POS.`);
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menambahkan paket');
@@ -824,6 +825,7 @@ export default function PatientManagement({
         setPackages(pkgRes.data || []);
       }
       fetchTodayDoingan();
+      fetchPatients();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal mengubah harga paket');
     } finally {
@@ -842,6 +844,7 @@ export default function PatientManagement({
         const res = await axios.get(`/api/pasien/${selectedPatient.id}/paket`);
         setPackages(res.data);
       }
+      fetchPatients();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menghapus paket pasien');
     }
@@ -947,6 +950,7 @@ export default function PatientManagement({
       setPackages(updated.data);
       fetchPackageUsageLogs();
       fetchTodayDoingan();
+      fetchPatients();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal memproses klaim paket');
     } finally {
@@ -973,6 +977,7 @@ export default function PatientManagement({
       setPackages(updated.data);
       fetchPackageUsageLogs();
       fetchTodayDoingan();
+      fetchPatients();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal memproses klaim kedua paket');
     } finally {
@@ -1172,7 +1177,9 @@ export default function PatientManagement({
       (p.no_ktp && p.no_ktp.includes(search));
     const matchFilter = filterType === 'ALL' ||
       (filterType === 'TRIAL' && (p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1)) ||
-      (filterType === 'MEMBER' && (p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler'));
+      (filterType === 'MEMBER' && (p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler')) ||
+      (filterType === 'HAS_PACKAGE' && p.total_paket > 0) ||
+      (filterType === 'NO_PACKAGE' && (!p.total_paket || p.total_paket === 0));
 
     let matchDate = true;
     if (dateFilterMode === 'TODAY') {
@@ -1687,9 +1694,27 @@ export default function PatientManagement({
                     setFilterType('MEMBER');
                     setCurrentPage(1);
                   }}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${filterType === 'MEMBER' || filterType === 'NON-TRIAL' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${filterType === 'MEMBER' || filterType === 'NON-TRIAL' ? 'bg-emerald-700 text-white' : 'bg-emerald-50 text-emerald-900 border border-emerald-200'}`}
                 >
                   Member ({patients.filter(p => p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler').length})
+                </button>
+                <button
+                  onClick={() => {
+                    setFilterType('HAS_PACKAGE');
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${filterType === 'HAS_PACKAGE' ? 'bg-blue-700 text-white shadow-xs' : 'bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-100'}`}
+                >
+                  Punya Paket ({patients.filter(p => p.total_paket > 0).length})
+                </button>
+                <button
+                  onClick={() => {
+                    setFilterType('NO_PACKAGE');
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${filterType === 'NO_PACKAGE' ? 'bg-gray-700 text-white shadow-xs' : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'}`}
+                >
+                  Belum Ada Paket ({patients.filter(p => !p.total_paket || p.total_paket === 0).length})
                 </button>
               </div>
             </div>
@@ -1720,13 +1745,14 @@ export default function PatientManagement({
                     <th className="py-3 px-4 min-w-[130px]">HP & NIK</th>
                     <th className="py-3 px-4 whitespace-nowrap">Tipe Pasien</th>
                     <th className="py-3 px-4 whitespace-nowrap">Poin</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Status Paket</th>
                     <th className="py-3 px-4 text-right min-w-[360px] whitespace-nowrap">AKSI</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
                   {filteredPatients.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="text-center py-8 text-[#83746f] italic">Tidak ada data pasien yang cocok dengan filter master database.</td>
+                      <td colSpan="7" className="text-center py-8 text-[#83746f] italic">Tidak ada data pasien yang cocok dengan filter master database.</td>
                     </tr>
                   ) : (
                     paginatedPatients.map(p => {
@@ -1760,6 +1786,32 @@ export default function PatientManagement({
                           </td>
                           <td className="py-3.5 px-4 font-bold text-[#7d5141] whitespace-nowrap">
                             +{p.total_poin || 0} Poin
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {p.total_paket > 0 ? (
+                              <div className="flex flex-col items-start gap-1">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs ${
+                                  p.paket_aktif > 0
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-gray-100 text-gray-600 border border-gray-300'
+                                }`}>
+                                  <Package className="w-3 h-3 text-emerald-600" />
+                                  <span>{p.paket_aktif > 0 ? `Punya Paket (${p.paket_aktif} Aktif)` : `Paket Habis (${p.total_paket})`}</span>
+                                </span>
+                                {p.nama_paket_aktif ? (
+                                  <span className="text-[10px] text-[#7d5141] font-semibold truncate max-w-[170px]" title={p.nama_paket_aktif}>
+                                    {p.nama_paket_aktif} ({p.total_sisa_kuota} Sesi)
+                                  </span>
+                                ) : (
+                                  <span className="text-[9.5px] text-gray-400 italic">0 sisa kuota</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200 inline-flex items-center gap-1">
+                                <Package className="w-3 h-3 text-gray-400" />
+                                <span>Belum Ada Paket</span>
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
 
@@ -3140,6 +3192,11 @@ export default function PatientManagement({
                 <div className="text-xs text-emerald-800 font-semibold">
                   Sisa Kuota: {claimItemKey === 'A' ? selectedClaimPkg.item_a_kuota : selectedClaimPkg.item_b_kuota} Sesi
                 </div>
+                {claimItemKey === 'A' && (
+                  <div className="text-[10.5px] text-[#7d5141] font-medium pt-0.5">
+                    Paket A mencakup 8 tindakan: DNA Salmon, PRP, Laser Blackdoll, Laser DPL, Laser Pico, Laser Underarms, Peeling Acne, Peeling Llaha.
+                  </div>
+                )}
               </div>
 
               <div>
@@ -3237,6 +3294,9 @@ export default function PatientManagement({
                 <div className="font-bold text-blue-900 flex items-center justify-between">
                   <span>2. Petugas Dokter / Nurse ({selectedClaimPkg.item_a_name || 'Tindakan Dokter'}) *</span>
                   <span className="text-[10px] text-emerald-700 font-semibold">Sisa: {selectedClaimPkg.item_a_kuota} Sesi</span>
+                </div>
+                <div className="text-[10.5px] text-blue-800 font-medium">
+                  Paket A mencakup 8 tindakan: DNA Salmon, PRP, Laser Blackdoll, Laser DPL, Laser Pico, Laser Underarms, Peeling Acne, Peeling Llaha.
                 </div>
                 <select
                   required

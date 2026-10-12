@@ -357,15 +357,19 @@ app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
 app.get('/api/doingan/staff/active', authenticateToken, async (req, res) => {
   try {
     const activeList = await allQuery(`
-      SELECT d.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, p.jenis_kulit, p.riwayat_alergi
+      SELECT d.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, p.jenis_kulit, p.riwayat_alergi,
+             ppu.id as paket_usage_id, ppu.item_claimed as paket_item_claimed, pp.nama_paket as paket_nama
       FROM doingan d
       JOIN pasien p ON d.pasien_id = p.id
+      LEFT JOIN pasien_paket_usage ppu ON ppu.doingan_id = d.id
+      LEFT JOIN pasien_paket pp ON ppu.pasien_paket_id = pp.id
       WHERE d.petugas_id = ? AND d.status_pengerjaan = 'IN_PROGRESS'
       ORDER BY d.created_at ASC
     `, [req.user.id]);
 
     const waitingList = await allQuery(`
       SELECT d.*, p.nama_lengkap as pasien_nama, p.no_hp as pasien_hp, p.tipe_pasien, p.jenis_kulit, p.riwayat_alergi,
+             ppu.id as paket_usage_id, ppu.item_claimed as paket_item_claimed, pp.nama_paket as paket_nama,
              (
                SELECT u.full_name 
                FROM doingan btc_d 
@@ -375,14 +379,19 @@ app.get('/api/doingan/staff/active', authenticateToken, async (req, res) => {
              ) as btc_petugas_nama
       FROM doingan d
       JOIN pasien p ON d.pasien_id = p.id
+      LEFT JOIN pasien_paket_usage ppu ON ppu.doingan_id = d.id
+      LEFT JOIN pasien_paket pp ON ppu.pasien_paket_id = pp.id
       WHERE d.petugas_id = ? AND d.status_pengerjaan = 'WAITING_BTC'
       ORDER BY d.created_at ASC
     `, [req.user.id]);
 
     const history = await allQuery(`
-      SELECT d.*, p.nama_lengkap as pasien_nama, p.tipe_pasien
+      SELECT d.*, p.nama_lengkap as pasien_nama, p.tipe_pasien,
+             ppu.id as paket_usage_id, ppu.item_claimed as paket_item_claimed, pp.nama_paket as paket_nama
       FROM doingan d
       JOIN pasien p ON d.pasien_id = p.id
+      LEFT JOIN pasien_paket_usage ppu ON ppu.doingan_id = d.id
+      LEFT JOIN pasien_paket pp ON ppu.pasien_paket_id = pp.id
       WHERE d.petugas_id = ? AND d.status_pengerjaan = 'COMPLETED'
       ORDER BY d.completed_at DESC
     `, [req.user.id]);
@@ -448,7 +457,9 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
 
           if (isNurse) {
             const unitComm = (t.nominal_nurse_tindakan != null && t.nominal_nurse_tindakan > 0 ? t.nominal_nurse_tindakan : (commMap['NURSE_TINDAKAN'] ?? 10000));
-            totalKomisi += (unitComm * qty);
+            // Tindakan benang: komisi nurse FLAT 1x per tindakan, berapapun benang yang dibeli pasien
+            const commMultiplier = isBenang ? 1 : qty;
+            totalKomisi += (unitComm * commMultiplier);
           } else {
             if (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') {
               const unitComm = (t.komisi_fix_therapist != null && t.komisi_fix_therapist > 0 ? t.komisi_fix_therapist : commBtcMember);
@@ -1111,7 +1122,11 @@ app.get('/api/pasien', authenticateToken, async (req, res) => {
       SELECT 
         p.*, 
         u.full_name as marketing_nama,
-        r.nama_lengkap as referrer_nama
+        r.nama_lengkap as referrer_nama,
+        (SELECT COUNT(*) FROM pasien_paket pp WHERE pp.pasien_id = p.id) as total_paket,
+        (SELECT COUNT(*) FROM pasien_paket pp WHERE pp.pasien_id = p.id AND pp.sisa_kuota > 0) as paket_aktif,
+        (SELECT COALESCE(SUM(pp.sisa_kuota), 0) FROM pasien_paket pp WHERE pp.pasien_id = p.id) as total_sisa_kuota,
+        (SELECT GROUP_CONCAT(pp.nama_paket) FROM pasien_paket pp WHERE pp.pasien_id = p.id AND pp.sisa_kuota > 0) as nama_paket_aktif
       FROM pasien p
       LEFT JOIN users u ON p.marketing_id = u.id
       LEFT JOIN pasien r ON p.referrer_pasien_id = r.id

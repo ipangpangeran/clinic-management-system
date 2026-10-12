@@ -519,7 +519,7 @@ export default function FinancialCommissionMatrix() {
                           {t.nama_tindakan}
                           {(t.is_per_benang === 1 || t.nama_tindakan.toLowerCase().includes('benang')) && (
                             <span className="block text-[10px] font-semibold text-amber-800">
-                              (Dihitung per benang)
+                              (Tarif pasien per benang, komisi nurse per tindakan)
                             </span>
                           )}
                         </td>
@@ -538,7 +538,9 @@ export default function FinancialCommissionMatrix() {
                           {t.kategori_petugas === 'NURSE' && t.nominal_nurse_tindakan > 0 ? (
                             <span className="font-bold text-blue-700">
                               Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}
-                              {(t.is_per_benang === 1 || t.nama_tindakan.toLowerCase().includes('benang'))}
+                              {(t.is_per_benang === 1 || t.nama_tindakan.toLowerCase().includes('benang')) && (
+                                <span className="block text-[10px] text-blue-600 font-normal">(per tindakan)</span>
+                              )}
                             </span>
                           ) : (
                             <span className="text-gray-300 font-bold">-</span>
@@ -711,7 +713,7 @@ export default function FinancialCommissionMatrix() {
                   className="w-4 h-4 accent-[#7d5141] cursor-pointer"
                 />
                 <label htmlFor="isPerBenangToggle" className="text-xs font-semibold text-amber-950 cursor-pointer select-none">
-                  Hitung Tarif & Komisi <strong>Per Benang</strong> (Khusus Benang Hidung & Benang Pipi)
+                  Hitung Tarif Pasien <strong>Per Benang</strong> (Komisi Nurse tetap flat per tindakan)
                 </label>
               </div>
 
