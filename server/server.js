@@ -52,12 +52,12 @@ app.post('/api/auth/login', async (req, res) => {
 
     const user = await getQuery('SELECT * FROM users WHERE username = ?', [username]);
     if (!user) {
-      return res.status(400).json({ message: 'Username atau password salah' });
+      return res.status(401).json({ message: 'Username atau password salah' });
     }
 
     const validPass = bcrypt.compareSync(password, user.password);
     if (!validPass) {
-      return res.status(400).json({ message: 'Username atau password salah' });
+      return res.status(401).json({ message: 'Username atau password salah' });
     }
 
     const permissions = await allQuery('SELECT module_key, can_create, can_read, can_update, can_delete FROM role_permissions WHERE role = ?', [user.role]);
@@ -87,7 +87,8 @@ app.post('/api/auth/login', async (req, res) => {
       permissions
     });
   } catch (err) {
-    res.status(500).json({ message: 'Internal Server Error', error: err.message });
+    console.error('[AUTH ERROR] Login error:', err);
+    res.status(500).json({ message: 'Terjadi kesalahan sistem di server backend saat proses login', error: err.message });
   }
 });
 

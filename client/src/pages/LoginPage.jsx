@@ -1,22 +1,57 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import { KeyRound, User } from 'lucide-react';
+import { KeyRound, User, AlertCircle, AlertTriangle, WifiOff } from 'lucide-react';
 
 export default function LoginPage() {
   const { login } = useContext(AuthContext);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError(null);
     setSubmitting(true);
     try {
       await login(username, password);
     } catch (err) {
-      setError(err.response?.data?.message || 'Login gagal. Periksa username & password.');
+      console.error('Login request error:', err);
+      if (!err.response) {
+        // Network error / server down / connection refused
+        setError({
+          type: 'SERVER_OFFLINE',
+          title: 'Tidak Dapat Terhubung ke Server Backend',
+          message: 'Server backend DEFLOW sedang tidak aktif atau tidak dapat dijangkau (Connection Refused / Offline). Pastikan service backend (node / PM2) sudah berjalan.'
+        });
+      } else if (err.response.status === 502 || err.response.status === 503 || err.response.status === 504) {
+        // Nginx Bad Gateway / Gateway Timeout in production
+        setError({
+          type: 'SERVER_DOWN',
+          title: `Server Sedang Gangguan (HTTP ${err.response.status})`,
+          message: 'Layanan server backend (Node.js/PM2) sedang mati atau mengalami restart. Silakan hubungi Administrator sistem.'
+        });
+      } else if (err.response.status >= 500) {
+        // Internal Server Error
+        setError({
+          type: 'SERVER_ERROR',
+          title: 'Kesalahan Sistem Server (Error 500)',
+          message: err.response.data?.message || 'Terjadi kesalahan sistem internal pada server backend. Silakan periksa log server.'
+        });
+      } else if (err.response.status === 401 || err.response.status === 400) {
+        // Username / password validation error
+        setError({
+          type: 'AUTH_FAILED',
+          title: 'Login Gagal',
+          message: err.response.data?.message || 'Username atau password salah. Silakan periksa kembali input Anda.'
+        });
+      } else {
+        setError({
+          type: 'UNKNOWN',
+          title: `Gagal Memproses Login (${err.response.status})`,
+          message: err.response.data?.message || 'Terjadi kendala saat verifikasi akun. Silakan coba beberapa saat lagi.'
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -42,8 +77,26 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
-            <span className="font-medium">{error}</span>
+          <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border shadow-2xs animate-in fade-in ${
+            typeof error === 'object' && (error.type === 'SERVER_OFFLINE' || error.type === 'SERVER_DOWN' || error.type === 'SERVER_ERROR')
+              ? 'bg-amber-50 border-amber-300 text-amber-900'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {typeof error === 'object' && (error.type === 'SERVER_OFFLINE' || error.type === 'SERVER_DOWN') ? (
+              <WifiOff className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            ) : typeof error === 'object' && error.type === 'SERVER_ERROR' ? (
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 min-w-0">
+              {typeof error === 'object' && error.title && (
+                <div className="font-bold text-xs mb-0.5">{error.title}</div>
+              )}
+              <div className="leading-relaxed">
+                {typeof error === 'object' ? error.message : error}
+              </div>
+            </div>
           </div>
         )}
 
