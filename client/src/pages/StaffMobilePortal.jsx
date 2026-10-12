@@ -88,8 +88,8 @@ export default function StaffMobilePortal() {
           const norm = t.nama_tindakan.toLowerCase().includes('micro')
             ? 'micro'
             : t.nama_tindakan.toLowerCase().includes('organ')
-            ? 'organ'
-            : t.nama_tindakan.toLowerCase().trim();
+              ? 'organ'
+              : t.nama_tindakan.toLowerCase().trim();
           if (seen.has(norm)) return false;
           seen.add(norm);
           return true;
@@ -529,31 +529,35 @@ export default function StaffMobilePortal() {
                     </div>
                     <p className="leading-relaxed text-[10.5px]">
                       {isPackageClaim
-                        ? 'Pasien ini sedang klaim kuota Paketan A. Sesuai ketentuan klinik, paket dokter HANYA bisa 8 tindakan di bawah (DNA Salmon, PRP, Laser Blackdoll, Laser DPL, Laser Pico, Laser Underarms, Peeling Acne, Peeling Llaha). Tindakan medis lain di luar daftar ini adalah treatment tunggal.'
-                        : 'Jika dokter merekomendasikan tindakan lain, Anda dapat langsung beralih (switch) memilih tindakan di bawah. Jika dokter tidak merekomendasikan dan pasien minta pulang, gunakan tombol Batalkan Tindakan agar tidak ditagih di kasir/POS.'}
+                        ? 'Pasien ini sedang klaim kuota Paketan A.'
+                        : 'Pasien ini sedang melakukan treatment tunggal tanpa paket.'}
                     </p>
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center justify-between gap-2 mb-1">
                   <label className="block text-xs font-bold text-[#1e1b15]">
-                    {isPackageClaim ? 'Pilih Tindakan Paket A Yang Dilakukan: *' : 'Konfirmasi Detail Yang Dilakukan: *'}
+                    {isNurse && isPackageClaim ? 'Pilih Tindakan Dokter (Paket A): *' : 'Konfirmasi Detail Yang Dilakukan: *'}
                   </label>
-                  {!isPackageClaim && displayedTreatments.length > 0 && (
+                  {displayedTreatments.length > 0 && (
                     <button
                       type="button"
                       onClick={handleSelectAllTreatments}
-                      className="px-2.5 py-1 bg-[#faf3e8] hover:bg-[#7d5141] hover:text-white border border-[#d6c2bd] text-[#7d5141] font-bold text-[11px] rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow-2xs"
+                      className={`px-2 py-0.5 rounded-lg text-[10.5px] font-bold border transition-all cursor-pointer inline-flex items-center gap-1 active:scale-95 ${isAllSelected
+                        ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-2xs'
+                        : 'bg-white text-[#7d5141] border-[#d6c2bd] hover:bg-[#faf3e8]'
+                        }`}
+                      title={isAllSelected ? 'Batalkan centang semua' : 'Centang semua tindakan'}
                     >
-                      <CheckSquare className="w-3.5 h-3.5" />
-                      <span>{isAllSelected ? 'Batal Centang Semua' : 'Centang Semua'}</span>
+                      <CheckSquare className="w-3 h-3" />
+                      <span>{isAllSelected ? 'Batal Centang' : 'Centang Semua'}</span>
                     </button>
                   )}
                 </div>
                 <p className="text-[11px] text-[#514440] mb-2">
-                  {isPackageClaim
-                    ? <span>Pilih tindakan dokter dari paket yang telah dilakukan untuk <strong>{currentActiveSession.pasien_nama}</strong>:</span>
-                    : <span>Centang jenis tindakan yang sudah Anda lakukan kepada pasien <strong>{currentActiveSession.pasien_nama}</strong>:</span>
+                  {isNurse && isPackageClaim
+                    ? <span>Pilih tindakan pasien untuk <strong>{currentActiveSession.pasien_nama}</strong>:</span>
+                    : <span>Centang jenis tindakan terhadap <strong>{currentActiveSession.pasien_nama}</strong>:</span>
                   }
                 </p>
 
@@ -581,8 +585,8 @@ export default function StaffMobilePortal() {
                             {t.nama_tindakan.toLowerCase().includes('micro')
                               ? 'Micro'
                               : t.nama_tindakan.toLowerCase().includes('organ')
-                              ? 'Organis'
-                              : t.nama_tindakan}
+                                ? 'Organis'
+                                : t.nama_tindakan}
                           </span>
                         </button>
                       );
@@ -622,20 +626,15 @@ export default function StaffMobilePortal() {
                                     (Tarif Pasien per Benang, Komisi Nurse per Tindakan)
                                   </span>
                                 )}
-                                {isPackageClaim && (
-                                  <span className={`block text-[10px] ${isSelected ? 'text-amber-200 font-bold' : 'text-emerald-700 font-medium'}`}>
-                                    ✓ Pilihan Resmi Paket A
-                                  </span>
-                                )}
                               </div>
                             </div>
                             {isPackageClaim ? (
                               <div className="text-right">
                                 <span className={`text-[11px] font-bold ${isSelected ? 'text-amber-200' : 'text-emerald-700'}`}>
-                                  Termasuk Paket
+                                  Paket included
                                 </span>
                                 <span className={`block text-[9.5px] ${isSelected ? 'text-amber-100/80' : 'text-gray-400'}`}>
-                                  Bebas Tagihan Kasir
+                                  Free
                                 </span>
                               </div>
                             ) : (

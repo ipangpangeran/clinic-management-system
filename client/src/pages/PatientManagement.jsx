@@ -1790,17 +1790,16 @@ export default function PatientManagement({
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             {p.total_paket > 0 ? (
                               <div className="flex flex-col items-start gap-1">
-                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs ${
-                                  p.paket_aktif > 0
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                    : 'bg-gray-100 text-gray-600 border border-gray-300'
-                                }`}>
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs ${p.paket_aktif > 0
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : 'bg-gray-100 text-gray-600 border border-gray-300'
+                                  }`}>
                                   <Package className="w-3 h-3 text-emerald-600" />
                                   <span>{p.paket_aktif > 0 ? `Punya Paket (${p.paket_aktif} Aktif)` : `Paket Habis (${p.total_paket})`}</span>
                                 </span>
                                 {p.nama_paket_aktif ? (
                                   <span className="text-[10px] text-[#7d5141] font-semibold truncate max-w-[170px]" title={p.nama_paket_aktif}>
-                                    {p.nama_paket_aktif} ({p.total_sisa_kuota} Sesi)
+                                    {p.nama_paket_aktif} (Sisa {p.total_sisa_kuota} Sesi)
                                   </span>
                                 ) : (
                                   <span className="text-[9.5px] text-gray-400 italic">0 sisa kuota</span>
@@ -2127,9 +2126,6 @@ export default function PatientManagement({
                 <span className="px-2 py-0.5 bg-[#7d5141] text-white rounded-full text-[10px] font-bold">
                   {filteredPackageLogs.length} Data
                 </span>
-              </div>
-              <div className="text-xs text-[#83746f]">
-                Menampilkan data secara lengkap tanpa pemotongan teks
               </div>
             </div>
 
@@ -2825,11 +2821,10 @@ export default function PatientManagement({
                                 Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
                               </span>
                             </div>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              pkg.is_billed
-                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                : 'bg-amber-100 text-amber-900 border border-amber-300'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${pkg.is_billed
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : 'bg-amber-100 text-amber-900 border border-amber-300'
+                              }`}>
                               {pkg.is_billed ? '✓ Lunas / Selesai di POS' : '⏳ Menunggu di Kasir POS'}
                             </span>
                             <button
