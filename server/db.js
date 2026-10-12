@@ -684,7 +684,6 @@ async function seedDefaultData() {
     ['tnd-7', 'Detox', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
     ['tnd-8', 'Filler Dagu', 'NURSE', 0, 2000000, 0, 0, 0, 20000, 0, 'sesi'],
     ['tnd-9', 'Filler Hidung', 'NURSE', 0, 2000000, 0, 0, 0, 20000, 0, 'sesi'],
-    ['tnd-10', 'HF', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
     ['tnd-11', 'Infus Choromosome', 'NURSE', 0, 1000000, 0, 0, 0, 15000, 0, 'sesi'],
     ['tnd-12', 'Infus Whitening', 'NURSE', 0, 700000, 0, 0, 0, 10000, 0, 'sesi'],
     ['tnd-13', 'JuveLook', 'NURSE', 0, 8000000, 0, 0, 0, 30000, 0, 'sesi'],
@@ -695,13 +694,12 @@ async function seedDefaultData() {
     ['tnd-18', 'Laser Underarmd', 'NURSE', 0, 700000, 0, 0, 0, 10000, 0, 'sesi'],
     ['tnd-19', 'Messo Lippo', 'NURSE', 0, 750000, 0, 0, 0, 6000, 0, 'sesi'],
     ['tnd-20', 'Micro', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
-    ['tnd-21', 'Organic', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
+    ['tnd-21', 'Organis', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
     ['tnd-22', 'Oxy', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
     ['tnd-23', 'PDT', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
     ['tnd-24', 'Peeling Acne', 'NURSE', 0, 799000, 0, 0, 0, 10000, 0, 'sesi'],
     ['tnd-25', 'Peeling Llaha', 'NURSE', 0, 1000000, 0, 0, 0, 10000, 0, 'sesi'],
     ['tnd-26', 'Platelet-Rich Plasma (PRP)', 'NURSE', 0, 1000000, 0, 0, 0, 10000, 0, 'sesi'],
-    ['tnd-27', 'RF', 'BEAUTICIAN', 0, 0, 17000, 0, 0, 0, 0, 'sesi'],
     ['tnd-28', 'Subsisi', 'NURSE', 0, 1200000, 0, 0, 0, 10000, 0, 'sesi'],
     ['tnd-29', 'Vittaran PN', 'NURSE', 0, 5999000, 0, 0, 0, 20000, 0, 'sesi'],
     ['tnd-30', 'Vittaran Poly Booster', 'NURSE', 0, 6999000, 0, 0, 0, 20000, 0, 'sesi']
@@ -716,6 +714,10 @@ async function seedDefaultData() {
     await runQuery("DELETE FROM tindakan_medis WHERE nama_tindakan = 'Peeling Baru'");
     await runQuery("DELETE FROM tindakan_medis WHERE nama_tindakan = 'Oxy & PDT'");
     await runQuery("DELETE FROM tindakan_medis WHERE nama_tindakan = 'Botox'");
+    await runQuery("UPDATE tindakan_medis SET nama_tindakan = 'Micro' WHERE nama_tindakan LIKE '%Micro%'");
+    await runQuery("UPDATE tindakan_medis SET nama_tindakan = 'Organis' WHERE nama_tindakan = 'Organic'");
+    await runQuery("DELETE FROM tindakan_medis WHERE nama_tindakan IN ('HF', 'RF') AND kategori_petugas = 'BEAUTICIAN'");
+    await runQuery("DELETE FROM tindakan_medis WHERE id IN ('tnd-off-1791799051852-2', 'tnd-off-1791799051857-3')");
   } catch (e) { }
 
   let offIdx = 1;

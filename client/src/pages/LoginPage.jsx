@@ -22,14 +22,14 @@ export default function LoginPage() {
         setError({
           type: 'SERVER_OFFLINE',
           title: 'Tidak Dapat Terhubung ke Server Backend',
-          message: 'Server backend DEFLOW sedang tidak aktif atau tidak dapat dijangkau (Connection Refused / Offline). Pastikan service backend (node / PM2) sudah berjalan.'
+          message: 'Server backend DEFLOW unreachable (Connection Refused / Offline). Pastikan service backend sudah berjalan.'
         });
       } else if (err.response.status === 502 || err.response.status === 503 || err.response.status === 504) {
         // Nginx Bad Gateway / Gateway Timeout in production
         setError({
           type: 'SERVER_DOWN',
           title: `Server Sedang Gangguan (HTTP ${err.response.status})`,
-          message: 'Layanan server backend (Node.js/PM2) sedang mati atau mengalami restart. Silakan hubungi Administrator sistem.'
+          message: 'Layanan server backend sedang mati atau mengalami restart. Silakan hubungi Administrator sistem.'
         });
       } else if (err.response.status >= 500) {
         // Internal Server Error
@@ -77,11 +77,10 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border shadow-2xs animate-in fade-in ${
-            typeof error === 'object' && (error.type === 'SERVER_OFFLINE' || error.type === 'SERVER_DOWN' || error.type === 'SERVER_ERROR')
-              ? 'bg-amber-50 border-amber-300 text-amber-900'
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
+          <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border shadow-2xs animate-in fade-in ${typeof error === 'object' && (error.type === 'SERVER_OFFLINE' || error.type === 'SERVER_DOWN' || error.type === 'SERVER_ERROR')
+            ? 'bg-amber-50 border-amber-300 text-amber-900'
+            : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
             {typeof error === 'object' && (error.type === 'SERVER_OFFLINE' || error.type === 'SERVER_DOWN') ? (
               <WifiOff className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             ) : typeof error === 'object' && error.type === 'SERVER_ERROR' ? (

@@ -538,7 +538,7 @@ export default function FinancialCommissionMatrix() {
                           {t.kategori_petugas === 'NURSE' && t.nominal_nurse_tindakan > 0 ? (
                             <span className="font-bold text-blue-700">
                               Rp {t.nominal_nurse_tindakan.toLocaleString('id-ID')}
-                              {(t.is_per_benang === 1 || t.nama_tindakan.toLowerCase().includes('benang')) ? ' / benang' : ''}
+                              {(t.is_per_benang === 1 || t.nama_tindakan.toLowerCase().includes('benang'))}
                             </span>
                           ) : (
                             <span className="text-gray-300 font-bold">-</span>

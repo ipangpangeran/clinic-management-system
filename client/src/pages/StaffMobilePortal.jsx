@@ -71,12 +71,39 @@ export default function StaffMobilePortal() {
 
       // Filter treatments based on staff profession / category (BEAUTICIAN vs NURSE)
       const userLini = (user?.lini_profesi || user?.role || 'BEAUTICIAN').toUpperCase();
-      const filtered = tndRes.data.filter(t => {
+      let filtered = tndRes.data.filter(t => {
         if (userLini.includes('NURSE') || userLini.includes('DOKTER')) {
           return t.kategori_petugas === 'NURSE' || !t.kategori_petugas;
         }
-        return t.kategori_petugas === 'BEAUTICIAN' || !t.kategori_petugas;
+        // Khusus BTC: hanya 5 pilihan (Oxy, PDT, Micro, Organis, Detox)
+        const allowedBtc = ['oxy', 'pdt', 'micro', 'organ', 'detox'];
+        const nameLower = (t.nama_tindakan || '').toLowerCase();
+        return (t.kategori_petugas === 'BEAUTICIAN' || !t.kategori_petugas) && allowedBtc.some(k => nameLower.includes(k));
       });
+
+      // Deduplicate berdasarkan kategori/nama tindakan agar tidak ada tombol ganda
+      if (!isNurse) {
+        const seen = new Set();
+        filtered = filtered.filter(t => {
+          const norm = t.nama_tindakan.toLowerCase().includes('micro')
+            ? 'micro'
+            : t.nama_tindakan.toLowerCase().includes('organ')
+            ? 'organ'
+            : t.nama_tindakan.toLowerCase().trim();
+          if (seen.has(norm)) return false;
+          seen.add(norm);
+          return true;
+        });
+
+        // Urutan khusus BTC: Oxy, PDT, Micro, Organis, Detox
+        const btcOrder = ['oxy', 'pdt', 'micro', 'organ', 'detox'];
+        filtered.sort((a, b) => {
+          const idxA = btcOrder.findIndex(k => a.nama_tindakan.toLowerCase().includes(k));
+          const idxB = btcOrder.findIndex(k => b.nama_tindakan.toLowerCase().includes(k));
+          return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+        });
+      }
+
       setTreatments(filtered.length > 0 ? filtered : tndRes.data);
     } catch (err) {
       console.error('Error fetching staff session data', err);
@@ -477,7 +504,7 @@ export default function StaffMobilePortal() {
 
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                   <label className="block text-xs font-bold text-[#1e1b15]">
-                    Konfirmasi Detail Treatment Yang Dilakukan: *
+                    Konfirmasi Detail Yang Dilakukan: *
                   </label>
                   {treatments.length > 0 && (
                     <button
@@ -491,94 +518,130 @@ export default function StaffMobilePortal() {
                   )}
                 </div>
                 <p className="text-[11px] text-[#514440] mb-2">
-                  Pilih atau centang jenis tindakan yang sudah Anda berikan kepada pasien <strong>{currentActiveSession.pasien_nama}</strong>:
+                  Centang jenis tindakan yang sudah Anda lakukan kepada pasien <strong>{currentActiveSession.pasien_nama}</strong>:
                 </p>
 
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {treatments.map(t => {
-                    const isSelected = selectedTreatments.includes(t.id);
-                    const isBenang = (t.is_per_benang === 1 || (t.nama_tindakan || '').toLowerCase().includes('benang'));
-                    const qty = treatmentQuantities[t.id] || 1;
-                    const totalTarifItem = (t.tarif_tindakan_medis || 0) * (isBenang ? qty : 1);
-
-                    return (
-                      <div
-                        key={t.id}
-                        className={`w-full rounded-2xl border text-xs font-semibold transition-all select-none overflow-hidden ${isSelected
-                          ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
-                          : 'bg-[#faf3e8]/60 text-[#1e1b15] border-[#d6c2bd] hover:bg-[#faf3e8]'
-                          }`}
-                      >
-                        <div
+                {!isNurse ? (
+                  /* BTC Mode: Grid Button Centered, Tanpa Tampilan Harga Rp 0 */
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto p-0.5">
+                    {treatments.map(t => {
+                      const isSelected = selectedTreatments.includes(t.id);
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
                           onClick={() => toggleTreatmentSelect(t.id)}
-                          className="p-3 flex items-center justify-between cursor-pointer"
+                          className={`w-full py-3.5 px-3 rounded-2xl border text-xs font-bold transition-all select-none flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-95 text-center ${isSelected
+                            ? 'bg-[#7d5141] text-white border-[#7d5141] ring-2 ring-[#7d5141]/30 shadow-xs'
+                            : 'bg-white text-[#1e1b15] border-[#d6c2bd] hover:bg-[#faf3e8] hover:border-[#7d5141]'
+                            }`}
                         >
-                          <div className="flex items-center gap-2.5">
-                            {isSelected ? (
-                              <CheckSquare className="w-4 h-4 text-white shrink-0" />
-                            ) : (
-                              <Square className="w-4 h-4 text-[#83746f] shrink-0" />
-                            )}
-                            <div className="text-left">
-                              <span>{t.nama_tindakan}</span>
-                              {isBenang && (
-                                <span className={`block text-[10px] ${isSelected ? 'text-amber-200' : 'text-[#83746f]'}`}>
-                                  (Tarif & Komisi Dihitung Per Benang)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className={`text-[11px] font-bold ${isSelected ? 'text-amber-200' : 'text-[#7d5141]'}`}>
-                              Rp {totalTarifItem.toLocaleString('id-ID')}
-                            </span>
-                            {isBenang && (
-                              <span className={`block text-[9.5px] ${isSelected ? 'text-amber-100/80' : 'text-gray-400'}`}>
-                                @ Rp {t.tarif_tindakan_medis?.toLocaleString('id-ID')}/benang
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-amber-200 shrink-0" />
+                          ) : (
+                            <Square className="w-4 h-4 text-[#83746f] shrink-0" />
+                          )}
+                          <span className="truncate">
+                            {t.nama_tindakan.toLowerCase().includes('micro')
+                              ? 'Micro'
+                              : t.nama_tindakan.toLowerCase().includes('organ')
+                              ? 'Organis'
+                              : t.nama_tindakan}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Nurse Mode: Card List dengan Selector Benang & Tarif Medis jika > 0 */
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {treatments.map(t => {
+                      const isSelected = selectedTreatments.includes(t.id);
+                      const isBenang = (t.is_per_benang === 1 || (t.nama_tindakan || '').toLowerCase().includes('benang'));
+                      const qty = treatmentQuantities[t.id] || 1;
+                      const totalTarifItem = (t.tarif_tindakan_medis || 0) * (isBenang ? qty : 1);
 
-                        {/* Special Quantity / Benang Selector */}
-                        {isSelected && isBenang && (
+                      return (
+                        <div
+                          key={t.id}
+                          className={`w-full rounded-2xl border text-xs font-semibold transition-all select-none overflow-hidden ${isSelected
+                            ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
+                            : 'bg-[#faf3e8]/60 text-[#1e1b15] border-[#d6c2bd] hover:bg-[#faf3e8]'
+                            }`}
+                        >
                           <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-3 pb-3 pt-1 border-t border-white/20 bg-black/10 flex items-center justify-between"
+                            onClick={() => toggleTreatmentSelect(t.id)}
+                            className="p-3 flex items-center justify-between cursor-pointer"
                           >
-                            <div className="text-[11px] text-amber-200 font-bold flex items-center gap-1">
-                              <span>Jumlah Benang:</span>
+                            <div className="flex items-center gap-2.5">
+                              {isSelected ? (
+                                <CheckSquare className="w-4 h-4 text-white shrink-0" />
+                              ) : (
+                                <Square className="w-4 h-4 text-[#83746f] shrink-0" />
+                              )}
+                              <div className="text-left">
+                                <span>{t.nama_tindakan}</span>
+                                {isBenang && (
+                                  <span className={`block text-[10px] ${isSelected ? 'text-amber-200' : 'text-[#83746f]'}`}>
+                                    (Tarif & Komisi Dihitung Per Benang)
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => updateTreatmentQuantity(t.id, -1)}
-                                className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-sm flex items-center justify-center cursor-pointer active:scale-95"
-                              >
-                                -
-                              </button>
-                              <input
-                                type="number"
-                                min="1"
-                                value={qty}
-                                onChange={(e) => setTreatmentQty(t.id, e.target.value)}
-                                className="w-12 py-1 text-center font-bold text-xs bg-white text-[#1e1b15] rounded-lg border border-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => updateTreatmentQuantity(t.id, 1)}
-                                className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-sm flex items-center justify-center cursor-pointer active:scale-95"
-                              >
-                                +
-                              </button>
-                              <span className="text-[11px] text-amber-100 font-bold ml-1">benang</span>
-                            </div>
+                            {totalTarifItem > 0 && (
+                              <div className="text-right">
+                                <span className={`text-[11px] font-bold ${isSelected ? 'text-amber-200' : 'text-[#7d5141]'}`}>
+                                  Rp {totalTarifItem.toLocaleString('id-ID')}
+                                </span>
+                                {isBenang && (
+                                  <span className={`block text-[9.5px] ${isSelected ? 'text-amber-100/80' : 'text-gray-400'}`}>
+                                    @ Rp {t.tarif_tindakan_medis?.toLocaleString('id-ID')}/benang
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+
+                          {/* Special Quantity / Benang Selector */}
+                          {isSelected && isBenang && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="px-3 pb-3 pt-1 border-t border-white/20 bg-black/10 flex items-center justify-between"
+                            >
+                              <div className="text-[11px] text-amber-200 font-bold flex items-center gap-1">
+                                <span>Jumlah Benang:</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => updateTreatmentQuantity(t.id, -1)}
+                                  className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-sm flex items-center justify-center cursor-pointer active:scale-95"
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={qty}
+                                  onChange={(e) => setTreatmentQty(t.id, e.target.value)}
+                                  className="w-12 py-1 text-center font-bold text-xs bg-white text-[#1e1b15] rounded-lg border border-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => updateTreatmentQuantity(t.id, 1)}
+                                  className="w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 text-white font-bold text-sm flex items-center justify-center cursor-pointer active:scale-95"
+                                >
+                                  +
+                                </button>
+                                <span className="text-[11px] text-amber-100 font-bold ml-1">benang</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

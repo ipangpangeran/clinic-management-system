@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp, Tag } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PosBillingCounter() {
@@ -199,13 +199,6 @@ export default function PosBillingCounter() {
     }
   };
 
-  const handleUpdateMigrationPkgPrice = (pkgId, newPrice) => {
-    const val = newPrice === '' ? '' : Math.max(0, Number(newPrice));
-    setSelectedMigrationPackages(prev =>
-      prev.map(p => p.id === pkgId ? { ...p, harga_paket: val } : p)
-    );
-  };
-
   const handleConfirmMigrationPackages = async () => {
     if (!migratedPatient) return;
     if (selectedMigrationPackages.length === 0) {
@@ -216,10 +209,7 @@ export default function PosBillingCounter() {
     setSubmittingMigrationPkg(true);
     try {
       await axios.post(`/api/pasien/${migratedPatient.id}/paket`, {
-        packages: selectedMigrationPackages.map(p => ({
-          ...p,
-          harga_paket: Number(p.harga_paket) || 0
-        })),
+        packages: selectedMigrationPackages,
         marketing_id: migratedPatient.marketing_id || null
       });
       const totalNominal = selectedMigrationPackages.reduce((sum, p) => sum + (Number(p.harga_paket) || 0), 0);
@@ -608,7 +598,7 @@ export default function PosBillingCounter() {
                         </td>
                         <td className="py-3.5 px-4 font-bold text-emerald-800 text-sm">
                           Rp {trx.grand_total?.toLocaleString('id-ID')}
-                          {/* <div className="text-[10px] font-normal text-gray-400">+{trx.earned_points || 0} Poin</div> */}
+                          {/* <div clasName="text-[10px] font-normal text-gray-400">+{trx.earned_points || 0} Poin</div> */}
                         </td>
                         <td className="py-3.5 px-4 text-center">
                           <button
@@ -1164,8 +1154,6 @@ export default function PosBillingCounter() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
                     {masterPackages.map(pkg => {
                       const isSelected = selectedMigrationPackages.some(p => p.id === pkg.id);
-                      const selectedPkgObj = selectedMigrationPackages.find(p => p.id === pkg.id);
-                      const currentPrice = selectedPkgObj ? selectedPkgObj.harga_paket : pkg.harga_paket;
                       return (
                         <div
                           key={pkg.id}
@@ -1175,68 +1163,33 @@ export default function PosBillingCounter() {
                               if (exists) {
                                 return prev.filter(p => p.id !== pkg.id);
                               } else {
-                                return [...prev, { ...pkg, harga_paket: pkg.harga_paket }];
+                                return [...prev, pkg];
                               }
                             });
                           }}
-                          className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex flex-col justify-between select-none ${isSelected
+                          className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5 select-none ${isSelected
                             ? 'bg-emerald-50 border-emerald-600 shadow-xs ring-1 ring-emerald-600'
                             : 'bg-white border-[#d6c2bd] hover:border-emerald-600'
                             }`}
                         >
-                          <div className="flex items-start gap-2.5">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => { }}
-                              className="mt-0.5 accent-emerald-700 cursor-pointer"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
-                              <div className="text-[10px] text-gray-600 mt-0.5">
-                                {[
-                                  pkg.item_a_name && (pkg.item_a_kuota > 0 || !pkg.item_b_name) ? `${pkg.item_a_name} (${pkg.item_a_kuota || 0}x)` : null,
-                                  pkg.item_b_name && pkg.item_b_kuota > 0 ? `${pkg.item_b_name} (${pkg.item_b_kuota}x)` : null
-                                ].filter(Boolean).join(' + ')}
-                              </div>
-                              <div className="text-xs font-bold text-emerald-800 mt-1">
-                                Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
-                              </div>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => { }}
+                            className="mt-0.5 accent-emerald-700 cursor-pointer"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
+                            <div className="text-[10px] text-gray-600 mt-0.5">
+                              {[
+                                pkg.item_a_name && (pkg.item_a_kuota > 0 || !pkg.item_b_name) ? `${pkg.item_a_name} (${pkg.item_a_kuota || 0}x)` : null,
+                                pkg.item_b_name && pkg.item_b_kuota > 0 ? `${pkg.item_b_name} (${pkg.item_b_kuota}x)` : null
+                              ].filter(Boolean).join(' + ')}
+                            </div>
+                            <div className="text-xs font-bold text-emerald-800 mt-1">
+                              Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
                             </div>
                           </div>
-
-                          {isSelected && (
-                            <div
-                              className="mt-2.5 pt-2 border-t border-emerald-300/80 w-full"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <div className="flex items-center justify-between text-[11px] mb-1">
-                                <label className="font-bold text-emerald-900 flex items-center gap-1">
-                                  <Tag className="w-3 h-3 text-emerald-700" />
-                                  <span>Sesuaikan Harga Pasien:</span>
-                                </label>
-                                {Number(currentPrice) !== Number(pkg.harga_paket) && (
-                                  <span className="text-[10px] text-gray-500 line-through">
-                                    Normal: Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="relative">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-xs text-gray-500">Rp</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={currentPrice}
-                                  onChange={(e) => handleUpdateMigrationPkgPrice(pkg.id, e.target.value)}
-                                  placeholder="Harga khusus..."
-                                  className="w-full pl-8 pr-2.5 py-1.5 bg-white border border-emerald-400 focus:border-emerald-700 rounded-lg font-bold text-xs text-emerald-950 focus:outline-none shadow-2xs"
-                                />
-                              </div>
-                              <div className="text-[10px] text-emerald-800 mt-0.5">
-                                *Nominal ini otomatis diteruskan ke antrean Kasir POS
-                              </div>
-                            </div>
-                          )}
                         </div>
                       );
                     })}
