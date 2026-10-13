@@ -1409,6 +1409,12 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
     const targetPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
     const finalMarketingId = marketing_id || targetPatient?.marketing_id || null;
 
+    // Ketentuan Poin Pasien MGM:
+    // 1. Poin 5% HANYA diberikan dari pembelanjaan treatment diawal (misal trial menjadi member mengambil paket diawal).
+    // 2. Poin TIDAK didapat lagi untuk pembelanjaan ke-2 atau upgrade treatment kembali.
+    const existingPkgCount = await getQuery('SELECT COUNT(*) as count FROM pasien_paket WHERE pasien_id = ?', [id]);
+    const isFirstTimePackagePurchase = (Number(existingPkgCount?.count) || 0) === 0 && (!targetPatient?.mgm_reward_given || targetPatient.mgm_reward_given === 0);
+
     let totalPointsAwarded = 0;
 
     for (const pkg of pkgList) {
@@ -1459,22 +1465,203 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
         statusPembayaran
       ]);
 
-      if (targetPatient && targetPatient.referrer_pasien_id && pkgPrice > 0) {
+      // Bonus MGM hanya dihitung untuk transaksi paket pertama pasien
+      if (isFirstTimePackagePurchase && targetPatient && targetPatient.referrer_pasien_id && pkgPrice > 0) {
         const bonusPoints = Math.round(pkgPrice * 0.05);
         totalPointsAwarded += bonusPoints;
       }
     }
 
     let mgmMsg = '';
-    if (targetPatient && targetPatient.referrer_pasien_id && totalPointsAwarded > 0) {
-      await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [totalPointsAwarded, targetPatient.referrer_pasien_id]);
-      const referrer = await getQuery('SELECT nama_lengkap FROM pasien WHERE id = ?', [targetPatient.referrer_pasien_id]);
-      mgmMsg = ` [MGM Bonus: +${totalPointsAwarded.toLocaleString('id-ID')} Poin diberikan ke ${referrer?.nama_lengkap || 'Pereferensi'}]`;
+    if (isFirstTimePackagePurchase && targetPatient && targetPatient.referrer_pasien_id && totalPointsAwarded > 0) {
+      const referrer = await getQuery('SELECT id, nama_lengkap, total_poin FROM pasien WHERE id = ?', [targetPatient.referrer_pasien_id]);
+      if (referrer) {
+        const newSaldo = (Number(referrer.total_poin) || 0) + totalPointsAwarded;
+        await runQuery('UPDATE pasien SET total_poin = ? WHERE id = ?', [newSaldo, referrer.id]);
+        await runQuery('UPDATE pasien SET mgm_reward_given = 1 WHERE id = ?', [id]);
+
+        // Catat mutasi poin masuk (EARN) ke pasien_poin_history
+        const pthId = 'pth-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+        await runQuery(`
+          INSERT INTO pasien_poin_history (id, pasien_id, tipe, jumlah_poin, saldo_akhir, kategori, referensi_id, keterangan)
+          VALUES (?, ?, 'EARN', ?, ?, 'MGM_REFERRAL', ?, ?)
+        `, [
+          pthId,
+          referrer.id,
+          totalPointsAwarded,
+          newSaldo,
+          id,
+          `Bonus MGM 5% pembelanjaan awal member baru (${targetPatient.nama_lengkap || 'Pasien'})`
+        ]);
+
+        mgmMsg = ` [MGM Bonus: +${totalPointsAwarded.toLocaleString('id-ID')} Poin diberikan ke ${referrer.nama_lengkap}]`;
+      }
+    } else if (!isFirstTimePackagePurchase && targetPatient?.referrer_pasien_id) {
+      mgmMsg = ` [Info: Pembelanjaan ke-2/upgrade treatment tidak menghasilkan poin MGM]`;
     }
 
     res.status(201).json({ message: `${pkgList.length} Paket treatment berhasil ditambahkan ke pasien! Tagihan paket masuk ke POS.${mgmMsg}` });
   } catch (err) {
     res.status(500).json({ message: 'Error adding package', error: err.message });
+  }
+});
+
+// --- MGM POINT REDEMPTION & HISTORY ROUTES ---
+app.get('/api/pasien/:id/poin-history', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const patient = await getQuery('SELECT id, nama_lengkap, total_poin, tipe_pasien, no_hp FROM pasien WHERE id = ?', [id]);
+    if (!patient) return res.status(404).json({ message: 'Pasien tidak ditemukan' });
+
+    const history = await allQuery(`
+      SELECT * FROM pasien_poin_history 
+      WHERE pasien_id = ? 
+      ORDER BY created_at DESC
+    `, [id]);
+
+    res.json({
+      pasien: patient,
+      total_poin: patient.total_poin || 0,
+      history: history || []
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error fetching point history', error: err.message });
+  }
+});
+
+// Endpoint Penukaran Poin MGM:
+// 1. Kategori 'FACIAL_FREE': Poin ditukarkan ke Facial Gratis (otomatis buat antrean doingan Beautician berstatus Free/Billed)
+// 2. Kategori 'POTONGAN_PAKET': Poin ditukarkan untuk memotong sisa tagihan paket treatment (1 Poin = Rp 1)
+app.post('/api/pasien/:id/tukar-poin', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { kategori, jenis_facial, therapist_id, pasien_paket_id, jumlah_poin, catatan } = req.body;
+
+    const patient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
+    if (!patient) return res.status(404).json({ message: 'Pasien tidak ditemukan' });
+
+    const currentPoints = Number(patient.total_poin) || 0;
+    const pointsToUse = Number(jumlah_poin) || 0;
+
+    if (pointsToUse <= 0) {
+      return res.status(400).json({ message: 'Jumlah poin yang ditukarkan harus lebih dari 0' });
+    }
+
+    if (currentPoints < pointsToUse) {
+      return res.status(400).json({ 
+        message: `Saldo poin tidak mencukupi. Saldo aktif Anda: ${currentPoints.toLocaleString('id-ID')} Poin, diminta: ${pointsToUse.toLocaleString('id-ID')} Poin` 
+      });
+    }
+
+    const pthId = 'pth-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const newSaldo = currentPoints - pointsToUse;
+
+    if (kategori === 'FACIAL_FREE') {
+      const facialName = jenis_facial || 'Facial Standard Free';
+      const doinganId = 'do-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+
+      // Otomatis masukkan antrian pengerjaan Doingan untuk Beautician (Gratis / Sudah dibayar dengan poin)
+      await runQuery(`
+        INSERT INTO doingan (
+          id, pasien_id, petugas_id, role_petugas, kategori_layanan, tindakan_id,
+          nama_tindakan, status_pengerjaan, status_doingan, started_at, created_at, notes, is_billed
+        )
+        VALUES (?, ?, ?, 'Beautician', 'Facial (Beautician)', NULL, ?, 'IN_PROGRESS', 'Member', datetime('now', '+7 hours'), datetime('now', '+7 hours'), ?, 1)
+      `, [
+        doinganId,
+        id,
+        therapist_id || null,
+        `[Reward MGM] Facial Free - ${facialName}`,
+        catatan || `Klaim Poin Pasien MGM: ${pointsToUse.toLocaleString('id-ID')} Poin (${facialName})`
+      ]);
+
+      // Potong saldo poin pasien
+      await runQuery('UPDATE pasien SET total_poin = ? WHERE id = ?', [newSaldo, id]);
+
+      // Catat mutasi poin keluar (REDEEM)
+      await runQuery(`
+        INSERT INTO pasien_poin_history (id, pasien_id, tipe, jumlah_poin, saldo_akhir, kategori, referensi_id, keterangan)
+        VALUES (?, ?, 'REDEEM', ?, ?, 'FACIAL_FREE', ?, ?)
+      `, [
+        pthId,
+        id,
+        pointsToUse,
+        newSaldo,
+        doinganId,
+        `Penukaran ${pointsToUse.toLocaleString('id-ID')} Poin MGM untuk Facial Free (${facialName})`
+      ]);
+
+      return res.json({
+        message: `Berhasil menukarkan ${pointsToUse.toLocaleString('id-ID')} Poin untuk Facial Free (${facialName})! Sesi Facial langsung masuk ke antrean Beautician.`,
+        sisa_poin: newSaldo,
+        doingan_id: doinganId
+      });
+
+    } else if (kategori === 'POTONGAN_PAKET') {
+      if (!pasien_paket_id) {
+        return res.status(400).json({ message: 'Paket treatment tujuan potongan wajib dipilih' });
+      }
+
+      const pkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ? AND pasien_id = ?', [pasien_paket_id, id]);
+      if (!pkg) {
+        return res.status(404).json({ message: 'Paket treatment pasien tidak ditemukan' });
+      }
+
+      const sisaTagihan = Number(pkg.sisa_tagihan) || 0;
+      if (sisaTagihan <= 0 && pkg.status_pembayaran === 'LUNAS') {
+        return res.status(400).json({ message: 'Paket ini sudah lunas, tidak memiliki sisa tagihan.' });
+      }
+
+      if (pointsToUse > sisaTagihan) {
+        return res.status(400).json({ 
+          message: `Jumlah poin yang digunakan (Rp ${pointsToUse.toLocaleString('id-ID')}) melebihi sisa tagihan paket (Rp ${sisaTagihan.toLocaleString('id-ID')}). Maksimal poin: ${sisaTagihan.toLocaleString('id-ID')}` 
+        });
+      }
+
+      const newDp = (Number(pkg.nominal_dp) || 0) + pointsToUse;
+      const newSisa = Math.max(0, sisaTagihan - pointsToUse);
+      const newStatus = newSisa <= 0 ? 'LUNAS' : 'BELUM_LUNAS';
+      const catatanBayar = (pkg.catatan_pembayaran ? pkg.catatan_pembayaran + ' | ' : '') + `Dipotong Poin MGM: Rp ${pointsToUse.toLocaleString('id-ID')}`;
+
+      // Update data paket pasien
+      await runQuery(`
+        UPDATE pasien_paket
+        SET nominal_dp = ?, sisa_tagihan = ?, status_pembayaran = ?,
+            tgl_pelunasan = CASE WHEN ? = 'LUNAS' THEN datetime('now', '+7 hours') ELSE tgl_pelunasan END,
+            catatan_pembayaran = ?
+        WHERE id = ?
+      `, [newDp, newSisa, newStatus, newStatus, catatanBayar, pkg.id]);
+
+      // Potong saldo poin pasien
+      await runQuery('UPDATE pasien SET total_poin = ? WHERE id = ?', [newSaldo, id]);
+
+      // Catat mutasi poin keluar (REDEEM)
+      await runQuery(`
+        INSERT INTO pasien_poin_history (id, pasien_id, tipe, jumlah_poin, saldo_akhir, kategori, referensi_id, keterangan)
+        VALUES (?, ?, 'REDEEM', ?, ?, 'POTONGAN_PAKET', ?, ?)
+      `, [
+        pthId,
+        id,
+        pointsToUse,
+        newSaldo,
+        pkg.id,
+        `Potongan tagihan paket "${pkg.nama_paket}" sebesar Rp ${pointsToUse.toLocaleString('id-ID')} menggunakan Poin MGM`
+      ]);
+
+      return res.json({
+        message: newStatus === 'LUNAS'
+          ? `Sukses! Poin MGM sebesar ${pointsToUse.toLocaleString('id-ID')} berhasil melunasi paket "${pkg.nama_paket}". Status paket kini LUNAS!`
+          : `Sukses! Poin MGM sebesar ${pointsToUse.toLocaleString('id-ID')} berhasil memotong tagihan paket "${pkg.nama_paket}". Sisa tagihan saat ini: Rp ${newSisa.toLocaleString('id-ID')}.`,
+        sisa_poin: newSaldo,
+        sisa_tagihan: newSisa,
+        status_pembayaran: newStatus
+      });
+
+    } else {
+      return res.status(400).json({ message: 'Kategori penukaran tidak valid. Poin hanya bisa ditukarkan ke Facial Free atau Potongan Paket Treatment.' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: 'Error redeeming points', error: err.message });
   }
 });
 
@@ -2288,7 +2475,7 @@ app.delete('/api/tindakan/:id', authenticateToken, async (req, res) => {
 // --- POS & BILLING TRANSACTIONS ---
 app.post('/api/transaksi', authenticateToken, async (req, res) => {
   try {
-    const { pasien_id, items, discount_amount, payment_amount, therapist_id, doctor_id, nurse_id, marketing_id } = req.body;
+    const { pasien_id, items, discount_amount, payment_amount, therapist_id, doctor_id, nurse_id, marketing_id, poin_used } = req.body;
 
     if (!pasien_id || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Pasien dan item belanja wajib diisi' });
@@ -2310,7 +2497,19 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
     const discount = Number(discount_amount) || 0;
     const taxableAmount = Math.max(0, subtotal - discount);
     const taxAmount = isTaxEnabled && taxRate > 0 ? Math.round(taxableAmount * taxRate) : 0;
-    const grandTotal = taxableAmount + taxAmount;
+    const initialGrandTotal = taxableAmount + taxAmount;
+
+    // Perhitungan Potongan Poin Pasien MGM (1 Poin = Rp 1)
+    let usedPoints = Math.max(0, Number(poin_used) || 0);
+    const patientPoints = Number(pasien.total_poin) || 0;
+    if (usedPoints > patientPoints) {
+      usedPoints = patientPoints;
+    }
+    if (usedPoints > initialGrandTotal) {
+      usedPoints = initialGrandTotal;
+    }
+
+    const grandTotal = Math.max(0, initialGrandTotal - usedPoints);
     const payment = Number(payment_amount) || grandTotal;
     const changeAmount = Math.max(0, payment - grandTotal);
 
@@ -2323,9 +2522,9 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
     const trxId = 'trx-' + Date.now();
 
     await runQuery(`
-      INSERT INTO transaksi (id, no_nota, pasien_id, kasir_id, subtotal, discount, tax_amount, grand_total, payment_amount, change_amount, earned_points, therapist_id, doctor_id, nurse_id, marketing_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [trxId, noNota, pasien_id, req.user.id, subtotal, discount, taxAmount, grandTotal, payment, changeAmount, earnedPoints, therapist_id || null, doctor_id || null, nurse_id || null, marketing_id || null]);
+      INSERT INTO transaksi (id, no_nota, pasien_id, kasir_id, subtotal, discount, tax_amount, grand_total, payment_amount, change_amount, earned_points, therapist_id, doctor_id, nurse_id, marketing_id, poin_used)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [trxId, noNota, pasien_id, req.user.id, subtotal, discount, taxAmount, grandTotal, payment, changeAmount, earnedPoints, therapist_id || null, doctor_id || null, nurse_id || null, marketing_id || null, usedPoints]);
 
     for (const item of items) {
       const detailId = 'dtl-' + Math.random().toString(36).substring(2, 9);
@@ -2373,7 +2572,26 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
       }
     }
 
-    await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [earnedPoints, pasien_id]);
+    // Kurangi poin pasien jika digunakan saat checkout transaksi POS
+    if (usedPoints > 0) {
+      const newSaldo = Math.max(0, patientPoints - usedPoints);
+      await runQuery('UPDATE pasien SET total_poin = ? WHERE id = ?', [newSaldo, pasien_id]);
+
+      const pthId = 'pth-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+      await runQuery(`
+        INSERT INTO pasien_poin_history (id, pasien_id, tipe, jumlah_poin, saldo_akhir, kategori, referensi_id, keterangan)
+        VALUES (?, ?, 'REDEEM', ?, ?, 'POTONGAN_PAKET', ?, ?)
+      `, [
+        pthId,
+        pasien_id,
+        usedPoints,
+        newSaldo,
+        trxId,
+        `Penggunaan ${usedPoints.toLocaleString('id-ID')} Poin MGM untuk potongan belanja kasir (No Nota: ${noNota})`
+      ]);
+    } else if (earnedPoints > 0) {
+      await runQuery('UPDATE pasien SET total_poin = total_poin + ? WHERE id = ?', [earnedPoints, pasien_id]);
+    }
 
     // Mark associated completed doingan as billed
     const { doingan_id } = req.body;
@@ -2391,6 +2609,7 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
       transaksi_id: trxId,
       no_nota: noNota,
       grand_total: grandTotal,
+      poin_used: usedPoints,
       earned_points: earnedPoints
     });
   } catch (err) {

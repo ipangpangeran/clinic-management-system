@@ -182,9 +182,29 @@ async function initDb() {
     } catch (e) { }
 
     try {
+      await runQuery(`ALTER TABLE pasien ADD COLUMN mgm_reward_given INTEGER DEFAULT 0`);
+    } catch (e) { }
+
+    try {
       await runQuery(`UPDATE pasien SET initial_tipe_pasien = tipe_pasien WHERE initial_tipe_pasien IS NULL OR initial_tipe_pasien = ''`);
       await runQuery(`UPDATE pasien SET initial_tipe_pasien = 'TRIAL' WHERE has_trial_history = 1`);
     } catch (e) { }
+
+    // Riwayat Mutasi Poin Pasien (Pemberian MGM & Penggunaan: Facial Free / Potongan Paket)
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS pasien_poin_history (
+        id TEXT PRIMARY KEY,
+        pasien_id TEXT NOT NULL,
+        tipe TEXT NOT NULL CHECK(tipe IN ('EARN', 'REDEEM')),
+        jumlah_poin INTEGER NOT NULL,
+        saldo_akhir INTEGER DEFAULT 0,
+        kategori TEXT NOT NULL, -- 'MGM_REFERRAL', 'FACIAL_FREE', 'POTONGAN_PAKET', 'POS_DISCOUNT', 'MANUAL'
+        referensi_id TEXT,
+        keterangan TEXT,
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
+        FOREIGN KEY(pasien_id) REFERENCES pasien(id) ON DELETE CASCADE
+      )
+    `);
 
     // 5a. Master Paket Templates
     await runQuery(`
@@ -430,6 +450,10 @@ async function initDb() {
         FOREIGN KEY(pasien_id) REFERENCES pasien(id)
       )
     `);
+
+    try {
+      await runQuery(`ALTER TABLE transaksi ADD COLUMN poin_used REAL DEFAULT 0`);
+    } catch (e) { }
 
     // 12. Transaction Details
     await runQuery(`

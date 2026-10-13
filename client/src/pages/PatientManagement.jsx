@@ -7,7 +7,8 @@ import {
   UserPlus, Search, Edit, Trash2, Download, Package, Calendar,
   AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet, UserCheck,
   Clock, RefreshCw, Sparkles, Stethoscope, Users, CheckCircle2, UserPlus2, History, Database,
-  ShoppingCart, X, ChevronLeft, ChevronRight, Plus, ChevronDown, ChevronUp, Edit3, Tag
+  ShoppingCart, X, ChevronLeft, ChevronRight, Plus, ChevronDown, ChevronUp, Edit3, Tag,
+  Gift, Coins, ArrowRightLeft
 } from 'lucide-react';
 import { formatPersonName } from '../utils/formatters';
 
@@ -151,6 +152,22 @@ export default function PatientManagement({
   // Marketing Recap State
   const [marketingRecap, setMarketingRecap] = useState([]);
   const [showMarketingModal, setShowMarketingModal] = useState(false);
+
+  // MGM Point Redemption & History State
+  const [showPointModal, setShowPointModal] = useState(false);
+  const [selectedPointPatient, setSelectedPointPatient] = useState(null);
+  const [pointHistory, setPointHistory] = useState([]);
+  const [loadingPointHistory, setLoadingPointHistory] = useState(false);
+  const [pointActiveTab, setPointActiveTab] = useState('TUKAR_FACIAL'); // 'TUKAR_FACIAL' | 'TUKAR_PAKET' | 'RIWAYAT'
+  const [facialFreeType, setFacialFreeType] = useState('Facial Oxy');
+  const [facialFreePoints, setFacialFreePoints] = useState(80000);
+  const [facialFreeStaffId, setFacialFreeStaffId] = useState('');
+  const [facialFreeNotes, setFacialFreeNotes] = useState('');
+  const [selectedPkgForPoint, setSelectedPkgForPoint] = useState('');
+  const [packagePointNominal, setPackagePointNominal] = useState(0);
+  const [patientUnpaidPkgs, setPatientUnpaidPkgs] = useState([]);
+  const [pointSubmitting, setPointSubmitting] = useState(false);
+  const [pointMessage, setPointMessage] = useState({ type: '', text: '' });
 
   // New Master Package Form State
   const [newMasterNama, setNewMasterNama] = useState('');
@@ -753,6 +770,142 @@ export default function PatientManagement({
     } catch (err) {
       const msg = err.response?.data?.message || 'Terjadi kesalahan sistem';
       setErrorMessage(msg);
+    }
+  };
+
+  // --- MGM POINT HANDLERS ---
+  const openPointModal = async (patient) => {
+    setSelectedPointPatient(patient);
+    setPointMessage({ type: '', text: '' });
+    setFacialFreeType('Facial Oxy');
+    const pTotal = Number(patient.total_poin) || 0;
+    setFacialFreePoints(pTotal >= 80000 ? 80000 : pTotal);
+    setFacialFreeStaffId('');
+    setFacialFreeNotes('');
+    setPackagePointNominal(0);
+    setSelectedPkgForPoint('');
+    setShowPointModal(true);
+    setPointActiveTab('TUKAR_FACIAL');
+    fetchStaffAvailability('Beautician', true);
+    setLoadingPointHistory(true);
+
+    try {
+      const [histRes, pkgRes] = await Promise.all([
+        axios.get(`/api/pasien/${patient.id}/poin-history`),
+        axios.get(`/api/pasien/${patient.id}/paket`)
+      ]);
+      setPointHistory(histRes.data?.history || []);
+      const pkgs = pkgRes.data || [];
+      const unpaid = pkgs.filter(p => (Number(p.sisa_tagihan) > 0 || p.status_pembayaran === 'BELUM_LUNAS'));
+      setPatientUnpaidPkgs(unpaid);
+      if (unpaid.length > 0) {
+        setSelectedPkgForPoint(unpaid[0].id);
+        const maxPotong = Math.min(Number(unpaid[0].sisa_tagihan) || 0, pTotal);
+        setPackagePointNominal(maxPotong);
+      }
+    } catch (err) {
+      console.error('Error fetching point details', err);
+    } finally {
+      setLoadingPointHistory(false);
+    }
+  };
+
+  const handleRedeemFacialFree = async (e) => {
+    e.preventDefault();
+    if (!selectedPointPatient) return;
+    const pts = Number(facialFreePoints) || 0;
+    if (pts <= 0) {
+      alert('Poin yang ditukarkan harus lebih dari 0');
+      return;
+    }
+    const currentPts = Number(selectedPointPatient.total_poin) || 0;
+    if (pts > currentPts) {
+      alert(`Saldo poin tidak mencukupi. Saldo saat ini: ${currentPts.toLocaleString('id-ID')} Poin`);
+      return;
+    }
+    if (!window.confirm(`Konfirmasi penukaran ${pts.toLocaleString('id-ID')} Poin untuk Facial Free (${facialFreeType}) bagi pasien "${selectedPointPatient.nama_lengkap}"?\n\nSesi facial gratis akan langsung otomatis masuk ke antrean pengerjaan Beautician.`)) {
+      return;
+    }
+
+    setPointSubmitting(true);
+    setPointMessage({ type: '', text: '' });
+    try {
+      const res = await axios.post(`/api/pasien/${selectedPointPatient.id}/tukar-poin`, {
+        kategori: 'FACIAL_FREE',
+        jenis_facial: facialFreeType,
+        jumlah_poin: pts,
+        therapist_id: facialFreeStaffId || null,
+        catatan: facialFreeNotes
+      });
+      setPointMessage({ type: 'success', text: res.data.message });
+      const updatedPts = res.data.sisa_poin;
+      setSelectedPointPatient(prev => ({ ...prev, total_poin: updatedPts }));
+      fetchPatients();
+      fetchTodayDoingan(true);
+      const histRes = await axios.get(`/api/pasien/${selectedPointPatient.id}/poin-history`);
+      setPointHistory(histRes.data?.history || []);
+    } catch (err) {
+      setPointMessage({ type: 'error', text: err.response?.data?.message || 'Gagal menukarkan poin' });
+    } finally {
+      setPointSubmitting(false);
+    }
+  };
+
+  const handleRedeemPackageDiscount = async (e) => {
+    e.preventDefault();
+    if (!selectedPointPatient || !selectedPkgForPoint) {
+      alert('Pilih paket treatment yang akan dipotong tagihannya!');
+      return;
+    }
+    const pts = Number(packagePointNominal) || 0;
+    if (pts <= 0) {
+      alert('Nominal poin potongan harus lebih dari 0');
+      return;
+    }
+    const currentPts = Number(selectedPointPatient.total_poin) || 0;
+    if (pts > currentPts) {
+      alert('Saldo poin tidak mencukupi');
+      return;
+    }
+
+    const targetPkg = patientUnpaidPkgs.find(p => p.id === selectedPkgForPoint);
+    if (!targetPkg) return;
+
+    if (!window.confirm(`Gunakan ${pts.toLocaleString('id-ID')} Poin untuk memotong sisa tagihan paket "${targetPkg.nama_paket}"?`)) {
+      return;
+    }
+
+    setPointSubmitting(true);
+    setPointMessage({ type: '', text: '' });
+    try {
+      const res = await axios.post(`/api/pasien/${selectedPointPatient.id}/tukar-poin`, {
+        kategori: 'POTONGAN_PAKET',
+        pasien_paket_id: selectedPkgForPoint,
+        jumlah_poin: pts
+      });
+      setPointMessage({ type: 'success', text: res.data.message });
+      const updatedPts = res.data.sisa_poin;
+      setSelectedPointPatient(prev => ({ ...prev, total_poin: updatedPts }));
+      fetchPatients();
+      const [histRes, pkgRes] = await Promise.all([
+        axios.get(`/api/pasien/${selectedPointPatient.id}/poin-history`),
+        axios.get(`/api/pasien/${selectedPointPatient.id}/paket`)
+      ]);
+      setPointHistory(histRes.data?.history || []);
+      const pkgs = pkgRes.data || [];
+      const unpaid = pkgs.filter(p => (Number(p.sisa_tagihan) > 0 || p.status_pembayaran === 'BELUM_LUNAS'));
+      setPatientUnpaidPkgs(unpaid);
+      if (unpaid.length > 0) {
+        setSelectedPkgForPoint(unpaid[0].id);
+        setPackagePointNominal(Math.min(Number(unpaid[0].sisa_tagihan) || 0, updatedPts));
+      } else {
+        setSelectedPkgForPoint('');
+        setPackagePointNominal(0);
+      }
+    } catch (err) {
+      setPointMessage({ type: 'error', text: err.response?.data?.message || 'Gagal memotong tagihan paket' });
+    } finally {
+      setPointSubmitting(false);
     }
   };
 
@@ -1863,8 +2016,23 @@ export default function PatientManagement({
                               </span>
                             )}
                           </td>
-                          <td className="py-3.5 px-4 font-bold text-[#7d5141] whitespace-nowrap">
-                            +{p.total_poin || 0} Poin
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <div className="flex flex-col items-start gap-1">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 shadow-2xs ${p.total_poin > 0
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                }`}>
+                                <Gift className="w-3 h-3 text-amber-600" />
+                                <span>+{(p.total_poin || 0).toLocaleString('id-ID')} Poin</span>
+                              </span>
+                              <button
+                                onClick={() => openPointModal(p)}
+                                className="text-[10px] font-bold text-[#7d5141] hover:text-[#5c3a2e] flex items-center gap-1 cursor-pointer bg-white px-2 py-0.5 rounded-md border border-[#d6c2bd] hover:bg-[#faf3e8] transition-colors shadow-2xs"
+                                title="Buka Detail & Penukaran Poin MGM Pasien"
+                              >
+                                <span>🎁 Tukar / Detail</span>
+                              </button>
+                            </div>
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             {p.total_paket > 0 ? (
@@ -4041,6 +4209,396 @@ export default function PatientManagement({
               >
                 <ShoppingCart className="w-4 h-4" />
                 <span>{submittingMigrationPkg ? 'Menyimpan...' : 'Simpan & Teruskan Tagihan ke POS'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL MANAJEMEN & PENUKARAN POIN PASIEN MGM                               */}
+      {/* ========================================================================= */}
+      {showPointModal && selectedPointPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-2xl w-full border border-[#e5ded4] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="p-5 bg-gradient-to-r from-[#faf3e8] via-[#fffbf5] to-[#faf3e8] border-b border-[#e5ded4] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-100 border border-amber-300 text-amber-900 flex items-center justify-center shadow-xs">
+                  <Gift className="w-6 h-6 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-base text-[#1e1b15] flex items-center gap-2">
+                    <span>Manajemen & Penukaran Poin MGM</span>
+                  </h3>
+                  <p className="text-xs text-[#83746f]">
+                    Pasien: <strong className="text-[#1e1b15]">{selectedPointPatient.nama_lengkap}</strong> ({selectedPointPatient.no_hp || '-'})
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-right px-3 py-1 bg-amber-50 rounded-xl border border-amber-200">
+                  <span className="text-[10px] text-[#83746f] block uppercase font-bold tracking-wider">Saldo Poin</span>
+                  <span className="text-sm font-extrabold text-amber-900 font-mono">
+                    +{(selectedPointPatient.total_poin || 0).toLocaleString('id-ID')} Poin
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPointModal(false)}
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Rules & Policy Banner */}
+              <div className="p-3.5 bg-gradient-to-br from-amber-50 to-orange-50/40 rounded-2xl border border-amber-200/80 text-xs text-amber-950 space-y-1.5">
+                <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                  <Coins className="w-4 h-4 text-amber-700" />
+                  <span>Ketentuan Resmi Poin Member Get Member (MGM)</span>
+                </div>
+                <ul className="text-[11px] text-amber-900/90 list-disc list-inside space-y-0.5 leading-relaxed">
+                  <li><strong>Perhitungan Poin:</strong> 5% dari pembelanjaan treatment diawal saat pasien yang direferensikan mengambil paket (1 Poin = Rp 1).</li>
+                  <li><strong>Batas Perolehan:</strong> Poin <em>hanya didapat 1x di awal</em>. Pembelanjaan ke-2 atau upgrade treatment tidak menghasilkan poin kembali.</li>
+                  <li><strong>Pilihan Penukaran:</strong> Poin hanya dapat ditukarkan ke <strong>Facial Free</strong> atau <strong>Pengambilan / Potongan Paket Treatment</strong>.</li>
+                </ul>
+              </div>
+
+              {/* Action Message Feedback */}
+              {pointMessage.text && (
+                <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${pointMessage.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-900 border border-rose-200'
+                  }`}>
+                  {pointMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />}
+                  <span>{pointMessage.text}</span>
+                </div>
+              )}
+
+              {/* Tabs Switcher */}
+              <div className="flex border-b border-[#e5ded4] gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setPointActiveTab('TUKAR_FACIAL'); setPointMessage({ type: '', text: '' }); }}
+                  className={`pb-2.5 px-3 text-xs font-bold transition-all cursor-pointer border-b-2 flex items-center gap-1.5 ${pointActiveTab === 'TUKAR_FACIAL'
+                    ? 'border-[#7d5141] text-[#7d5141]'
+                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                    }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Tukar ke Facial Free</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPointActiveTab('TUKAR_PAKET'); setPointMessage({ type: '', text: '' }); }}
+                  className={`pb-2.5 px-3 text-xs font-bold transition-all cursor-pointer border-b-2 flex items-center gap-1.5 ${pointActiveTab === 'TUKAR_PAKET'
+                    ? 'border-[#7d5141] text-[#7d5141]'
+                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                    }`}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Potong Tagihan Paket</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPointActiveTab('RIWAYAT'); setPointMessage({ type: '', text: '' }); }}
+                  className={`pb-2.5 px-3 text-xs font-bold transition-all cursor-pointer border-b-2 flex items-center gap-1.5 ${pointActiveTab === 'RIWAYAT'
+                    ? 'border-[#7d5141] text-[#7d5141]'
+                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                    }`}
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>Riwayat Mutasi Poin ({pointHistory.length})</span>
+                </button>
+              </div>
+
+              {/* TAB 1: TUKAR KE FACIAL FREE */}
+              {pointActiveTab === 'TUKAR_FACIAL' && (
+                <form onSubmit={handleRedeemFacialFree} className="space-y-4 pt-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-[#514440] mb-1">
+                        Pilihan Jenis Facial Free <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={facialFreeType}
+                        onChange={(e) => setFacialFreeType(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-semibold focus:outline-none focus:border-[#7d5141]"
+                        required
+                      >
+                        <option value="Facial Oxy">Facial Oxy</option>
+                        <option value="Facial PDT">Facial PDT</option>
+                        <option value="Facial Micro">Facial Micro</option>
+                        <option value="Facial Organik">Facial Organik</option>
+                        <option value="Facial Detox">Facial Detox</option>
+                        <option value="Facial Premium">Facial Premium</option>
+                      </select>
+                      <span className="text-[10px] text-gray-500 mt-1 block">
+                        Pilih jenis layanan facial yang diklaim pasien.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#514440] mb-1">
+                        Poin yang Ditukarkan <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="1"
+                          max={selectedPointPatient.total_poin || 0}
+                          value={facialFreePoints}
+                          onChange={(e) => setFacialFreePoints(Math.max(0, Number(e.target.value)))}
+                          className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-amber-950 focus:outline-none focus:border-[#7d5141]"
+                          required
+                        />
+                        <span className="absolute right-3 top-2 text-xs font-bold text-gray-400">Poin</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-1 text-[10px]">
+                        <span className="text-gray-500">Maksimal: {(selectedPointPatient.total_poin || 0).toLocaleString('id-ID')} Poin</span>
+                        <button
+                          type="button"
+                          onClick={() => setFacialFreePoints(Math.min(80000, selectedPointPatient.total_poin || 0))}
+                          className="text-[#7d5141] font-bold hover:underline cursor-pointer"
+                        >
+                          Set Standar (80.000)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-[#514440] mb-1">
+                        Petugas Beautician (Opsional)
+                      </label>
+                      <select
+                        value={facialFreeStaffId}
+                        onChange={(e) => setFacialFreeStaffId(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-medium focus:outline-none focus:border-[#7d5141]"
+                      >
+                        <option value="">-- Tugaskan Nanti (Antre Bebas) --</option>
+                        {staffList.map(st => (
+                          <option key={st.id} value={st.id}>
+                            {st.full_name} ({st.status_bertugas === 'SEDANG_BERTUGAS' ? '🔴 Sedang Bertugas' : '🟢 Tersedia'})
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] text-gray-500 mt-1 block">
+                        Jika dipilih, sesi pengerjaan langsung ditugaskan ke Beautician tersebut.
+                      </span>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-[#514440] mb-1">
+                        Catatan Tambahan (Opsional)
+                      </label>
+                      <input
+                        type="text"
+                        value={facialFreeNotes}
+                        onChange={(e) => setFacialFreeNotes(e.target.value)}
+                        placeholder="Contoh: Pasien request ruangan dingin / kulit sensitif"
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-medium focus:outline-none focus:border-[#7d5141]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-[11px] text-emerald-950 flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Otomatis Masuk Antrean Pengerjaan:</strong>
+                      <p className="mt-0.5 text-emerald-900">
+                        Setelah ditukarkan, sistem akan otomatis membuat antrean pengerjaan facial di halaman Beautician dengan status <em>Layanan Gratis / Billed</em>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={pointSubmitting || (selectedPointPatient.total_poin || 0) <= 0 || facialFreePoints <= 0}
+                      className="px-5 py-2.5 bg-[#7d5141] hover:bg-[#684133] disabled:bg-gray-300 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>{pointSubmitting ? 'Memproses...' : `Tukarkan ${facialFreePoints.toLocaleString('id-ID')} Poin ke Facial Free`}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* TAB 2: TUKAR KE POTONGAN PAKET TREATMENT */}
+              {pointActiveTab === 'TUKAR_PAKET' && (
+                <div className="space-y-4 pt-1">
+                  {patientUnpaidPkgs.length === 0 ? (
+                    <div className="p-6 text-center bg-[#faf3e8]/60 border border-[#e5ded4] rounded-2xl space-y-2">
+                      <Package className="w-8 h-8 text-gray-400 mx-auto" />
+                      <div className="font-bold text-xs text-[#514440]">
+                        Tidak Ada Paket dengan Sisa Tagihan Belum Lunas
+                      </div>
+                      <p className="text-[11px] text-[#83746f] max-w-md mx-auto">
+                        Saat ini seluruh paket treatment pasien sudah lunas penuh. Pasien dapat menggunakan poinnya saat melakukan pembelian paket baru di menu <strong>Kasir POS</strong>.
+                      </p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleRedeemPackageDiscount} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-[#514440] mb-1.5">
+                          Pilih Paket yang Ingin Dipotong Sisa Tagihannya <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="space-y-2">
+                          {patientUnpaidPkgs.map(pkg => {
+                            const isSelected = selectedPkgForPoint === pkg.id;
+                            const sisa = Number(pkg.sisa_tagihan) || 0;
+                            return (
+                              <div
+                                key={pkg.id}
+                                onClick={() => {
+                                  setSelectedPkgForPoint(pkg.id);
+                                  setPackagePointNominal(Math.min(sisa, selectedPointPatient.total_poin || 0));
+                                }}
+                                className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between ${isSelected
+                                  ? 'bg-[#faf3e8] border-[#7d5141] ring-1 ring-[#7d5141] shadow-2xs'
+                                  : 'bg-white border-[#e5ded4] hover:bg-[#faf3e8]/40'
+                                  }`}
+                              >
+                                <div>
+                                  <div className="font-bold text-[#1e1b15]">{pkg.nama_paket}</div>
+                                  <div className="text-[11px] text-[#83746f] mt-0.5">
+                                    Harga Paket: Rp {(pkg.harga_paket || 0).toLocaleString('id-ID')} | DP Masuk: Rp {(pkg.nominal_dp || 0).toLocaleString('id-ID')}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-[10px] text-rose-600 font-bold block uppercase tracking-wider">Kurang Bayar</span>
+                                  <span className="text-sm font-extrabold text-rose-700 font-mono">
+                                    Rp {sisa.toLocaleString('id-ID')}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {selectedPkgForPoint && (
+                        <div className="p-4 bg-white border border-[#e5ded4] rounded-2xl space-y-3">
+                          <label className="block text-xs font-bold text-[#514440]">
+                            Nominal Poin untuk Potongan Tagihan (1 Poin = Rp 1) <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="1"
+                              max={Math.min(
+                                selectedPointPatient.total_poin || 0,
+                                Number(patientUnpaidPkgs.find(p => p.id === selectedPkgForPoint)?.sisa_tagihan) || 0
+                              )}
+                              value={packagePointNominal}
+                              onChange={(e) => setPackagePointNominal(Math.max(0, Number(e.target.value)))}
+                              className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs font-bold text-emerald-900 focus:outline-none focus:border-[#7d5141]"
+                              required
+                            />
+                            <span className="absolute right-3 top-2 text-xs font-bold text-gray-400">Poin (Rp)</span>
+                          </div>
+
+                          <div className="flex justify-between items-center text-[11px] text-[#83746f]">
+                            <span>Saldo Poin Pasien: {(selectedPointPatient.total_poin || 0).toLocaleString('id-ID')} Poin</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const targetPkg = patientUnpaidPkgs.find(p => p.id === selectedPkgForPoint);
+                                const maxP = Math.min(Number(targetPkg?.sisa_tagihan) || 0, selectedPointPatient.total_poin || 0);
+                                setPackagePointNominal(maxP);
+                              }}
+                              className="text-[#7d5141] font-bold hover:underline cursor-pointer"
+                            >
+                              Gunakan Maksimal
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="submit"
+                          disabled={pointSubmitting || !selectedPkgForPoint || packagePointNominal <= 0 || (selectedPointPatient.total_poin || 0) <= 0}
+                          className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold text-xs rounded-xl shadow-md cursor-pointer flex items-center gap-2"
+                        >
+                          <Coins className="w-4 h-4" />
+                          <span>{pointSubmitting ? 'Memproses...' : `Gunakan ${packagePointNominal.toLocaleString('id-ID')} Poin untuk Potong Tagihan`}</span>
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: RIWAYAT MUTASI POIN */}
+              {pointActiveTab === 'RIWAYAT' && (
+                <div className="space-y-3 pt-1">
+                  {loadingPointHistory ? (
+                    <div className="py-8 text-center text-xs text-gray-400">Memuat riwayat mutasi poin...</div>
+                  ) : pointHistory.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-gray-400 italic">
+                      Belum ada riwayat mutasi poin untuk pasien ini.
+                    </div>
+                  ) : (
+                    <div className="border border-[#e5ded4] rounded-2xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase text-[10px] tracking-wider border-b border-[#e5ded4]">
+                          <tr>
+                            <th className="py-2.5 px-3">Tanggal</th>
+                            <th className="py-2.5 px-3">Jenis Mutasi</th>
+                            <th className="py-2.5 px-3 text-right">Poin</th>
+                            <th className="py-2.5 px-3 text-right">Saldo Akhir</th>
+                            <th className="py-2.5 px-3">Keterangan</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#e5ded4]">
+                          {pointHistory.map((h) => {
+                            const isEarn = h.tipe === 'EARN';
+                            return (
+                              <tr key={h.id} className="hover:bg-[#faf3e8]/30">
+                                <td className="py-2 px-3 text-gray-500 text-[11px] whitespace-nowrap">
+                                  {h.created_at ? new Date(h.created_at).toLocaleString('id-ID') : '-'}
+                                </td>
+                                <td className="py-2 px-3 whitespace-nowrap">
+                                  <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold ${isEarn
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                    }`}>
+                                    {isEarn ? '+ PEROLEHAN MGM' : '- PENUKARAN'}
+                                  </span>
+                                </td>
+                                <td className={`py-2 px-3 text-right font-bold font-mono ${isEarn ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                  {isEarn ? '+' : '-'}{Number(h.jumlah_poin || 0).toLocaleString('id-ID')}
+                                </td>
+                                <td className="py-2 px-3 text-right font-medium text-gray-600 font-mono">
+                                  {Number(h.saldo_akhir || 0).toLocaleString('id-ID')}
+                                </td>
+                                <td className="py-2 px-3 text-gray-700 text-[11px]">
+                                  {h.keterangan || '-'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 bg-[#faf3e8] border-t border-[#e5ded4] flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowPointModal(false)}
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-[#514440] font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Tutup
               </button>
             </div>
           </div>

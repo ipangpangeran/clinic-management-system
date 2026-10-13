@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp, Tag, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp, Tag, AlertTriangle, Gift, Coins } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PosBillingCounter() {
@@ -27,6 +27,10 @@ export default function PosBillingCounter() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [clinicProfile, setClinicProfile] = useState(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+
+  // MGM Point Usage State
+  const [usePoinMGM, setUsePoinMGM] = useState(false);
+  const [poinUsedInput, setPoinUsedInput] = useState('');
 
   // Selected Professional Lines for Commissions (Auto-assigned)
   const [selectedTherapistId, setSelectedTherapistId] = useState('');
@@ -410,10 +414,7 @@ export default function PosBillingCounter() {
   const discount = Number(discountAmount) || 0;
   const taxable = Math.max(0, subtotal - discount);
   const taxAmount = isTaxEnabled && taxRate > 0 ? Math.round(taxable * taxRate) : 0;
-  const grandTotal = taxable + taxAmount;
-  const payment = Number(paymentAmount) || grandTotal;
-  const changeAmount = Math.max(0, payment - grandTotal);
-  const earnedPoints = 0;
+  const initialGrandTotal = taxable + taxAmount;
 
   const filteredPatients = patients.filter(p => {
     const q = (patientSearch || '').toLowerCase();
@@ -422,6 +423,16 @@ export default function PosBillingCounter() {
 
   const selectedPatient = patients.find(p => p.id === selectedPatientId);
   const selectedTherapistUser = users.find(u => u.id === selectedTherapistId);
+
+  // Perhitungan Poin Pasien MGM untuk Diskon Belanja POS (1 Poin = Rp 1)
+  const patientPoints = Number(selectedPatient?.total_poin) || 0;
+  const desiredPoinUsed = usePoinMGM ? (poinUsedInput === '' ? Math.min(patientPoints, initialGrandTotal) : Number(poinUsedInput) || 0) : 0;
+  const actualPoinUsed = Math.min(desiredPoinUsed, patientPoints, initialGrandTotal);
+  const grandTotal = Math.max(0, initialGrandTotal - actualPoinUsed);
+
+  const payment = Number(paymentAmount) || grandTotal;
+  const changeAmount = Math.max(0, payment - grandTotal);
+  const earnedPoints = 0;
 
   const handleCheckout = async () => {
     if (!selectedPatientId) {
@@ -441,7 +452,8 @@ export default function PosBillingCounter() {
         discount_amount: discount,
         payment_amount: payment,
         therapist_id: selectedTherapistId || null,
-        doingan_id: activeDoinganId || null
+        doingan_id: activeDoinganId || null,
+        poin_used: actualPoinUsed
       };
 
       const res = await axios.post('/api/transaksi', payload);
@@ -456,6 +468,8 @@ export default function PosBillingCounter() {
       setCart([]);
       setDiscountAmount(0);
       setPaymentAmount('');
+      setUsePoinMGM(false);
+      setPoinUsedInput('');
       setActiveDoinganId(null);
       setSelectedTherapistId('');
       fetchInitialPosData();
@@ -1051,6 +1065,66 @@ export default function PosBillingCounter() {
                     />
                   </div>
 
+                  {/* MGM Point Redemption Section (Hanya tampil jika pasien memiliki poin) */}
+                  {selectedPatient && selectedPatient.total_poin > 0 && (
+                    <div className="p-2.5 bg-gradient-to-r from-amber-50 to-orange-50/50 border border-amber-200 rounded-xl space-y-2 my-1">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={usePoinMGM}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setUsePoinMGM(checked);
+                              if (checked && poinUsedInput === '') {
+                                setPoinUsedInput(Math.min(selectedPatient.total_poin, initialGrandTotal));
+                              }
+                            }}
+                            className="w-3.5 h-3.5 text-amber-700 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <span className="text-[11px] font-bold text-amber-950 flex items-center gap-1">
+                            <Gift className="w-3.5 h-3.5 text-amber-700" />
+                            <span>Gunakan Poin MGM (Saldo: {(selectedPatient.total_poin || 0).toLocaleString('id-ID')})</span>
+                          </span>
+                        </label>
+                        <span className="text-[9.5px] bg-amber-200/70 text-amber-900 font-bold px-2 py-0.2 rounded-full">
+                          1 Poin = Rp 1
+                        </span>
+                      </div>
+
+                      {usePoinMGM && (
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-amber-200/60">
+                          <span className="text-[10.5px] text-amber-900 font-semibold">Pakai Poin:</span>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              max={Math.min(selectedPatient.total_poin || 0, initialGrandTotal)}
+                              value={poinUsedInput}
+                              onChange={(e) => setPoinUsedInput(e.target.value)}
+                              placeholder={Math.min(selectedPatient.total_poin || 0, initialGrandTotal)}
+                              className="w-24 px-2 py-1 text-right bg-white border border-amber-300 rounded-lg text-xs font-bold text-amber-950 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setPoinUsedInput(Math.min(selectedPatient.total_poin || 0, initialGrandTotal))}
+                              className="px-2 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[10px] font-bold rounded-lg cursor-pointer"
+                            >
+                              Maks
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {actualPoinUsed > 0 && (
+                    <div className="flex justify-between text-amber-900 font-bold bg-amber-50 px-2 py-1 rounded-lg">
+                      <span>Potongan Poin Pasien MGM:</span>
+                      <span className="font-mono">-Rp {actualPoinUsed.toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+
                   {isTaxEnabled && taxRate > 0 && (
                     <div className="flex justify-between text-[#514440]">
                       <span>Pajak PPN ({taxRatePercent}%)</span>
@@ -1163,6 +1237,12 @@ export default function PosBillingCounter() {
                   <span>Diskon:</span>
                   <span>Rp {receiptData.transaction.discount.toLocaleString('id-ID')}</span>
                 </div>
+                {receiptData.transaction.poin_used > 0 && (
+                  <div className="flex justify-between font-bold">
+                    <span>POTONGAN POIN:</span>
+                    <span>-Rp {receiptData.transaction.poin_used.toLocaleString('id-ID')}</span>
+                  </div>
+                )}
                 {receiptData.transaction.tax_amount > 0 && (
                   <div className="flex justify-between">
                     <span>Pajak (PPN {receiptData.clinic?.tax_rate_percent || 11}%):</span>
