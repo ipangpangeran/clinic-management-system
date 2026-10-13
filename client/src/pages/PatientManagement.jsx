@@ -99,6 +99,18 @@ export default function PatientManagement({
   const [itemBName, setItemBName] = useState('Facial');
   const [itemBKuota, setItemBKuota] = useState(2);
 
+  // Package DP & Payment States
+  const [isDpPayment, setIsDpPayment] = useState(false);
+  const [nominalDp, setNominalDp] = useState(0);
+  const [catatanPembayaran, setCatatanPembayaran] = useState('');
+
+  // Pelunasan Modal State
+  const [showPelunasanModal, setShowPelunasanModal] = useState(false);
+  const [selectedPelunasanPkg, setSelectedPelunasanPkg] = useState(null);
+  const [nominalPelunasan, setNominalPelunasan] = useState('');
+  const [catatanPelunasan, setCatatanPelunasan] = useState('');
+  const [submittingPelunasan, setSubmittingPelunasan] = useState(false);
+
   // Member Registration Package Selection State
   const [selectedRegPackages, setSelectedRegPackages] = useState([]);
   const [isBuyingPackage, setIsBuyingPackage] = useState(false);
@@ -487,6 +499,10 @@ export default function PatientManagement({
       'Tipe Pasien': p.tipe_pasien || '',
       'Alamat': p.alamat || '-',
       'Total Poin': p.total_poin || 0,
+      'Status Paket': p.total_paket > 0 ? (p.paket_aktif > 0 ? `Punya Paket (${p.paket_aktif} Aktif)` : `Paket Habis (${p.total_paket})`) : 'Belum Ada Paket',
+      'Status Pembayaran': p.total_paket > 0 ? ((p.paket_belum_lunas_count > 0 || p.total_sisa_tagihan > 0) ? `Belum Lunas (Sisa: Rp ${(p.total_sisa_tagihan || 0).toLocaleString('id-ID')})` : 'Lunas Penuh') : '-',
+      'Total DP Masuk (Rp)': p.total_dp_paid || 0,
+      'Sisa Tagihan Paket (Rp)': p.total_sisa_tagihan || 0,
       'Tanggal Terdaftar': p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : ''
     }));
 
@@ -786,23 +802,74 @@ export default function PatientManagement({
     }
 
     try {
+      const pkgPrice = Number(hargaPaket) || 0;
       await axios.post(`/api/pasien/${selectedPatient.id}/paket`, {
         nama_paket: namaPaket.trim(),
         item_a_name: hasA ? aName : '',
         item_a_kuota: hasA ? aKuota : 0,
         item_b_name: hasB ? bName : '',
         item_b_kuota: hasB ? bKuota : 0,
-        harga_paket: Number(hargaPaket) || 0
+        harga_paket: pkgPrice,
+        is_dp: isDpPayment,
+        nominal_dp: 0,
+        catatan_pembayaran: isDpPayment ? 'Skema DP (Menunggu Kasir POS)' : 'Lunas Penuh'
       });
       const res = await axios.get(`/api/pasien/${selectedPatient.id}/paket`);
       const patientPkgs = res.data || [];
       setPackages(patientPkgs);
       setIsAssignPackageOpen(false); // Collapse form after successfully adding package
+      setIsDpPayment(false);
       fetchTodayDoingan();
       fetchPatients();
-      alert(`Paket treatment "${namaPaket}" berhasil ditambahkan ke pasien! Tagihan paket otomatis masuk ke antrean Kasir POS.`);
+      if (isDpPayment) {
+        alert(`Paket treatment "${namaPaket}" berhasil ditambahkan dengan Skema DP!\nTagihan otomatis diteruskan ke antrian Kasir POS untuk penentuan nominal pembayaran DP.`);
+      } else {
+        alert(`Paket treatment "${namaPaket}" berhasil ditambahkan (Lunas Penuh)! Tagihan otomatis masuk ke antrian Kasir POS.`);
+      }
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menambahkan paket');
+    }
+  };
+
+  const openPelunasanModal = (pkg) => {
+    setSelectedPelunasanPkg(pkg);
+    setNominalPelunasan(pkg.sisa_tagihan || 0);
+    setCatatanPelunasan(`Pelunasan paket ${pkg.nama_paket}`);
+    setShowPelunasanModal(true);
+  };
+
+  const handleSubmitPelunasan = async (e) => {
+    e.preventDefault();
+    if (!selectedPelunasanPkg) return;
+    const bayar = Number(nominalPelunasan);
+    if (isNaN(bayar) || bayar <= 0) {
+      alert('Masukkan nominal pelunasan yang valid (minimal Rp 1)!');
+      return;
+    }
+    setSubmittingPelunasan(true);
+    try {
+      const res = await axios.post(`/api/pasien/paket/${selectedPelunasanPkg.id}/pelunasan`, {
+        nominal_bayar: bayar,
+        catatan: catatanPelunasan
+      });
+      alert(res.data?.message || 'Pelunasan berhasil dicatat!');
+      setShowPelunasanModal(false);
+
+      if (selectedPatient) {
+        const pkgRes = await axios.get(`/api/pasien/${selectedPatient.id}/paket`);
+        const updatedPkgs = pkgRes.data || [];
+        setPackages(updatedPkgs);
+        if (selectedClaimPkg && selectedClaimPkg.id === selectedPelunasanPkg.id) {
+          const freshClaim = updatedPkgs.find(p => p.id === selectedClaimPkg.id);
+          if (freshClaim) setSelectedClaimPkg(freshClaim);
+        }
+      }
+      fetchPatients();
+      fetchTodayDoingan();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal memproses pelunasan');
+    } finally {
+      setSubmittingPelunasan(false);
     }
   };
 
@@ -1179,7 +1246,8 @@ export default function PatientManagement({
       (filterType === 'TRIAL' && (p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1)) ||
       (filterType === 'MEMBER' && (p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler')) ||
       (filterType === 'HAS_PACKAGE' && p.total_paket > 0) ||
-      (filterType === 'NO_PACKAGE' && (!p.total_paket || p.total_paket === 0));
+      (filterType === 'NO_PACKAGE' && (!p.total_paket || p.total_paket === 0)) ||
+      (filterType === 'UNPAID_PACKAGE' && (p.paket_belum_lunas_count > 0 || p.total_sisa_tagihan > 0));
 
     let matchDate = true;
     if (dateFilterMode === 'TODAY') {
@@ -1716,6 +1784,16 @@ export default function PatientManagement({
                 >
                   Belum Ada Paket ({patients.filter(p => !p.total_paket || p.total_paket === 0).length})
                 </button>
+                <button
+                  onClick={() => {
+                    setFilterType('UNPAID_PACKAGE');
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${filterType === 'UNPAID_PACKAGE' ? 'bg-rose-700 text-white shadow-xs' : 'bg-rose-50 text-rose-800 border border-rose-300 hover:bg-rose-100'}`}
+                >
+                  {/* <AlertTriangle className="w-3.5 h-3.5" /> */}
+                  <span>Belum Lunas ({patients.filter(p => p.paket_belum_lunas_count > 0 || p.total_sisa_tagihan > 0).length})</span>
+                </button>
               </div>
             </div>
 
@@ -1745,14 +1823,15 @@ export default function PatientManagement({
                     <th className="py-3 px-4 min-w-[130px]">HP & NIK</th>
                     <th className="py-3 px-4 whitespace-nowrap">Tipe Pasien</th>
                     <th className="py-3 px-4 whitespace-nowrap">Poin</th>
-                    <th className="py-3 px-4 whitespace-nowrap">Status Paket</th>
-                    <th className="py-3 px-4 text-right min-w-[360px] whitespace-nowrap">AKSI</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap">Status Paket</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Status Pembayaran</th>
+                    <th className="py-3 px-4 text-center min-w-[120px] whitespace-nowrap">AKSI</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
                   {filteredPatients.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="text-center py-8 text-[#83746f] italic">Tidak ada data pasien yang cocok dengan filter master database.</td>
+                      <td colSpan="8" className="text-center py-8 text-[#83746f] italic">Tidak ada data pasien yang cocok dengan filter master database.</td>
                     </tr>
                   ) : (
                     paginatedPatients.map(p => {
@@ -1772,7 +1851,7 @@ export default function PatientManagement({
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             {isMember && p.has_trial_history === 1 ? (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300">
-                                MEMBER (MIGRASI DARI TRIAL)
+                                MEMBER (MIGRASI)
                               </span>
                             ) : isMember ? (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -1810,6 +1889,35 @@ export default function PatientManagement({
                                 <Package className="w-3 h-3 text-gray-400" />
                                 <span>Belum Ada Paket</span>
                               </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {p.total_paket > 0 ? (
+                              (p.paket_belum_lunas_count > 0 || p.total_sisa_tagihan > 0) ? (
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shadow-2xs">
+                                    <span>⚠️ Belum Lunas</span>
+                                  </span>
+                                  <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                    Kurang: Rp {(p.total_sisa_tagihan || 0).toLocaleString('id-ID')}
+                                  </span>
+                                  {p.total_dp_paid > 0 && (
+                                    <span className="text-[9.5px] text-[#83746f] font-medium">
+                                      DP Masuk: Rp {(p.total_dp_paid || 0).toLocaleString('id-ID')}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 shadow-2xs">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    <span>✓ Lunas Penuh</span>
+                                  </span>
+                                  <span className="text-[9.5px] text-gray-400">Semua paket lunas</span>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-gray-400 font-medium">-</span>
                             )}
                           </td>
                           <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
@@ -2813,20 +2921,42 @@ export default function PatientManagement({
                             )}
                           </div>
 
-                          {/* Price & Billing Status Badge & Sesuaikan Harga Button */}
+                          {/* Price, DP, & Billing Status Breakdown */}
                           <div className="flex flex-wrap items-center gap-2 mt-2">
                             <div className="px-2.5 py-1 bg-white border border-[#d6c2bd] rounded-lg text-xs font-bold text-[#514440] flex items-center gap-1.5 shadow-2xs">
-                              <span>Harga Tagihan:</span>
-                              <span className="text-emerald-700 font-extrabold text-xs font-mono">
+                              <span>Harga Paket:</span>
+                              <span className="text-emerald-700 font-bold text-xs font-mono">
                                 Rp {Number(pkg.harga_paket || 0).toLocaleString('id-ID')}
                               </span>
                             </div>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${pkg.is_billed
-                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                              : 'bg-amber-100 text-amber-900 border border-amber-300'
-                              }`}>
-                              {pkg.is_billed ? '✓ Lunas / Selesai di POS' : '⏳ Menunggu di Kasir POS'}
-                            </span>
+
+                            {/* Status Pembayaran Badge */}
+                            {(pkg.sisa_tagihan > 0 || pkg.status_pembayaran === 'BELUM_LUNAS') ? (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-[10px] font-bold flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                  <span>DP: Rp {(pkg.nominal_dp || 0).toLocaleString('id-ID')}</span>
+                                </span>
+                                <span className="px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-300 rounded-full text-[10px] font-bold">
+                                  Sisa Kurang: Rp {(pkg.sisa_tagihan || 0).toLocaleString('id-ID')}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => openPelunasanModal(pkg)}
+                                  className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
+                                  title="Catat pelunasan sisa tagihan paket ini"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+                                  <span>💵 Catat Pelunasan</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>✓ Lunas Penuh</span>
+                              </span>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => {
@@ -3096,6 +3226,45 @@ export default function PatientManagement({
                     </p>
                   </div>
 
+                  {/* Skema Pembayaran Paket: Lunas Penuh vs DP */}
+                  <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-2">
+                    <label className="block text-[#514440] font-bold text-xs">
+                      Skema Pembayaran Paket *
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsDpPayment(false)}
+                        className={`py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${!isDpPayment
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-white text-[#514440] border border-[#d6c2bd] hover:bg-[#eee7dd]'
+                          }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Lunas Penuh</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsDpPayment(true)}
+                        className={`py-2 px-3 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${isDpPayment
+                          ? 'bg-amber-700 text-white shadow-xs'
+                          : 'bg-white text-[#514440] border border-[#d6c2bd] hover:bg-[#eee7dd]'
+                          }`}
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>Bayar DP Dulu</span>
+                      </button>
+                    </div>
+
+                    {isDpPayment && (
+                      <div className="pt-1.5 border-t border-[#d6c2bd]/60 animate-in fade-in">
+                        <p className="text-[11px] text-amber-900 bg-amber-50 p-2.5 rounded-xl border border-amber-200 leading-snug">
+                          ⚡ <strong>Skema DP Dipilih:</strong> Tagihan paket ini akan diteruskan ke antrian <strong>Kasir POS</strong> dengan status DP. Kasir dapat menentukan nominal pembayaran DP saat proses transaksi POS.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="pt-2 flex justify-end gap-2">
                     <button
                       type="button"
@@ -3180,6 +3349,36 @@ export default function PatientManagement({
             </div>
 
             <form onSubmit={handleProcessClaim} className="space-y-3 text-xs">
+              {/* Alert jika paket ini belum lunas */}
+              {((selectedClaimPkg.sisa_tagihan > 0) || selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS') && (
+                <div className="p-3 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-1.5 text-rose-900 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-xs flex items-center gap-1.5 text-rose-800">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>PERINGATAN: Paket Ini Belum Lunas!</span>
+                    </div>
+                    <span className="px-2 py-0.5 bg-rose-200 text-rose-900 font-bold rounded text-[10px]">
+                      Sisa: Rp {(selectedClaimPkg.sisa_tagihan || 0).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-rose-800 leading-snug">
+                    Pasien memiliki sisa tagihan sebesar <strong>Rp {(selectedClaimPkg.sisa_tagihan || 0).toLocaleString('id-ID')}</strong> (DP awal: Rp {(selectedClaimPkg.nominal_dp || 0).toLocaleString('id-ID')}).
+                    Mohon selesaikan pelunasan saat kedatangan ini.
+                  </p>
+                  <div className="pt-1 flex items-center justify-between border-t border-rose-200">
+                    <span className="text-[10px] text-rose-600 italic">Bisa langsung catat pelunasan:</span>
+                    <button
+                      type="button"
+                      onClick={() => openPelunasanModal(selectedClaimPkg)}
+                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10.5px] shadow-xs cursor-pointer flex items-center gap-1"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Catat Pelunasan Sekarang</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-1">
                 <div className="font-bold text-[#1e1b15] text-sm">
                   Item Klaim: <span className="text-[#7d5141]">{claimItemKey === 'A' ? selectedClaimPkg.item_a_name : selectedClaimPkg.item_b_name}</span>
@@ -3251,6 +3450,36 @@ export default function PatientManagement({
             </div>
 
             <form onSubmit={handleProcessClaimBoth} className="space-y-3.5 text-xs">
+              {/* Alert jika paket ini belum lunas */}
+              {((selectedClaimPkg.sisa_tagihan > 0) || selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS') && (
+                <div className="p-3 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-1.5 text-rose-900 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="font-bold text-xs flex items-center gap-1.5 text-rose-800">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>PERINGATAN: Paket Ini Belum Lunas!</span>
+                    </div>
+                    <span className="px-2 py-0.5 bg-rose-200 text-rose-900 font-bold rounded text-[10px]">
+                      Sisa: Rp {(selectedClaimPkg.sisa_tagihan || 0).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-rose-800 leading-snug">
+                    Pasien memiliki sisa tagihan sebesar <strong>Rp {(selectedClaimPkg.sisa_tagihan || 0).toLocaleString('id-ID')}</strong> (DP awal: Rp {(selectedClaimPkg.nominal_dp || 0).toLocaleString('id-ID')}).
+                    Mohon koordinasikan pelunasan tagihan dengan kasir.
+                  </p>
+                  <div className="pt-1 flex items-center justify-between border-t border-rose-200">
+                    <span className="text-[10px] text-rose-600 italic">Bisa langsung catat pelunasan:</span>
+                    <button
+                      type="button"
+                      onClick={() => openPelunasanModal(selectedClaimPkg)}
+                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10.5px] shadow-xs cursor-pointer flex items-center gap-1"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Catat Pelunasan Sekarang</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Info Urutan Tindakan Sesuai SOP */}
               <div className="p-3 bg-amber-50/80 border border-amber-300 rounded-xl space-y-1 text-amber-950">
                 <div className="font-bold text-xs flex items-center gap-1.5 text-amber-900">
@@ -3325,6 +3554,103 @@ export default function PatientManagement({
                   className="px-5 py-2.5 bg-gradient-to-r from-[#7d5141] to-[#553123] hover:from-[#653d2e] hover:to-[#442317] disabled:bg-gray-300 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
                 >
                   {submittingClaim ? 'Memproses...' : 'Konfirmasi Klaim Keduanya'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PELUNASAN SISA TAGIHAN PAKET */}
+      {showPelunasanModal && selectedPelunasanPkg && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-[#e5ded4] animate-in zoom-in-95">
+            <div className="flex justify-between items-center border-b border-[#e5ded4] pb-3">
+              <div>
+                <h3 className="font-serif font-bold text-base text-[#1e1b15] flex items-center gap-2">
+                  <span>💵 Catat Pelunasan Paket</span>
+                </h3>
+                <p className="text-xs text-[#83746f]">Paket: <strong className="text-[#7d5141]">{selectedPelunasanPkg.nama_paket}</strong></p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPelunasanModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center font-bold text-lg cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitPelunasan} className="space-y-3.5 text-xs">
+              <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-2">
+                <div className="flex justify-between text-[#514440]">
+                  <span>Total Harga Paket:</span>
+                  <strong className="font-mono text-[#1e1b15]">Rp {(Number(selectedPelunasanPkg.harga_paket) || 0).toLocaleString('id-ID')}</strong>
+                </div>
+                <div className="flex justify-between text-[#514440]">
+                  <span>DP Sudah Dibayar:</span>
+                  <span className="font-bold text-emerald-700 font-mono">Rp {(Number(selectedPelunasanPkg.nominal_dp) || 0).toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between pt-1.5 border-t border-[#d6c2bd] font-bold">
+                  <span className="text-rose-800">Sisa Tagihan Belum Lunas:</span>
+                  <span className="text-rose-700 text-sm font-mono font-bold">Rp {(Number(selectedPelunasanPkg.sisa_tagihan) || 0).toLocaleString('id-ID')}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[#514440] font-bold mb-1">
+                  Nominal Pembayaran Pelunasan (Rp) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-xs text-[#514440]">Rp</span>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={nominalPelunasan}
+                    onChange={(e) => setNominalPelunasan(e.target.value)}
+                    placeholder="Masukkan nominal pelunasan..."
+                    className="w-full pl-9 pr-3 py-2 bg-white border border-[#d6c2bd] focus:border-[#7d5141] rounded-xl font-bold text-sm text-[#1e1b15] focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center justify-between mt-1 text-[10px] text-gray-500">
+                  <span>*Bisa lunas penuh atau cicil sebagian</span>
+                  <button
+                    type="button"
+                    onClick={() => setNominalPelunasan(selectedPelunasanPkg.sisa_tagihan || 0)}
+                    className="text-[#7d5141] font-bold hover:underline cursor-pointer"
+                  >
+                    Set Lunas Penuh (Rp {(selectedPelunasanPkg.sisa_tagihan || 0).toLocaleString('id-ID')})
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[#514440] font-semibold mb-1">Catatan Pelunasan / Metode Bayar</label>
+                <input
+                  type="text"
+                  value={catatanPelunasan}
+                  onChange={(e) => setCatatanPelunasan(e.target.value)}
+                  placeholder="Contoh: Lunas via Kasir Cash / QRIS / Transfer..."
+                  className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl text-xs text-[#1e1b15] focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-[#e5ded4]">
+                <button
+                  type="button"
+                  onClick={() => setShowPelunasanModal(false)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-[#514440] font-bold rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingPelunasan}
+                  className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                  <span>{submittingPelunasan ? 'Menyimpan...' : 'Simpan Pelunasan'}</span>
                 </button>
               </div>
             </form>
@@ -3517,7 +3843,7 @@ export default function PatientManagement({
                         <td className="py-2.5 px-3 text-gray-500">{idx + 1}</td>
                         <td className="py-2.5 px-3 font-bold text-[#1e1b15]">{m.marketing_nama}</td>
                         <td className="py-2.5 px-3 text-[#83746f]">{m.marketing_role || 'Marketing'}</td>
-                        <td className="py-2.5 px-3 text-center font-extrabold text-[#1e1b15]">{m.total_pasien_count || 0} Orang</td>
+                        <td className="py-2.5 px-3 text-center font-bold text-[#1e1b15]">{m.total_pasien_count || 0} Orang</td>
                         <td className="py-2.5 px-3 text-center font-bold text-amber-800">{m.total_trial_count || 0}</td>
                         <td className="py-2.5 px-3 text-center font-bold text-blue-800">{m.total_member_count || 0}</td>
                         <td className="py-2.5 px-3">
@@ -3684,11 +4010,11 @@ export default function PatientManagement({
               <div className="p-3.5 bg-[#faf3e8] rounded-xl border border-[#d6c2bd] flex justify-between items-center text-xs font-bold">
                 <div className="text-[#514440]">
                   <span>Total Paket Terpilih: </span>
-                  <span className="text-[#7d5141] font-extrabold">{selectedMigrationPackages.length} Paket</span>
+                  <span className="text-[#7d5141] font-bold">{selectedMigrationPackages.length} Paket</span>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-gray-500 font-semibold uppercase">Total Tagihan POS</div>
-                  <div className="text-sm text-emerald-800 font-extrabold">
+                  <div className="text-sm text-emerald-800 font-bold">
                     Rp {selectedMigrationPackages.reduce((sum, p) => sum + (Number(p.harga_paket) || 0), 0).toLocaleString('id-ID')}
                   </div>
                 </div>

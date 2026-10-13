@@ -902,6 +902,9 @@ app.get('/api/doingan/unbilled', authenticateToken, async (req, res) => {
         p.marketing_id,
         'PAKET' as item_type,
         pp.harga_paket,
+        pp.nominal_dp,
+        pp.sisa_tagihan,
+        pp.status_pembayaran,
         p.nama_lengkap as pasien_nama,
         p.no_hp as pasien_hp,
         p.tipe_pasien,
@@ -1126,7 +1129,10 @@ app.get('/api/pasien', authenticateToken, async (req, res) => {
         (SELECT COUNT(*) FROM pasien_paket pp WHERE pp.pasien_id = p.id) as total_paket,
         (SELECT COUNT(*) FROM pasien_paket pp WHERE pp.pasien_id = p.id AND pp.sisa_kuota > 0) as paket_aktif,
         (SELECT COALESCE(SUM(pp.sisa_kuota), 0) FROM pasien_paket pp WHERE pp.pasien_id = p.id) as total_sisa_kuota,
-        (SELECT GROUP_CONCAT(pp.nama_paket) FROM pasien_paket pp WHERE pp.pasien_id = p.id AND pp.sisa_kuota > 0) as nama_paket_aktif
+        (SELECT GROUP_CONCAT(pp.nama_paket) FROM pasien_paket pp WHERE pp.pasien_id = p.id AND pp.sisa_kuota > 0) as nama_paket_aktif,
+        (SELECT COALESCE(SUM(pp.nominal_dp), 0) FROM pasien_paket pp WHERE pp.pasien_id = p.id) as total_dp_paid,
+        (SELECT COALESCE(SUM(pp.sisa_tagihan), 0) FROM pasien_paket pp WHERE pp.pasien_id = p.id) as total_sisa_tagihan,
+        (SELECT COUNT(*) FROM pasien_paket pp WHERE pp.pasien_id = p.id AND (pp.status_pembayaran = 'BELUM_LUNAS' OR pp.sisa_tagihan > 0)) as paket_belum_lunas_count
       FROM pasien p
       LEFT JOIN users u ON p.marketing_id = u.id
       LEFT JOIN pasien r ON p.referrer_pasien_id = r.id
@@ -1394,11 +1400,11 @@ app.get('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
 app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { packages, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket, marketing_id } = req.body;
+    const { packages, nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket, marketing_id, is_dp, nominal_dp, catatan_pembayaran } = req.body;
 
     const pkgList = Array.isArray(packages) && packages.length > 0
       ? packages
-      : [{ nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket }];
+      : [{ nama_paket, item_a_name, item_a_kuota, item_b_name, item_b_kuota, harga_paket, is_dp, nominal_dp, catatan_pembayaran }];
 
     const targetPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [id]);
     const finalMarketingId = marketing_id || targetPatient?.marketing_id || null;
@@ -1412,10 +1418,6 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
       const pkgPrice = Number(pkg.harga_paket) || 0;
 
       // Hitung komisi marketing berjenjang berdasarkan harga penjualan paket:
-      // < 600.000 -> 30.000
-      // 600.000 s/d < 2.000.000 -> 50.000
-      // 2.000.000 s/d < 10.000.000 -> 70.000
-      // >= 10.000.000 -> 150.000
       let mktComm = 0;
       if (finalMarketingId && pkgPrice > 0) {
         if (pkgPrice < 600000) {
@@ -1429,19 +1431,32 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
         }
       }
 
+      // Hitung Skema Pembayaran: LUNAS PENUH vs DP (Down Payment)
+      const pkgIsDp = Boolean(pkg.is_dp ?? is_dp);
+      let pkgDp = pkgIsDp ? Math.max(0, Number(pkg.nominal_dp ?? nominal_dp) || 0) : pkgPrice;
+      if (pkgDp >= pkgPrice && pkgPrice > 0) {
+        pkgDp = pkgPrice;
+      }
+      const sisaTagihan = Math.max(0, pkgPrice - pkgDp);
+      const statusPembayaran = sisaTagihan > 0 ? 'BELUM_LUNAS' : 'LUNAS';
+      const catatan = pkg.catatan_pembayaran || catatan_pembayaran || (pkgIsDp && sisaTagihan > 0 ? `DP sebesar Rp ${pkgDp.toLocaleString('id-ID')}` : 'Lunas Penuh');
+
       await runQuery(`
         INSERT INTO pasien_paket (
           id, pasien_id, nama_paket, item_a_name, item_a_kuota, item_a_total, 
           item_b_name, item_b_kuota, item_b_total, sisa_kuota, total_kuota, harga_paket, is_billed,
-          marketing_id, komisi_marketing
+          marketing_id, komisi_marketing, nominal_dp, sisa_tagihan, status_pembayaran, catatan_pembayaran,
+          tgl_pelunasan
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'LUNAS' THEN datetime('now', '+7 hours') ELSE NULL END)
       `, [
         paketId, id, pkg.nama_paket,
         pkg.item_a_name || '', Number(pkg.item_a_kuota) || 0, Number(pkg.item_a_kuota) || 0,
         pkg.item_b_name || '', Number(pkg.item_b_kuota) || 0, Number(pkg.item_b_kuota) || 0,
         totalKuota, totalKuota, pkgPrice,
-        finalMarketingId, mktComm
+        finalMarketingId, mktComm,
+        pkgDp, sisaTagihan, statusPembayaran, catatan,
+        statusPembayaran
       ]);
 
       if (targetPatient && targetPatient.referrer_pasien_id && pkgPrice > 0) {
@@ -1478,7 +1493,7 @@ app.delete('/api/pasien/paket/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// UPDATE / ADJUST PRICE FOR PATIENT PACKAGE (DAN HITUNG ULANG KOMISI MARKETING)
+// UPDATE / ADJUST PRICE FOR PATIENT PACKAGE (DAN HITUNG ULANG KOMISI MARKETING SERTA SISA TAGIHAN)
 app.put('/api/pasien/paket/:id/price', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1488,6 +1503,9 @@ app.put('/api/pasien/paket/:id/price', authenticateToken, async (req, res) => {
     if (!pkg) return res.status(404).json({ message: 'Paket pasien tidak ditemukan' });
 
     const newPrice = Math.max(0, Number(harga_paket) || 0);
+    const dpPaid = Number(pkg.nominal_dp) || 0;
+    const newSisa = Math.max(0, newPrice - dpPaid);
+    const newStatus = newSisa > 0 ? 'BELUM_LUNAS' : 'LUNAS';
 
     // Hitung ulang komisi marketing sesuai tiering harga baru
     const targetPatient = await getQuery('SELECT * FROM pasien WHERE id = ?', [pkg.pasien_id]);
@@ -1508,16 +1526,60 @@ app.put('/api/pasien/paket/:id/price', authenticateToken, async (req, res) => {
 
     await runQuery(`
       UPDATE pasien_paket
-      SET harga_paket = ?, komisi_marketing = ?
+      SET harga_paket = ?, komisi_marketing = ?, sisa_tagihan = ?, status_pembayaran = ?,
+          tgl_pelunasan = CASE WHEN ? = 'LUNAS' THEN datetime('now', '+7 hours') ELSE tgl_pelunasan END
       WHERE id = ?
-    `, [newPrice, mktComm, id]);
+    `, [newPrice, mktComm, newSisa, newStatus, newStatus, id]);
 
     res.json({
-      message: `Harga paket "${pkg.nama_paket}" berhasil disesuaikan menjadi Rp ${newPrice.toLocaleString('id-ID')}! Tagihan di Kasir POS otomatis ter-update.`,
-      harga_paket: newPrice
+      message: `Harga paket "${pkg.nama_paket}" berhasil disesuaikan menjadi Rp ${newPrice.toLocaleString('id-ID')}! Sisa tagihan otomatis dihitung ulang.`,
+      harga_paket: newPrice,
+      sisa_tagihan: newSisa,
+      status_pembayaran: newStatus
     });
   } catch (err) {
     res.status(500).json({ message: 'Error updating package price', error: err.message });
+  }
+});
+
+// PELUNASAN / PEMBAYARAN SISA TAGIHAN PAKET PASIEN
+app.post('/api/pasien/paket/:id/pelunasan', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nominal_bayar, catatan } = req.body;
+
+    const pkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ?', [id]);
+    if (!pkg) return res.status(404).json({ message: 'Paket pasien tidak ditemukan' });
+
+    const currentSisa = Number(pkg.sisa_tagihan) || 0;
+    if (currentSisa <= 0 && pkg.status_pembayaran === 'LUNAS') {
+      return res.status(400).json({ message: 'Paket ini sudah lunas sepenuhnya.' });
+    }
+
+    const bayar = (nominal_bayar !== undefined && nominal_bayar !== null && nominal_bayar !== '') ? Math.max(0, Number(nominal_bayar)) : currentSisa;
+    const newDp = (Number(pkg.nominal_dp) || 0) + bayar;
+    const newSisa = Math.max(0, currentSisa - bayar);
+    const newStatus = newSisa <= 0 ? 'LUNAS' : 'BELUM_LUNAS';
+    const note = catatan ? catatan : (newStatus === 'LUNAS' ? 'Pelunasan berhasil' : `Pembayaran sisa tagihan Rp ${bayar.toLocaleString('id-ID')}`);
+
+    await runQuery(`
+      UPDATE pasien_paket
+      SET nominal_dp = ?, sisa_tagihan = ?, status_pembayaran = ?,
+          tgl_pelunasan = CASE WHEN ? = 'LUNAS' THEN datetime('now', '+7 hours') ELSE tgl_pelunasan END,
+          catatan_pembayaran = ?
+      WHERE id = ?
+    `, [newDp, newSisa, newStatus, newStatus, note, id]);
+
+    res.json({
+      message: newStatus === 'LUNAS'
+        ? `Pelunasan paket "${pkg.nama_paket}" berhasil dicatat! Status paket kini LUNAS.`
+        : `Pembayaran sisa tagihan paket "${pkg.nama_paket}" sebesar Rp ${bayar.toLocaleString('id-ID')} berhasil dicatat. Sisa tagihan saat ini: Rp ${newSisa.toLocaleString('id-ID')}.`,
+      status_pembayaran: newStatus,
+      nominal_dp: newDp,
+      sisa_tagihan: newSisa
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error processing package payment', error: err.message });
   }
 });
 
@@ -2279,7 +2341,34 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
       if (item.jenis_item === 'PAKET') {
         const pId = item.paket_id || item.item_id;
         if (pId) {
-          await runQuery('UPDATE pasien_paket SET is_billed = 1, transaksi_id = ? WHERE id = ?', [trxId, pId]);
+          const currentPkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ?', [pId]);
+          if (currentPkg) {
+            const isDp = Boolean(item.is_dp);
+            const fullPrice = Number(currentPkg.harga_paket) || Number(item.full_harga_paket) || 0;
+            const paidNow = Number(item.harga_satuan) || 0;
+
+            if (isDp && paidNow < fullPrice) {
+              const newDp = paidNow;
+              const newSisa = Math.max(0, fullPrice - newDp);
+              const newStatus = newSisa > 0 ? 'BELUM_LUNAS' : 'LUNAS';
+              await runQuery(`
+                UPDATE pasien_paket 
+                SET is_billed = 1, transaksi_id = ?, nominal_dp = ?, sisa_tagihan = ?, status_pembayaran = ?,
+                    catatan_pembayaran = ?
+                WHERE id = ?
+              `, [trxId, newDp, newSisa, newStatus, `DP di Kasir POS: Rp ${newDp.toLocaleString('id-ID')}`, pId]);
+            } else {
+              // Paid in full
+              await runQuery(`
+                UPDATE pasien_paket 
+                SET is_billed = 1, transaksi_id = ?, nominal_dp = ?, sisa_tagihan = 0, status_pembayaran = 'LUNAS',
+                    tgl_pelunasan = datetime('now', '+7 hours'), catatan_pembayaran = 'Lunas Penuh di Kasir POS'
+                WHERE id = ?
+              `, [trxId, fullPrice, pId]);
+            }
+          } else {
+            await runQuery('UPDATE pasien_paket SET is_billed = 1, transaksi_id = ? WHERE id = ?', [trxId, pId]);
+          }
         }
       }
     }

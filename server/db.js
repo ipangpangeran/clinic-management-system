@@ -263,6 +263,14 @@ async function initDb() {
     try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN transaksi_id TEXT`); } catch (e) { }
     try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN marketing_id TEXT`); } catch (e) { }
     try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN komisi_marketing REAL DEFAULT 0`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN nominal_dp REAL DEFAULT 0`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN sisa_tagihan REAL DEFAULT 0`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN status_pembayaran TEXT DEFAULT 'LUNAS'`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN tgl_pelunasan DATETIME`); } catch (e) { }
+    try { await runQuery(`ALTER TABLE pasien_paket ADD COLUMN catatan_pembayaran TEXT`); } catch (e) { }
+    try {
+      await runQuery(`UPDATE pasien_paket SET status_pembayaran = 'LUNAS', nominal_dp = harga_paket, sisa_tagihan = 0 WHERE status_pembayaran IS NULL OR status_pembayaran = ''`);
+    } catch (e) { }
 
     // 6. Patient Package Usage History
     await runQuery(`

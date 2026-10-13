@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp, Tag, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PosBillingCounter() {
@@ -232,12 +232,18 @@ export default function PosBillingCounter() {
     if (patientUnbilled.length > 0) {
       const newItems = patientUnbilled.map(d => {
         if (d.item_type === 'PAKET') {
+          const isDp = (d.status_pembayaran === 'BELUM_LUNAS');
+          const fullPrice = Number(d.harga_paket) || 0;
+          const defaultDp = isDp ? (Number(d.nominal_dp) > 0 ? Number(d.nominal_dp) : Math.round(fullPrice * 0.5)) : fullPrice;
           return {
             item_id: d.id,
             paket_id: d.id,
             jenis_item: 'PAKET',
-            nama_item: 'Paket: ' + d.nama_tindakan,
-            harga_satuan: Number(d.harga_paket) || 0,
+            nama_item: isDp ? `Paket: ${d.nama_tindakan} (DP)` : `Paket: ${d.nama_tindakan}`,
+            nama_paket_asli: d.nama_tindakan,
+            full_harga_paket: fullPrice,
+            is_dp: isDp,
+            harga_satuan: isDp ? defaultDp : fullPrice,
             jumlah: 1,
             therapist_id: null
           };
@@ -278,12 +284,18 @@ export default function PosBillingCounter() {
     if (patientUnbilled.length > 0) {
       const newItems = patientUnbilled.map(doi => {
         if (doi.item_type === 'PAKET') {
+          const isDp = (doi.status_pembayaran === 'BELUM_LUNAS');
+          const fullPrice = Number(doi.harga_paket) || 0;
+          const defaultDp = isDp ? (Number(doi.nominal_dp) > 0 ? Number(doi.nominal_dp) : Math.round(fullPrice * 0.5)) : fullPrice;
           return {
             item_id: doi.id,
             paket_id: doi.id,
             jenis_item: 'PAKET',
-            nama_item: 'Paket: ' + doi.nama_tindakan,
-            harga_satuan: Number(doi.harga_paket) || 0,
+            nama_item: isDp ? `Paket: ${doi.nama_tindakan} (DP)` : `Paket: ${doi.nama_tindakan}`,
+            nama_paket_asli: doi.nama_tindakan,
+            full_harga_paket: fullPrice,
+            is_dp: isDp,
+            harga_satuan: isDp ? defaultDp : fullPrice,
             jumlah: 1,
             therapist_id: null
           };
@@ -360,6 +372,34 @@ export default function PosBillingCounter() {
     const updatedCart = [...cart];
     updatedCart.splice(index, 1);
     setCart(updatedCart);
+  };
+
+  const handleToggleCartPackageDp = (index, toDp) => {
+    setCart(prev => {
+      const updated = [...prev];
+      const itm = { ...updated[index] };
+      const full = Number(itm.full_harga_paket) || Number(itm.harga_satuan) || 0;
+      itm.is_dp = toDp;
+      if (toDp) {
+        itm.nama_item = `Paket: ${itm.nama_paket_asli || itm.nama_item.replace(/^Paket:\s*/, '').replace(/\s*\(DP\)$/, '')} (DP)`;
+        itm.harga_satuan = Math.round(full * 0.5);
+      } else {
+        itm.nama_item = `Paket: ${itm.nama_paket_asli || itm.nama_item.replace(/^Paket:\s*/, '').replace(/\s*\(DP\)$/, '')}`;
+        itm.harga_satuan = full;
+      }
+      updated[index] = itm;
+      return updated;
+    });
+  };
+
+  const handleUpdateCartItemDp = (index, newDpVal) => {
+    setCart(prev => {
+      const updated = [...prev];
+      const itm = { ...updated[index] };
+      itm.harga_satuan = Math.max(0, Number(newDpVal) || 0);
+      updated[index] = itm;
+      return updated;
+    });
   };
 
   // Calculations
@@ -636,18 +676,24 @@ export default function PosBillingCounter() {
                     <div className="flex justify-between items-start">
                       <div className="font-bold text-[#1e1b15]">{doi.pasien_nama}</div>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${doi.item_type === 'PAKET'
-                        ? 'bg-purple-100 text-purple-900 border border-purple-300 font-extrabold'
+                        ? (doi.status_pembayaran === 'BELUM_LUNAS' ? 'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold' : 'bg-purple-100 text-purple-900 border border-purple-300 font-extrabold')
                         : 'bg-amber-100 text-amber-900'
                         }`}>
-                        {doi.item_type === 'PAKET' ? '📦 PAKET MEMBER' : (doi.tipe_pasien === 'NON-TRIAL' || doi.tipe_pasien === 'Reguler' ? 'MEMBER' : doi.tipe_pasien)}
+                        {doi.item_type === 'PAKET' ? (doi.status_pembayaran === 'BELUM_LUNAS' ? '⚡ PAKET (SKEMA DP)' : '📦 PAKET (LUNAS)') : (doi.tipe_pasien === 'NON-TRIAL' || doi.tipe_pasien === 'Reguler' ? 'MEMBER' : doi.tipe_pasien)}
                       </span>
                     </div>
                     <div className="text-[11px] text-[#514440]">
                       <strong>{doi.item_type === 'PAKET' ? 'Paket Dibeli:' : 'Tindakan:'}</strong> {doi.nama_tindakan}
                     </div>
                     {doi.item_type === 'PAKET' ? (
-                      <div className="text-[11px] text-purple-800 font-bold">
-                        <strong>Nominal:</strong> Rp {Number(doi.harga_paket || 0).toLocaleString('id-ID')}
+                      <div className="text-[11px] font-bold">
+                        <span className="text-[#514440]">Harga Paket: </span>
+                        <span className="text-purple-800 font-extrabold font-mono">Rp {Number(doi.harga_paket || 0).toLocaleString('id-ID')}</span>
+                        {doi.status_pembayaran === 'BELUM_LUNAS' && (
+                          <span className="text-[10px] text-amber-800 font-bold ml-1.5 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                            (Input DP di Kasir)
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <div className="text-[11px] text-emerald-800 font-semibold">
@@ -884,21 +930,94 @@ export default function PosBillingCounter() {
                     <div className="text-center py-6 text-xs text-gray-400 italic">Keranjang belanja belum terisi.</div>
                   ) : (
                     cart.map((item, idx) => (
-                      <div key={idx} className="p-2.5 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl flex items-center justify-between text-xs">
-                        <div className="flex-1 pr-2">
-                          <div className="font-bold text-[#1e1b15]">{item.nama_item}</div>
-                          <div className="text-[11px] text-[#7d5141]">Rp {item.harga_satuan.toLocaleString('id-ID')} x {item.jumlah}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center border border-[#d6c2bd] rounded-lg bg-white">
-                            <button onClick={() => updateQuantity(idx, -1)} className="px-1.5 py-0.5 text-gray-600 hover:bg-gray-100 rounded-l cursor-pointer">-</button>
-                            <span className="px-2 font-bold text-xs">{item.jumlah}</span>
-                            <button onClick={() => updateQuantity(idx, 1)} className="px-1.5 py-0.5 text-gray-600 hover:bg-gray-100 rounded-r cursor-pointer">+</button>
+                      <div key={idx} className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl text-xs space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 pr-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-[#1e1b15]">{item.nama_item}</span>
+                              {item.jenis_item === 'PAKET' && (
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${item.is_dp
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  }`}>
+                                  {item.is_dp ? '⚡ SKEMA DP' : '✓ LUNAS PENUH'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-[#7d5141] mt-0.5">
+                              Rp {item.harga_satuan.toLocaleString('id-ID')} x {item.jumlah}
+                              {item.jenis_item === 'PAKET' && (
+                                <span className="text-[10px] text-gray-500 ml-1.5">
+                                  (Harga Paket Asli: Rp {(item.full_harga_paket || item.harga_satuan).toLocaleString('id-ID')})
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <button onClick={() => removeFromCart(idx)} className="text-red-500 hover:text-red-700 p-1 cursor-pointer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+
+                          <div className="flex items-center gap-2">
+                            {item.jenis_item !== 'PAKET' && (
+                              <div className="flex items-center border border-[#d6c2bd] rounded-lg bg-white">
+                                <button onClick={() => updateQuantity(idx, -1)} className="px-1.5 py-0.5 text-gray-600 hover:bg-gray-100 rounded-l cursor-pointer">-</button>
+                                <span className="px-2 font-bold text-xs">{item.jumlah}</span>
+                                <button onClick={() => updateQuantity(idx, 1)} className="px-1.5 py-0.5 text-gray-600 hover:bg-gray-100 rounded-r cursor-pointer">+</button>
+                              </div>
+                            )}
+                            <button onClick={() => removeFromCart(idx)} className="text-red-500 hover:text-red-700 p-1 cursor-pointer">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
+
+                        {/* Jika item ini adalah PAKET: Opsi kelola DP atau Lunas langsung di POS */}
+                        {item.jenis_item === 'PAKET' && (
+                          <div className="pt-2 border-t border-[#d6c2bd]/60 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-semibold text-[#514440]">Skema Kasir:</span>
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCartPackageDp(idx, false)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold cursor-pointer transition-all ${!item.is_dp ? 'bg-emerald-700 text-white shadow-2xs' : 'bg-white text-gray-700 border border-gray-300'}`}
+                                >
+                                  Lunas Penuh
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCartPackageDp(idx, true)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold cursor-pointer transition-all ${item.is_dp ? 'bg-amber-700 text-white shadow-2xs' : 'bg-white text-gray-700 border border-gray-300'}`}
+                                >
+                                  Bayar DP
+                                </button>
+                              </div>
+                            </div>
+
+                            {item.is_dp && (
+                              <div className="p-2.5 bg-amber-50/90 border border-amber-300 rounded-lg space-y-1.5">
+                                <div className="flex items-center justify-between text-xs font-bold text-[#7d5141]">
+                                  <span>Nominal DP yang Dibayar Sekarang:</span>
+                                </div>
+                                <div className="relative">
+                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-xs text-[#514440]">Rp</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={item.full_harga_paket || 999999999}
+                                    value={item.harga_satuan}
+                                    onChange={(e) => handleUpdateCartItemDp(idx, e.target.value)}
+                                    className="w-full pl-8 pr-3 py-1 bg-white border border-amber-300 focus:border-amber-600 rounded-md font-bold text-xs text-[#1e1b15] focus:outline-none"
+                                    placeholder="Tulis nominal DP..."
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between text-[10.5px] pt-0.5">
+                                  <span className="text-rose-700 font-bold">Sisa Tagihan Belum Lunas:</span>
+                                  <span className="text-rose-700 font-extrabold font-mono">
+                                    Rp {Math.max(0, (item.full_harga_paket || 0) - item.harga_satuan).toLocaleString('id-ID')}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
