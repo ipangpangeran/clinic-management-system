@@ -4222,7 +4222,7 @@ export default function PatientManagement({
       {/* ========================================================================= */}
       {showPointModal && selectedPointPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-2xl w-full border border-[#e5ded4] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150 max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-3xl max-w-4xl w-full border border-[#e5ded4] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150 max-h-[90vh] flex flex-col">
             {/* Modal Header */}
             <div className="p-5 bg-gradient-to-r from-[#faf3e8] via-[#fffbf5] to-[#faf3e8] border-b border-[#e5ded4] flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -4546,16 +4546,16 @@ export default function PatientManagement({
                       Belum ada riwayat mutasi poin untuk pasien ini.
                     </div>
                   ) : (
-                    <div className="border border-[#e5ded4] rounded-2xl overflow-hidden">
-                      <table className="w-full text-left text-xs">
+                    <div className="border border-[#e5ded4] rounded-2xl overflow-x-auto shadow-2xs bg-white">
+                      <table className="w-full min-w-[760px] text-left text-xs">
                         <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase text-[10px] tracking-wider border-b border-[#e5ded4]">
                           <tr>
-                            <th className="py-2.5 px-3">Tanggal</th>
-                            <th className="py-2.5 px-3">Jenis Mutasi</th>
-                            <th className="py-2.5 px-3">Pasien yang Dibawa</th>
-                            <th className="py-2.5 px-3 text-right">Poin</th>
-                            <th className="py-2.5 px-3 text-right">Saldo Akhir</th>
-                            <th className="py-2.5 px-3">Keterangan</th>
+                            <th className="py-2.5 px-3.5 whitespace-nowrap">Tanggal & Waktu</th>
+                            <th className="py-2.5 px-3.5 whitespace-nowrap">Jenis Mutasi</th>
+                            <th className="py-2.5 px-3.5 min-w-[190px]">Pasien yang Dibawa (Member Baru)</th>
+                            <th className="py-2.5 px-3.5 text-right whitespace-nowrap">Poin</th>
+                            <th className="py-2.5 px-3.5 text-right whitespace-nowrap">Saldo Akhir</th>
+                            <th className="py-2.5 px-3.5 min-w-[200px]">Keterangan</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#e5ded4]">
@@ -4563,33 +4563,47 @@ export default function PatientManagement({
                             const isEarn = h.tipe === 'EARN';
                             const namaPasien = h.nama_pasien_dibawa || (isEarn ? (h.keterangan || '').match(/\(([^)]+)\)$/)?.[1] : null);
                             return (
-                              <tr key={h.id} className="hover:bg-[#faf3e8]/30">
-                                <td className="py-2 px-3 text-gray-500 text-[11px] whitespace-nowrap">
+                              <tr key={h.id} className="hover:bg-[#faf3e8]/30 transition-colors">
+                                <td className="py-3 px-3.5 text-gray-500 text-[11px] whitespace-nowrap">
                                   {h.created_at ? new Date(h.created_at).toLocaleString('id-ID') : '-'}
                                 </td>
-                                <td className="py-2 px-3 whitespace-nowrap">
-                                  <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold ${isEarn
+                                <td className="py-3 px-3.5 whitespace-nowrap">
+                                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isEarn
                                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                     : 'bg-rose-100 text-rose-800 border border-rose-300'
                                     }`}>
                                     {isEarn ? '+ PEROLEHAN MGM' : '- PENUKARAN'}
                                   </span>
                                 </td>
-                                <td className="py-2 px-3 whitespace-nowrap">
+                                <td className="py-3 px-3.5">
                                   {namaPasien ? (
-                                    <span className="font-bold text-[#1e1b15]">{namaPasien}</span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-7 h-7 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-bold flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                                        <UserCheck className="w-3.5 h-3.5 text-amber-700" />
+                                      </div>
+                                      <div>
+                                        <div className="font-bold text-[#1e1b15] text-xs">{namaPasien}</div>
+                                      </div>
+                                    </div>
                                   ) : (
-                                    <span className="text-gray-400 font-normal">-</span>
+                                    <span className="text-gray-400 font-normal italic">-</span>
                                   )}
                                 </td>
-                                <td className={`py-2 px-3 text-right font-bold font-mono ${isEarn ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                <td className={`py-3 px-3.5 text-right font-bold font-mono text-sm ${isEarn ? 'text-emerald-700' : 'text-rose-700'}`}>
                                   {isEarn ? '+' : '-'}{Number(h.jumlah_poin || 0).toLocaleString('id-ID')}
                                 </td>
-                                <td className="py-2 px-3 text-right font-medium text-gray-600 font-mono">
+                                <td className="py-3 px-3.5 text-right font-semibold text-gray-600 font-mono">
                                   {Number(h.saldo_akhir || 0).toLocaleString('id-ID')}
                                 </td>
-                                <td className="py-2 px-3 text-gray-700 text-[11px]">
-                                  {h.keterangan || '-'}
+                                <td className="py-3 px-3.5 text-gray-700 text-xs">
+                                  {isEarn ? (
+                                    <div>
+                                      <span className="font-semibold text-[#514440] block">Bonus MGM 5% Pembelian Paket Awal</span>
+                                      <span className="text-[10px] text-gray-400 block">Diberikan ke {selectedPointPatient.nama_lengkap}</span>
+                                    </div>
+                                  ) : (
+                                    <span>{h.keterangan || '-'}</span>
+                                  )}
                                 </td>
                               </tr>
                             );
