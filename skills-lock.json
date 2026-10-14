@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "database": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/database/SKILL.md",
+      "computedHash": "af40b7d08c16de22bb9f4ba7f0add17d75ea802361365971d3d42ace55e5eaf9"
+    },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "computedHash": "3cfe4ebb6fa7288f668d87880d279c8e48f7a92b63415e296857060f5ce22e05"
+    },
+    "webapp-testing": {
+      "source": "xenitv1/antigravity-workflows",
+      "sourceType": "github",
+      "skillPath": "skills/webapp-testing/SKILL.md",
+      "computedHash": "593f6b960ea90ae44fdafde7ce937d8ead056112286d98a7919a21591748ce8c"
+    }
+  }
+}

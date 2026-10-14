@@ -2022,16 +2022,18 @@ export default function PatientManagement({
                                 ? 'bg-amber-100 text-amber-900 border border-amber-300'
                                 : 'bg-gray-100 text-gray-500 border border-gray-200'
                                 }`}>
-                                <Gift className="w-3 h-3 text-amber-600" />
-                                <span>+{(p.total_poin || 0).toLocaleString('id-ID')} Poin</span>
+                                <Gift className={`w-3 h-3 ${p.total_poin > 0 ? 'text-amber-600' : 'text-gray-400'}`} />
+                                <span>{p.total_poin > 0 ? `+${(p.total_poin).toLocaleString('id-ID')} Poin` : '0 Poin'}</span>
                               </span>
-                              <button
-                                onClick={() => openPointModal(p)}
-                                className="text-[10px] font-bold text-[#7d5141] hover:text-[#5c3a2e] flex items-center gap-1 cursor-pointer bg-white px-2 py-0.5 rounded-md border border-[#d6c2bd] hover:bg-[#faf3e8] transition-colors shadow-2xs"
-                                title="Buka Detail & Penukaran Poin MGM Pasien"
-                              >
-                                <span>🎁 Tukar / Detail</span>
-                              </button>
+                              {p.total_poin > 0 && (
+                                <button
+                                  onClick={() => openPointModal(p)}
+                                  className="text-[10px] font-bold text-[#7d5141] hover:text-[#5c3a2e] flex items-center gap-1 cursor-pointer bg-white px-2 py-0.5 rounded-md border border-[#d6c2bd] hover:bg-[#faf3e8] transition-colors shadow-2xs"
+                                  title="Buka Detail & Penukaran Poin MGM Pasien"
+                                >
+                                  <span>🎁 Tukar / Detail</span>
+                                </button>
+                              )}
                             </div>
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap">
