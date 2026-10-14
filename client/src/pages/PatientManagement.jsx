@@ -4242,7 +4242,7 @@ export default function PatientManagement({
                 <div className="text-right px-3 py-1 bg-amber-50 rounded-xl border border-amber-200">
                   <span className="text-[10px] text-[#83746f] block uppercase font-bold tracking-wider">Saldo Poin</span>
                   <span className="text-sm font-extrabold text-amber-900 font-mono">
-                    +{(selectedPointPatient.total_poin || 0).toLocaleString('id-ID')} Poin
+                    {(selectedPointPatient.total_poin || 0).toLocaleString('id-ID')} Poin
                   </span>
                 </div>
                 <button
@@ -4552,6 +4552,7 @@ export default function PatientManagement({
                           <tr>
                             <th className="py-2.5 px-3">Tanggal</th>
                             <th className="py-2.5 px-3">Jenis Mutasi</th>
+                            <th className="py-2.5 px-3">Pasien yang Dibawa</th>
                             <th className="py-2.5 px-3 text-right">Poin</th>
                             <th className="py-2.5 px-3 text-right">Saldo Akhir</th>
                             <th className="py-2.5 px-3">Keterangan</th>
@@ -4560,6 +4561,7 @@ export default function PatientManagement({
                         <tbody className="divide-y divide-[#e5ded4]">
                           {pointHistory.map((h) => {
                             const isEarn = h.tipe === 'EARN';
+                            const namaPasien = h.nama_pasien_dibawa || (isEarn ? (h.keterangan || '').match(/\(([^)]+)\)$/)?.[1] : null);
                             return (
                               <tr key={h.id} className="hover:bg-[#faf3e8]/30">
                                 <td className="py-2 px-3 text-gray-500 text-[11px] whitespace-nowrap">
@@ -4572,6 +4574,13 @@ export default function PatientManagement({
                                     }`}>
                                     {isEarn ? '+ PEROLEHAN MGM' : '- PENUKARAN'}
                                   </span>
+                                </td>
+                                <td className="py-2 px-3 whitespace-nowrap">
+                                  {namaPasien ? (
+                                    <span className="font-bold text-[#1e1b15]">{namaPasien}</span>
+                                  ) : (
+                                    <span className="text-gray-400 font-normal">-</span>
+                                  )}
                                 </td>
                                 <td className={`py-2 px-3 text-right font-bold font-mono ${isEarn ? 'text-emerald-700' : 'text-rose-700'}`}>
                                   {isEarn ? '+' : '-'}{Number(h.jumlah_poin || 0).toLocaleString('id-ID')}

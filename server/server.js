@@ -1513,11 +1513,29 @@ app.get('/api/pasien/:id/poin-history', authenticateToken, async (req, res) => {
     const patient = await getQuery('SELECT id, nama_lengkap, total_poin, tipe_pasien, no_hp FROM pasien WHERE id = ?', [id]);
     if (!patient) return res.status(404).json({ message: 'Pasien tidak ditemukan' });
 
-    const history = await allQuery(`
-      SELECT * FROM pasien_poin_history 
-      WHERE pasien_id = ? 
-      ORDER BY created_at DESC
+    const rawHistory = await allQuery(`
+      SELECT 
+        pph.*,
+        p_ref.nama_lengkap as nama_pasien_dibawa
+      FROM pasien_poin_history pph
+      LEFT JOIN pasien p_ref ON (pph.referensi_id = p_ref.id)
+      WHERE pph.pasien_id = ? 
+      ORDER BY pph.created_at DESC
     `, [id]);
+
+    const history = rawHistory.map(h => {
+      let namaDibawa = h.nama_pasien_dibawa || null;
+      if (!namaDibawa && (h.kategori === 'MGM_REFERRAL' || h.tipe === 'EARN')) {
+        const match = (h.keterangan || '').match(/\(([^)]+)\)$/);
+        if (match && match[1]) {
+          namaDibawa = match[1].trim();
+        }
+      }
+      return {
+        ...h,
+        nama_pasien_dibawa: namaDibawa
+      };
+    });
 
     res.json({
       pasien: patient,
