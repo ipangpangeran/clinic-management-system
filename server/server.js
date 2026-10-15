@@ -433,18 +433,19 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
     const commBtcMember = commMap['BTC_MEMBER'] ?? 17000;
     const commBtcTraining = commMap['BTC_TRAINING'] ?? 10000;
 
+    const isNurse = (petugas?.lini_profesi === 'Nurse' || petugas?.role === 'Nurse' || doi.role_petugas === 'Nurse');
     const isTrial = (doi.status_doingan === 'Trial' || doi.tipe_pasien === 'TRIAL');
+    const isMember = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member' || doi.tipe_pasien === 'MEMBER');
 
     if (isTrial) {
       finalNamaTindakan = 'Tindakan Treatment Trial';
-      totalKomisi = isTraining ? commBtcTraining : commBtcTrial;
+      totalKomisi = isTraining ? commBtcTraining : (isNurse ? (commMap['NURSE_TINDAKAN'] ?? 10000) : commBtcTrial);
     } else {
       if (tindakan_ids && Array.isArray(tindakan_ids) && tindakan_ids.length > 0) {
         const placeholders = tindakan_ids.map(() => '?').join(',');
         const selectedTreatments = await allQuery(`SELECT * FROM tindakan_medis WHERE id IN (${placeholders})`, tindakan_ids);
 
         mainTindakanId = selectedTreatments[0]?.id || null;
-        const isNurse = (petugas?.lini_profesi === 'Nurse' || petugas?.role === 'Nurse' || doi.role_petugas === 'Nurse');
         const treatmentLabelParts = [];
 
         selectedTreatments.forEach(t => {
@@ -460,27 +461,25 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
             // Tindakan benang: komisi nurse FLAT 1x per tindakan, berapapun benang yang dibeli pasien
             const commMultiplier = isBenang ? 1 : qty;
             totalKomisi += (unitComm * commMultiplier);
-          } else {
-            if (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') {
-              const unitComm = (t.komisi_fix_therapist != null && t.komisi_fix_therapist > 0 ? t.komisi_fix_therapist : commBtcMember);
-              totalKomisi += (unitComm * qty);
-            } else {
-              const unitComm = (t.komisi_fix_therapist != null && t.komisi_fix_therapist > 0 ? t.komisi_fix_therapist : commBtcTrial);
-              totalKomisi += (unitComm * qty);
-            }
           }
 
           const labelSuffix = isBenang ? ` (${qty} Benang)` : (qty > 1 ? ` (${qty}x)` : '');
           treatmentLabelParts.push(`${t.nama_tindakan}${labelSuffix}`);
         });
 
+        // Untuk Beautician (BTC): Komisi dihitung FLAT per sesi treatment facial
+        // Trial = Rp 13.000, Member (termasuk klaim paketan) = Rp 17.000, Training = Rp 10.000
+        // TIDAK diakumulasi per checklist sub-tindakan alat facial yang dicentang
+        if (!isNurse) {
+          totalKomisi = isTraining ? commBtcTraining : (isMember ? commBtcMember : commBtcTrial);
+        }
+
         finalNamaTindakan = treatmentLabelParts.join(', ');
       } else {
-        const isNurse = (petugas?.lini_profesi === 'Nurse' || petugas?.role === 'Nurse' || doi.role_petugas === 'Nurse');
         if (isNurse) {
           totalKomisi = commMap['NURSE_TINDAKAN'] ?? 10000;
         } else {
-          totalKomisi = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member') ? commBtcMember : (isTraining ? commBtcTraining : commBtcTrial);
+          totalKomisi = isTraining ? commBtcTraining : (isMember ? commBtcMember : commBtcTrial);
         }
       }
     }
@@ -684,19 +683,25 @@ app.get('/api/marketing/recap-detail', authenticateToken, async (req, res) => {
           SELECT pp.nama_paket 
           FROM pasien_paket pp 
           WHERE pp.pasien_id = p.id 
-          ORDER BY pp.created_at DESC LIMIT 1
+          ORDER BY pp.created_at ASC LIMIT 1
         ) as nama_paket,
         (
           SELECT pp.harga_paket 
           FROM pasien_paket pp 
           WHERE pp.pasien_id = p.id 
-          ORDER BY pp.created_at DESC LIMIT 1
+          ORDER BY pp.created_at ASC LIMIT 1
         ) as harga_paket,
+        (
+          SELECT pp.komisi_marketing 
+          FROM pasien_paket pp 
+          WHERE pp.pasien_id = p.id 
+          ORDER BY pp.created_at ASC LIMIT 1
+        ) as komisi_marketing_db,
         (
           SELECT pp.is_billed 
           FROM pasien_paket pp 
           WHERE pp.pasien_id = p.id 
-          ORDER BY pp.created_at DESC LIMIT 1
+          ORDER BY pp.created_at ASC LIMIT 1
         ) as is_billed,
         (
           SELECT d.nama_tindakan 
@@ -713,7 +718,11 @@ app.get('/api/marketing/recap-detail', authenticateToken, async (req, res) => {
     const formattedDetails = details.map((item, idx) => {
       let detailTransaksi = 'Registrasi Pasien Baru';
       const hargaPaket = Number(item.harga_paket) || 0;
-      const komisiPaket = item.nama_paket ? getPackageCommission(hargaPaket) : 0;
+      const komisiPaket = item.nama_paket 
+        ? (item.komisi_marketing_db !== null && item.komisi_marketing_db !== undefined 
+            ? Number(item.komisi_marketing_db) 
+            : getPackageCommission(hargaPaket)) 
+        : 0;
 
       if (item.nama_paket) {
         detailTransaksi = `Paket: ${item.nama_paket}`;
@@ -745,14 +754,23 @@ app.get('/api/marketing/recap-detail', authenticateToken, async (req, res) => {
     });
 
     // Query package purchases within date range for package tiering commission
+    // Aturan Bisnis DEFLOW: Marketing HANYA mendapatkan komisi dari pembelian paket PERTAMA per pasien
     const packageRows = await allQuery(`
       SELECT 
         pp.id,
         pp.harga_paket,
+        pp.komisi_marketing,
         COALESCE(pp.marketing_id, p.marketing_id) as marketing_id
       FROM pasien_paket pp
       JOIN pasien p ON pp.pasien_id = p.id
-      WHERE (pp.marketing_id IS NOT NULL OR p.marketing_id IS NOT NULL) ${dateFilterPkg}
+      WHERE pp.id IN (
+        SELECT id FROM (
+          SELECT id, MIN(created_at) as first_created
+          FROM pasien_paket
+          GROUP BY pasien_id
+        )
+      )
+      AND (pp.marketing_id IS NOT NULL OR p.marketing_id IS NOT NULL) ${dateFilterPkg}
     `, paramsPkg);
 
     const pkgMap = {};
@@ -763,7 +781,10 @@ app.get('/api/marketing/recap-detail', authenticateToken, async (req, res) => {
           pkgMap[mId] = { total_paket_count: 0, total_komisi_paket: 0 };
         }
         pkgMap[mId].total_paket_count += 1;
-        pkgMap[mId].total_komisi_paket += getPackageCommission(pkg.harga_paket);
+        const comm = (pkg.komisi_marketing !== null && pkg.komisi_marketing !== undefined && Number(pkg.komisi_marketing) >= 0)
+          ? Number(pkg.komisi_marketing)
+          : getPackageCommission(pkg.harga_paket);
+        pkgMap[mId].total_komisi_paket += comm;
       }
     });
 
@@ -913,7 +934,7 @@ app.get('/api/doingan/unbilled', authenticateToken, async (req, res) => {
         'FO' as lini_profesi
       FROM pasien_paket pp
       JOIN pasien p ON pp.pasien_id = p.id
-      WHERE (pp.is_billed IS NULL OR pp.is_billed = 0)
+      WHERE (pp.is_billed IS NULL OR pp.is_billed = 0) OR (pp.status_pembayaran = 'BELUM_LUNAS' AND pp.sisa_tagihan > 0)
       ORDER BY pp.created_at DESC
     `);
 
@@ -1181,8 +1202,9 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
     await runQuery(`
       INSERT INTO pasien (
         id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir, 
-        riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id, has_trial_history, initial_tipe_pasien
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        riwayat_alergi, jenis_kulit, rekomendasi_dokter, referrer_pasien_id, marketing_id, has_trial_history, initial_tipe_pasien,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
     `, [
       id, no_ktp || null, no_hp, formattedNama, normalizedTipe, alamat || null, tgl_lahir || null,
       riwayat_alergi || null, jenis_kulit || null, rekomendasi_dokter || null,
@@ -1417,6 +1439,8 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
 
     let totalPointsAwarded = 0;
 
+    let hasAwardedMarketingCommissionInBatch = false;
+
     for (const pkg of pkgList) {
       if (!pkg.nama_paket) continue;
       const totalKuota = (Number(pkg.item_a_kuota) || 0) + (Number(pkg.item_b_kuota) || 0);
@@ -1424,8 +1448,10 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
       const pkgPrice = Number(pkg.harga_paket) || 0;
 
       // Hitung komisi marketing berjenjang berdasarkan harga penjualan paket:
+      // Aturan Bisnis DEFLOW: Marketing HANYA mendapatkan komisi dari pembelian paket PERTAMA pasien.
+      // Pembelian paket ke-2, upgrade, atau paket tambahan TIDAK mendapatkan komisi lagi (komisi = 0).
       let mktComm = 0;
-      if (finalMarketingId && pkgPrice > 0) {
+      if (isFirstTimePackagePurchase && !hasAwardedMarketingCommissionInBatch && finalMarketingId && pkgPrice > 0) {
         if (pkgPrice < 600000) {
           mktComm = 30000;
         } else if (pkgPrice < 2000000) {
@@ -1435,34 +1461,32 @@ app.post('/api/pasien/:id/paket', authenticateToken, async (req, res) => {
         } else {
           mktComm = 150000;
         }
+        hasAwardedMarketingCommissionInBatch = true;
       }
 
-      // Hitung Skema Pembayaran: LUNAS PENUH vs DP (Down Payment)
+      // Paket baru ditambahkan dan masuk ke antrean tagihan kasir POS (is_billed = 0)
+      // Selama belum dibayar di kasir POS, statusnya wajib BELUM_LUNAS dan sisa tagihan = full harga paket.
       const pkgIsDp = Boolean(pkg.is_dp ?? is_dp);
-      let pkgDp = pkgIsDp ? Math.max(0, Number(pkg.nominal_dp ?? nominal_dp) || 0) : pkgPrice;
-      if (pkgDp >= pkgPrice && pkgPrice > 0) {
-        pkgDp = pkgPrice;
-      }
-      const sisaTagihan = Math.max(0, pkgPrice - pkgDp);
-      const statusPembayaran = sisaTagihan > 0 ? 'BELUM_LUNAS' : 'LUNAS';
-      const catatan = pkg.catatan_pembayaran || catatan_pembayaran || (pkgIsDp && sisaTagihan > 0 ? `DP sebesar Rp ${pkgDp.toLocaleString('id-ID')}` : 'Lunas Penuh');
+      const pkgDp = 0; // Uang riil baru diterima saat kasir POS memproses pembayaran
+      const sisaTagihan = pkgPrice;
+      const statusPembayaran = 'BELUM_LUNAS';
+      const catatan = pkg.catatan_pembayaran || catatan_pembayaran || (pkgIsDp ? 'Skema DP (Menunggu Pembayaran di Kasir POS)' : 'Menunggu Pembayaran di Kasir POS');
 
       await runQuery(`
         INSERT INTO pasien_paket (
           id, pasien_id, nama_paket, item_a_name, item_a_kuota, item_a_total, 
           item_b_name, item_b_kuota, item_b_total, sisa_kuota, total_kuota, harga_paket, is_billed,
           marketing_id, komisi_marketing, nominal_dp, sisa_tagihan, status_pembayaran, catatan_pembayaran,
-          tgl_pelunasan
+          tgl_pelunasan, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 'LUNAS' THEN datetime('now', '+7 hours') ELSE NULL END)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, NULL, datetime('now', '+7 hours'))
       `, [
         paketId, id, pkg.nama_paket,
         pkg.item_a_name || '', Number(pkg.item_a_kuota) || 0, Number(pkg.item_a_kuota) || 0,
         pkg.item_b_name || '', Number(pkg.item_b_kuota) || 0, Number(pkg.item_b_kuota) || 0,
         totalKuota, totalKuota, pkgPrice,
         finalMarketingId, mktComm,
-        pkgDp, sisaTagihan, statusPembayaran, catatan,
-        statusPembayaran
+        pkgDp, sisaTagihan, statusPembayaran, catatan
       ]);
 
       // Bonus MGM hanya dihitung untuk transaksi paket pertama pasien
@@ -1796,6 +1820,21 @@ app.post('/api/pasien/paket/:paketId/claim', authenticateToken, async (req, res)
 
     const pkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ?', [paketId]);
     if (!pkg) return res.status(404).json({ message: 'Paket pasien tidak ditemukan' });
+
+    const isUnpaid = (
+      pkg.is_billed === 0 || 
+      pkg.is_billed === '0' || 
+      pkg.is_billed === null || 
+      (Number(pkg.sisa_tagihan) > 0) || 
+      pkg.status_pembayaran === 'BELUM_LUNAS'
+    );
+    if (isUnpaid) {
+      const tagihan = (Number(pkg.sisa_tagihan) > 0) ? Number(pkg.sisa_tagihan) : Number(pkg.harga_paket || 0);
+      return res.status(400).json({ 
+        message: `Paket "${pkg.nama_paket}" belum lunas (Tagihan: Rp ${(tagihan || 0).toLocaleString('id-ID')}). Pasien wajib menyelesaikan pembayaran di Kasir POS terlebih dahulu sebelum melakukan klaim tindakan.` 
+      });
+    }
+
     if (pkg.sisa_kuota <= 0) return res.status(400).json({ message: 'Total sisa kuota paket ini sudah habis' });
 
     let itemClaimedName = '';
@@ -1895,6 +1934,20 @@ app.post('/api/pasien/paket/:paketId/claim-both', authenticateToken, async (req,
 
     const pkg = await getQuery('SELECT * FROM pasien_paket WHERE id = ?', [paketId]);
     if (!pkg) return res.status(404).json({ message: 'Paket pasien tidak ditemukan' });
+
+    const isUnpaid = (
+      pkg.is_billed === 0 || 
+      pkg.is_billed === '0' || 
+      pkg.is_billed === null || 
+      (Number(pkg.sisa_tagihan) > 0) || 
+      pkg.status_pembayaran === 'BELUM_LUNAS'
+    );
+    if (isUnpaid) {
+      const tagihan = (Number(pkg.sisa_tagihan) > 0) ? Number(pkg.sisa_tagihan) : Number(pkg.harga_paket || 0);
+      return res.status(400).json({ 
+        message: `Paket "${pkg.nama_paket}" belum lunas (Tagihan: Rp ${(tagihan || 0).toLocaleString('id-ID')}). Pasien wajib menyelesaikan pembayaran di Kasir POS terlebih dahulu sebelum melakukan klaim tindakan.` 
+      });
+    }
 
     if ((pkg.item_a_kuota || 0) <= 0 || (pkg.item_b_kuota || 0) <= 0) {
       return res.status(400).json({ message: 'Kedua item (Item A & Item B) harus memiliki minimal 1 sisa kuota' });
@@ -2022,8 +2075,8 @@ app.post('/api/settings/toggle-wa-reminder', authenticateToken, async (req, res)
     const val = enabled ? '1' : '0';
     await runQuery(`
       INSERT INTO system_settings (setting_key, setting_value, updated_at)
-      VALUES ('wa_reminder_enabled', ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(setting_key) DO UPDATE SET setting_value = ?, updated_at = CURRENT_TIMESTAMP
+      VALUES ('wa_reminder_enabled', ?, datetime('now', '+7 hours'))
+      ON CONFLICT(setting_key) DO UPDATE SET setting_value = ?, updated_at = datetime('now', '+7 hours')
     `, [val, val]);
 
     res.json({ message: `Fitur WA Reminder berhasil ${enabled ? 'DI-AKTIFKAN (ON)' : 'DI-NONAKTIFKAN (OFF)'}`, wa_reminder_enabled: val });
@@ -2066,14 +2119,24 @@ app.get('/api/marketing/recap', authenticateToken, async (req, res) => {
       return 150000;
     };
 
+    // Query package purchases within date range for package tiering commission
+    // Aturan Bisnis DEFLOW: Marketing HANYA mendapatkan komisi dari pembelian paket PERTAMA per pasien
     const packageRows = await allQuery(`
       SELECT 
         pp.id,
         pp.harga_paket,
+        pp.komisi_marketing,
         COALESCE(pp.marketing_id, p.marketing_id) as marketing_id
       FROM pasien_paket pp
       JOIN pasien p ON pp.pasien_id = p.id
-      WHERE (pp.marketing_id IS NOT NULL OR p.marketing_id IS NOT NULL) ${dateFilterPkg}
+      WHERE pp.id IN (
+        SELECT id FROM (
+          SELECT id, MIN(created_at) as first_created
+          FROM pasien_paket
+          GROUP BY pasien_id
+        )
+      )
+      AND (pp.marketing_id IS NOT NULL OR p.marketing_id IS NOT NULL) ${dateFilterPkg}
     `, paramsPkg);
 
     const pkgMap = {};
@@ -2084,7 +2147,10 @@ app.get('/api/marketing/recap', authenticateToken, async (req, res) => {
           pkgMap[mId] = { total_paket_count: 0, total_komisi_paket: 0 };
         }
         pkgMap[mId].total_paket_count += 1;
-        pkgMap[mId].total_komisi_paket += getPackageCommission(pkg.harga_paket);
+        const comm = (pkg.komisi_marketing !== null && pkg.komisi_marketing !== undefined && Number(pkg.komisi_marketing) >= 0)
+          ? Number(pkg.komisi_marketing)
+          : getPackageCommission(pkg.harga_paket);
+        pkgMap[mId].total_komisi_paket += comm;
       }
     });
 
@@ -2320,7 +2386,7 @@ app.put('/api/stok/product-approvals/:id/review', authenticateToken, async (req,
 
     await runQuery(`
       UPDATE produk_approval_requests
-      SET status = ?, approver_user_id = ?, updated_at = CURRENT_TIMESTAMP
+      SET status = ?, approver_user_id = ?, updated_at = datetime('now', '+7 hours')
       WHERE id = ?
     `, [status, req.user.id, id]);
 
@@ -2533,22 +2599,32 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
 
     const earnedPoints = 0;
 
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const nowWib = new Date(Date.now() + 7 * 3600 * 1000);
+    const dateStr = nowWib.toISOString().slice(0, 10).replace(/-/g, '');
     const randNum = Math.floor(1000 + Math.random() * 9000);
     const noNota = `INV/${dateStr}/${randNum}`;
 
     const trxId = 'trx-' + Date.now();
 
-    await runQuery(`
-      INSERT INTO transaksi (id, no_nota, pasien_id, kasir_id, subtotal, discount, tax_amount, grand_total, payment_amount, change_amount, earned_points, therapist_id, doctor_id, nurse_id, marketing_id, poin_used)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [trxId, noNota, pasien_id, req.user.id, subtotal, discount, taxAmount, grandTotal, payment, changeAmount, earnedPoints, therapist_id || null, doctor_id || null, nurse_id || null, marketing_id || null, usedPoints]);
+    await runQuery('BEGIN TRANSACTION');
+    try {
+      await runQuery(`
+        INSERT INTO transaksi (
+          id, no_nota, pasien_id, kasir_id, subtotal, discount, tax_amount, grand_total, 
+          payment_amount, change_amount, earned_points, therapist_id, doctor_id, nurse_id, 
+          marketing_id, poin_used, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
+      `, [trxId, noNota, pasien_id, req.user.id, subtotal, discount, taxAmount, grandTotal, payment, changeAmount, earnedPoints, therapist_id || null, doctor_id || null, nurse_id || null, marketing_id || null, usedPoints]);
 
     for (const item of items) {
       const detailId = 'dtl-' + Math.random().toString(36).substring(2, 9);
       await runQuery(`
-        INSERT INTO transaksi_detail (id, transaksi_id, produk_id, tindakan_id, jenis_item, nama_item, jumlah, harga_satuan, subtotal_item, therapist_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO transaksi_detail (
+          id, transaksi_id, produk_id, tindakan_id, jenis_item, nama_item, 
+          jumlah, harga_satuan, subtotal_item, therapist_id, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
       `, [detailId, trxId, item.produk_id || null, item.tindakan_id || null, item.jenis_item, item.nama_item, item.jumlah, item.harga_satuan, item.harga_satuan * item.jumlah, item.therapist_id || therapist_id || null]);
 
       if (item.jenis_item === 'RETAIL' && item.produk_id) {
@@ -2563,8 +2639,23 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
             const isDp = Boolean(item.is_dp);
             const fullPrice = Number(currentPkg.harga_paket) || Number(item.full_harga_paket) || 0;
             const paidNow = Number(item.harga_satuan) || 0;
+            const isFirstTimeBilling = (currentPkg.is_billed === 0 || currentPkg.is_billed === '0' || currentPkg.is_billed === null);
 
-            if (isDp && paidNow < fullPrice) {
+            if (!isFirstTimeBilling && currentPkg.status_pembayaran === 'BELUM_LUNAS' && (Number(currentPkg.sisa_tagihan) > 0)) {
+              // Transaksi pelunasan sisa tagihan paket yang sudah pernah DP sebelumnya
+              const currentSisa = Number(currentPkg.sisa_tagihan) || 0;
+              const newSisa = Math.max(0, currentSisa - paidNow);
+              const newDp = (Number(currentPkg.nominal_dp) || 0) + paidNow;
+              const newStatus = newSisa <= 0 ? 'LUNAS' : 'BELUM_LUNAS';
+              await runQuery(`
+                UPDATE pasien_paket 
+                SET transaksi_id = ?, nominal_dp = ?, sisa_tagihan = ?, status_pembayaran = ?,
+                    tgl_pelunasan = CASE WHEN ? = 'LUNAS' THEN datetime('now', '+7 hours') ELSE tgl_pelunasan END,
+                    catatan_pembayaran = ?
+                WHERE id = ?
+              `, [trxId, newDp, newSisa, newStatus, newStatus, newStatus === 'LUNAS' ? `Pelunasan di Kasir POS: Rp ${paidNow.toLocaleString('id-ID')}` : `Cicilan sisa di Kasir POS: Rp ${paidNow.toLocaleString('id-ID')}`, pId]);
+            } else if (isDp && paidNow < fullPrice) {
+              // Pembayaran pertama di Kasir POS dengan skema DP
               const newDp = paidNow;
               const newSisa = Math.max(0, fullPrice - newDp);
               const newStatus = newSisa > 0 ? 'BELUM_LUNAS' : 'LUNAS';
@@ -2575,7 +2666,7 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
                 WHERE id = ?
               `, [trxId, newDp, newSisa, newStatus, `DP di Kasir POS: Rp ${newDp.toLocaleString('id-ID')}`, pId]);
             } else {
-              // Paid in full
+              // Pembayaran pertama di Kasir POS Lunas Penuh
               await runQuery(`
                 UPDATE pasien_paket 
                 SET is_billed = 1, transaksi_id = ?, nominal_dp = ?, sisa_tagihan = 0, status_pembayaran = 'LUNAS',
@@ -2621,6 +2712,12 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
 
     // Mark unbilled packages for this patient as billed
     await runQuery('UPDATE pasien_paket SET is_billed = 1, transaksi_id = ? WHERE pasien_id = ? AND (is_billed IS NULL OR is_billed = 0)', [trxId, pasien_id]);
+
+    await runQuery('COMMIT');
+  } catch (txErr) {
+    try { await runQuery('ROLLBACK'); } catch (rbErr) { }
+    throw txErr;
+  }
 
     res.status(201).json({
       message: 'Transaksi berhasil disimpan',
@@ -2785,16 +2882,23 @@ app.get('/api/payroll/summary', authenticateToken, async (req, res) => {
         komisiTindakan += (count * rate);
 
         const userPackages = await allQuery(`
-          SELECT harga_paket, komisi_marketing
-          FROM pasien_paket
-          WHERE marketing_id = ?
-            AND strftime('%m', created_at) = ?
-            AND strftime('%Y', created_at) = ?
+          SELECT pp.harga_paket, pp.komisi_marketing
+          FROM pasien_paket pp
+          WHERE pp.id IN (
+            SELECT id FROM (
+              SELECT id, MIN(created_at) as first_created
+              FROM pasien_paket
+              GROUP BY pasien_id
+            )
+          )
+          AND pp.marketing_id = ?
+          AND strftime('%m', pp.created_at) = ?
+          AND strftime('%Y', pp.created_at) = ?
         `, [u.id, String(currentMonth).padStart(2, '0'), String(currentYear)]);
         userPackages.forEach(p => {
           const h = Number(p.harga_paket) || 0;
-          let comm = Number(p.komisi_marketing) || 0;
-          if (!comm && h > 0) {
+          let comm = (p.komisi_marketing !== null && p.komisi_marketing !== undefined) ? Number(p.komisi_marketing) : 0;
+          if (!comm && p.komisi_marketing === null && h > 0) {
             if (h < 600000) comm = 30000;
             else if (h < 2000000) comm = 50000;
             else if (h < 10000000) comm = 70000;
@@ -2910,7 +3014,7 @@ async function triggerWaReminders() {
         message: rem.message_text
       }, { headers: { 'Content-Type': 'application/json' } });
 
-      await runQuery('UPDATE pasien_reminder SET status = "SENT", sent_at = CURRENT_TIMESTAMP WHERE id = ?', [rem.id]);
+      await runQuery("UPDATE pasien_reminder SET status = 'SENT', sent_at = datetime('now', '+7 hours') WHERE id = ?", [rem.id]);
 
       await runQuery('INSERT INTO wa_logs (id, recipient_number, message, status, response_data) VALUES (?, ?, ?, ?, ?)', [
         'log-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -2952,6 +3056,66 @@ app.get('/api/wa/logs', authenticateToken, async (req, res) => {
     res.json(logs);
   } catch (err) {
     res.status(500).json({ message: 'Error fetching WA logs', error: err.message });
+  }
+});
+
+// Database Backup & Restore Endpoints
+const backupService = require('./backupService');
+
+app.get('/api/database/backups', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System') {
+    return res.status(403).json({ message: 'Akses ditolak: Hanya Super Admin / Admin System' });
+  }
+  try {
+    const backups = await backupService.listBackups();
+    res.json(backups);
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal membaca daftar backup', error: err.message });
+  }
+});
+
+app.post('/api/database/backup', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System') {
+    return res.status(403).json({ message: 'Akses ditolak: Hanya Super Admin / Admin System' });
+  }
+  try {
+    const { label } = req.body || {};
+    const result = await backupService.createBackup(label || req.user.username);
+    res.json({ message: 'Backup database berhasil dibuat', backup: result });
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal membuat backup database', error: err.message });
+  }
+});
+
+app.post('/api/database/restore', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System') {
+    return res.status(403).json({ message: 'Akses ditolak: Hanya Super Admin / Admin System' });
+  }
+  try {
+    const { filename } = req.body;
+    if (!filename) {
+      return res.status(400).json({ message: 'Parameter filename wajib diisi' });
+    }
+    const result = await backupService.restoreBackup(filename);
+    res.json({ message: 'Restore database berhasil dipulihkan', result });
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal memulihkan (restore) database', error: err.message });
+  }
+});
+
+app.get('/api/database/download/:filename', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'Super Admin' && req.user.role !== 'Admin System') {
+    return res.status(403).json({ message: 'Akses ditolak: Hanya Super Admin / Admin System' });
+  }
+  try {
+    const safeFilename = path.basename(req.params.filename);
+    const targetFile = path.join(backupService.BACKUPS_DIR, safeFilename);
+    if (!fs.existsSync(targetFile)) {
+      return res.status(404).json({ message: 'File backup tidak ditemukan' });
+    }
+    res.download(targetFile, safeFilename);
+  } catch (err) {
+    res.status(500).json({ message: 'Gagal mendownload backup', error: err.message });
   }
 });
 

@@ -22,6 +22,9 @@ description: "Panduan dan aturan bisnis transaksi kasir (POS), pembayaran split/
    - Jika pembayaran kombinasi (Tunai + Transfer / QRIS / Kartu), breakdown masing-masing metode bayar harus tersimpan presisi di database.
 4. **Pembatalan / Void:**
    - Void transaksi wajib mengembalikan kuota paket / stok produk yang sempat terpotong dan merestore poin MGM bila ada.
+5. **Pencatatan di Database:**
+   - Selalu gunakan transaksi database untuk memastikan konsistensi data.
+   - Selalu gunakan timezone `Asia/Jakarta` (GMT+7) untuk pencatatan timestamp.
 
 ## Instruksi untuk Antigravity Agent
 - Setiap perubahan pada kalkulasi total di `PosBillingCounter.jsx`, pastikan sinkron dengan validasi backend di `server.js`.

@@ -18,6 +18,13 @@ description: "Aturan kalkulasi insentif, komisi 5 lini karyawan, matriks keuanga
    - Nilai komisi bisa berupa nominal tetap (flat) atau persentase dari harga netto tindakan/penjualan produk.
    - Hitungan komisi hanya dieksekusi dari transaksi yang sudah lunas (`PAID`).
    - Perubahan matriks parameter komisi dipusatkan di modul Keuangan/Manager, bukan di level resepsionis.
+3. **Aturan Pembelian Paket Marketing:**
+   - Marketing HANYA mendapatkan komisi dari pembelian paket PERTAMA per pasien.
+   - Pembelian paket ke-2, upgrade, atau paket tambahan TIDAK mendapatkan komisi lagi.
+   - Pencatatan ke database harus sesuai jam nya yaitu GMT+7
+4. **Pencatatan di Database:**
+   - Selalu gunakan transaksi database untuk memastikan konsistensi data.
+   - Selalu gunakan timezone `Asia/Jakarta` (GMT+7) untuk pencatatan timestamp.
 
 ## Instruksi untuk Antigravity Agent
 - Hati-hati saat refactor query laporan keuangan; kalkulasi komisi harus selalu memiliki fallback 0 jika rule tidak terpasang, tanpa membatalkan query utama.

@@ -8,7 +8,7 @@ import {
   AlertTriangle, CheckCircle, ShieldAlert, FileSpreadsheet, UserCheck,
   Clock, RefreshCw, Sparkles, Stethoscope, Users, CheckCircle2, UserPlus2, History, Database,
   ShoppingCart, X, ChevronLeft, ChevronRight, Plus, ChevronDown, ChevronUp, Edit3, Tag,
-  Gift, Coins, ArrowRightLeft
+  Gift, Coins, ArrowRightLeft, Lock, ArrowRight
 } from 'lucide-react';
 import { formatPersonName } from '../utils/formatters';
 
@@ -121,11 +121,6 @@ export default function PatientManagement({
   const [showMigrationPackageModal, setShowMigrationPackageModal] = useState(false);
   const [selectedMigrationPackages, setSelectedMigrationPackages] = useState([]);
   const [submittingMigrationPkg, setSubmittingMigrationPkg] = useState(false);
-
-  // Package Price Adjustment State in Manage Package Modal
-  const [editingPkgPriceId, setEditingPkgPriceId] = useState(null);
-  const [editingPkgPriceValue, setEditingPkgPriceValue] = useState('');
-  const [savingPkgPrice, setSavingPkgPrice] = useState(false);
 
   // Claim Modal State
   const [showClaimModal, setShowClaimModal] = useState(false);
@@ -1026,33 +1021,6 @@ export default function PatientManagement({
     }
   };
 
-  const handleSavePackagePrice = async (pkgId) => {
-    if (editingPkgPriceValue === '' || isNaN(Number(editingPkgPriceValue))) {
-      alert('Masukkan nominal harga yang valid!');
-      return;
-    }
-    const newPrice = Math.max(0, Number(editingPkgPriceValue));
-    setSavingPkgPrice(true);
-    try {
-      const res = await axios.put(`/api/pasien/paket/${pkgId}/price`, {
-        harga_paket: newPrice
-      });
-      alert(res.data?.message || `Harga paket berhasil disesuaikan menjadi Rp ${newPrice.toLocaleString('id-ID')}!`);
-      setEditingPkgPriceId(null);
-      setEditingPkgPriceValue('');
-      if (selectedPatient) {
-        const pkgRes = await axios.get(`/api/pasien/${selectedPatient.id}/paket`);
-        setPackages(pkgRes.data || []);
-      }
-      fetchTodayDoingan();
-      fetchPatients();
-    } catch (err) {
-      alert(err.response?.data?.message || 'Gagal mengubah harga paket');
-    } finally {
-      setSavingPkgPrice(false);
-    }
-  };
-
   const handleDeletePatientPackage = async (paketId, namaPaket) => {
     if (!window.confirm(`Apakah Anda yakin ingin menghapus paket "${namaPaket}" dari pasien ini?\n\nSeluruh riwayat kuota paket ini akan dibersihkan dari sistem.`)) {
       return;
@@ -1151,9 +1119,37 @@ export default function PatientManagement({
     setShowClaimBothModal(true);
   };
 
+  const handleDirectToPosForPelunasan = (pkg) => {
+    if (selectedPatient) {
+      sessionStorage.setItem('deflow_pos_patient_id', selectedPatient.id);
+    }
+    setShowClaimModal(false);
+    setShowClaimBothModal(false);
+    setShowPackageModal(false);
+    if (setActiveTab) {
+      setActiveTab('pos');
+    }
+  };
+
   const handleProcessClaim = async (e) => {
     e.preventDefault();
-    if (!selectedClaimPkg || !claimStaffId) {
+    if (!selectedClaimPkg) return;
+
+    // Proteksi: Paket belum lunas / belum dibayar di kasir tidak boleh diklaim
+    const isUnpaid = (
+      selectedClaimPkg.is_billed === 0 || 
+      selectedClaimPkg.is_billed === '0' || 
+      selectedClaimPkg.is_billed === null || 
+      (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+      selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
+    );
+    if (isUnpaid) {
+      const tagihan = (Number(selectedClaimPkg.sisa_tagihan) > 0) ? Number(selectedClaimPkg.sisa_tagihan) : Number(selectedClaimPkg.harga_paket || 0);
+      alert(`Paket "${selectedClaimPkg.nama_paket}" belum lunas (Tagihan: Rp ${(tagihan || 0).toLocaleString('id-ID')}).\nPasien wajib menyelesaikan pembayaran di Kasir POS terlebih dahulu.`);
+      return;
+    }
+
+    if (!claimStaffId) {
       alert('Pilih petugas bertugas!');
       return;
     }
@@ -1180,7 +1176,23 @@ export default function PatientManagement({
 
   const handleProcessClaimBoth = async (e) => {
     e.preventDefault();
-    if (!selectedClaimPkg || !claimBothBtcStaffId || !claimBothNurseStaffId) {
+    if (!selectedClaimPkg) return;
+
+    // Proteksi: Paket belum lunas / belum dibayar di kasir tidak boleh diklaim
+    const isUnpaid = (
+      selectedClaimPkg.is_billed === 0 || 
+      selectedClaimPkg.is_billed === '0' || 
+      selectedClaimPkg.is_billed === null || 
+      (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+      selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
+    );
+    if (isUnpaid) {
+      const tagihan = (Number(selectedClaimPkg.sisa_tagihan) > 0) ? Number(selectedClaimPkg.sisa_tagihan) : Number(selectedClaimPkg.harga_paket || 0);
+      alert(`Paket "${selectedClaimPkg.nama_paket}" belum lunas (Tagihan: Rp ${(tagihan || 0).toLocaleString('id-ID')}).\nPasien wajib menyelesaikan pembayaran di Kasir POS terlebih dahulu.`);
+      return;
+    }
+
+    if (!claimBothBtcStaffId || !claimBothNurseStaffId) {
       alert('Pilih kedua petugas (Beautician dan Nurse bertugas)!');
       return;
     }
@@ -2703,7 +2715,6 @@ export default function PatientManagement({
                       placeholder="Tuliskan nama lengkap"
                       className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-medium text-[#1e1b15] focus:outline-none focus:border-[#7d5141]"
                     />
-                    <p className="text-[10px] text-gray-400 mt-0.5">* Otomatis kapital huruf awal nama (EYD Title Case)</p>
                   </div>
 
                   <div>
@@ -3101,23 +3112,30 @@ export default function PatientManagement({
                             </div>
 
                             {/* Status Pembayaran Badge */}
-                            {(pkg.sisa_tagihan > 0 || pkg.status_pembayaran === 'BELUM_LUNAS') ? (
+                            {(pkg.is_billed === 0 || pkg.is_billed === '0' || pkg.is_billed === null || Number(pkg.sisa_tagihan) > 0 || pkg.status_pembayaran === 'BELUM_LUNAS') ? (
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-[10px] font-bold flex items-center gap-1">
-                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
-                                  <span>DP: Rp {(pkg.nominal_dp || 0).toLocaleString('id-ID')}</span>
-                                </span>
+                                {(pkg.is_billed === 0 || pkg.is_billed === '0' || pkg.is_billed === null) ? (
+                                  <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-[10px] font-bold flex items-center gap-1">
+                                    <Clock className="w-3 h-3 text-amber-600" />
+                                    <span>Menunggu Kasir POS (Belum Bayar)</span>
+                                  </span>
+                                ) : (Number(pkg.nominal_dp) > 0 ? (
+                                  <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded-full text-[10px] font-bold flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                    <span>DP: Rp {(pkg.nominal_dp || 0).toLocaleString('id-ID')}</span>
+                                  </span>
+                                ) : null)}
                                 <span className="px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-300 rounded-full text-[10px] font-bold">
-                                  Sisa Kurang: Rp {(pkg.sisa_tagihan || 0).toLocaleString('id-ID')}
+                                  Sisa Tagihan: Rp {(Number(pkg.sisa_tagihan) > 0 ? Number(pkg.sisa_tagihan) : Number(pkg.harga_paket || 0)).toLocaleString('id-ID')}
                                 </span>
                                 <button
                                   type="button"
-                                  onClick={() => openPelunasanModal(pkg)}
-                                  className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
-                                  title="Catat pelunasan sisa tagihan paket ini"
+                                  onClick={() => handleDirectToPosForPelunasan(pkg)}
+                                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
+                                  title="Bayar tagihan paket ini di Kasir POS"
                                 >
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
-                                  <span>💵 Catat Pelunasan</span>
+                                  <ShoppingCart className="w-3.5 h-3.5" />
+                                  <span>Bayar di Kasir POS</span>
                                 </button>
                               </div>
                             ) : (
@@ -3126,69 +3144,7 @@ export default function PatientManagement({
                                 <span>✓ Lunas Penuh</span>
                               </span>
                             )}
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (editingPkgPriceId === pkg.id) {
-                                  setEditingPkgPriceId(null);
-                                  setEditingPkgPriceValue('');
-                                } else {
-                                  setEditingPkgPriceId(pkg.id);
-                                  setEditingPkgPriceValue(pkg.harga_paket || 0);
-                                }
-                              }}
-                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-[#7d5141] hover:text-[#553123] border border-amber-300 font-bold rounded-lg text-xs cursor-pointer shadow-2xs flex items-center gap-1 transition-all"
-                              title="Sesuaikan harga paket ini khusus untuk pasien ini"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-amber-700" />
-                              <span>Sesuaikan Harga</span>
-                            </button>
                           </div>
-
-                          {/* Inline Edit Form jika sedang menyesuaikan harga */}
-                          {editingPkgPriceId === pkg.id && (
-                            <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-300 rounded-xl space-y-2 animate-in fade-in">
-                              <div className="flex items-center justify-between">
-                                <label className="text-xs font-bold text-[#7d5141] flex items-center gap-1">
-                                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                                  <span>Penyesuaian Harga Khusus Pasien Ini:</span>
-                                </label>
-                                <span className="text-[10px] text-amber-800 font-medium italic">
-                                  *Harga baru otomatis masuk ke tagihan Kasir POS
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="relative flex-1">
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#514440]">Rp</span>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={editingPkgPriceValue}
-                                    onChange={(e) => setEditingPkgPriceValue(e.target.value)}
-                                    placeholder="Masukkan nominal harga khusus..."
-                                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-[#d6c2bd] focus:border-[#7d5141] rounded-lg font-bold text-xs text-[#1e1b15] focus:outline-none"
-                                  />
-                                </div>
-                                <button
-                                  type="button"
-                                  disabled={savingPkgPrice}
-                                  onClick={() => handleSavePackagePrice(pkg.id)}
-                                  className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:bg-gray-300 text-white font-bold text-xs rounded-lg shadow-xs cursor-pointer flex items-center gap-1"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>{savingPkgPrice ? 'Menyimpan...' : 'Simpan'}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => { setEditingPkgPriceId(null); setEditingPkgPriceValue(''); }}
-                                  className="px-2.5 py-1.5 bg-gray-200 hover:bg-gray-300 text-[#514440] font-semibold text-xs rounded-lg cursor-pointer"
-                                >
-                                  Batal
-                                </button>
-                              </div>
-                            </div>
-                          )}
                         </div>
                         <button
                           type="button"
@@ -3520,34 +3476,54 @@ export default function PatientManagement({
 
             <form onSubmit={handleProcessClaim} className="space-y-3 text-xs">
               {/* Alert jika paket ini belum lunas */}
-              {((selectedClaimPkg.sisa_tagihan > 0) || selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS') && (
-                <div className="p-3 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-1.5 text-rose-900 animate-in fade-in">
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-xs flex items-center gap-1.5 text-rose-800">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>PERINGATAN: Paket Ini Belum Lunas!</span>
+              {(() => {
+                const isPkgUnpaid = (
+                  selectedClaimPkg.is_billed === 0 || 
+                  selectedClaimPkg.is_billed === '0' || 
+                  selectedClaimPkg.is_billed === null || 
+                  (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+                  selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
+                );
+                if (!isPkgUnpaid) return null;
+                const sisaNominal = (Number(selectedClaimPkg.sisa_tagihan) > 0) ? Number(selectedClaimPkg.sisa_tagihan) : Number(selectedClaimPkg.harga_paket || 0);
+                const isAntrianPos = (selectedClaimPkg.is_billed === 0 || selectedClaimPkg.is_billed === '0' || selectedClaimPkg.is_billed === null);
+                return (
+                  <div className="p-3.5 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-2 text-rose-900 animate-in fade-in shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-xs flex items-center gap-1.5 text-rose-800">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>{isAntrianPos ? 'PERINGATAN: Paket Belum Dibayar di Kasir POS!' : 'PERINGATAN: Paket Ini Belum Lunas!'}</span>
+                      </div>
+                      <span className="px-2 py-0.5 bg-rose-200 text-rose-900 font-bold rounded text-[10px]">
+                        Tagihan: Rp {sisaNominal.toLocaleString('id-ID')}
+                      </span>
                     </div>
-                    <span className="px-2 py-0.5 bg-rose-200 text-rose-900 font-bold rounded text-[10px]">
-                      Sisa: Rp {(selectedClaimPkg.sisa_tagihan || 0).toLocaleString('id-ID')}
-                    </span>
+                    <p className="text-[11px] text-rose-800 leading-snug">
+                      {isAntrianPos ? (
+                        <>
+                          Pasien baru memilih paket ini dan <strong>masih di antrean Kasir POS (belum dibayar)</strong> dengan tagihan sebesar <strong>Rp {sisaNominal.toLocaleString('id-ID')}</strong>. Pasien <strong>wajib menyelesaikan pembayaran terlebih dahulu</strong> di Kasir POS sebelum dapat melakukan klaim tindakan paket.
+                        </>
+                      ) : (
+                        <>
+                          Pasien memiliki sisa tagihan sebesar <strong>Rp {sisaNominal.toLocaleString('id-ID')}</strong> {Number(selectedClaimPkg.nominal_dp) > 0 ? `(DP awal: Rp ${Number(selectedClaimPkg.nominal_dp).toLocaleString('id-ID')})` : ''}. Pasien <strong>wajib melunasi tagihan terlebih dahulu</strong> di Kasir POS sebelum dapat melakukan klaim tindakan paket.
+                        </>
+                      )}
+                    </p>
+                    <div className="pt-1.5 flex items-center justify-between border-t border-rose-200">
+                      <span className="text-[10px] text-rose-600 italic">Harus bayar di kasir:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDirectToPosForPelunasan(selectedClaimPkg)}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10.5px] shadow-xs cursor-pointer flex items-center gap-1.5 transition-all"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Bayar Pelunasan di Kasir POS</span>
+                        <ArrowRight className="w-3 h-3 ml-0.5" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-rose-800 leading-snug">
-                    Pasien memiliki sisa tagihan sebesar <strong>Rp {(selectedClaimPkg.sisa_tagihan || 0).toLocaleString('id-ID')}</strong> (DP awal: Rp {(selectedClaimPkg.nominal_dp || 0).toLocaleString('id-ID')}).
-                    Mohon selesaikan pelunasan saat kedatangan ini.
-                  </p>
-                  <div className="pt-1 flex items-center justify-between border-t border-rose-200">
-                    <span className="text-[10px] text-rose-600 italic">Bisa langsung catat pelunasan:</span>
-                    <button
-                      type="button"
-                      onClick={() => openPelunasanModal(selectedClaimPkg)}
-                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10.5px] shadow-xs cursor-pointer flex items-center gap-1"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Catat Pelunasan Sekarang</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div className="p-3 bg-[#faf3e8] border border-[#d6c2bd] rounded-xl space-y-1">
                 <div className="font-bold text-[#1e1b15] text-sm">
@@ -3586,22 +3562,53 @@ export default function PatientManagement({
                 </select>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2 border-t border-[#e5ded4]">
-                <button
-                  type="button"
-                  onClick={() => setShowClaimModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-[#514440] font-bold rounded-xl"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingClaim}
-                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
-                >
-                  {submittingClaim ? 'Memproses...' : 'Konfirmasi Klaim Paket'}
-                </button>
-              </div>
+              {(() => {
+                const isPkgUnpaid = (
+                  selectedClaimPkg.is_billed === 0 || 
+                  selectedClaimPkg.is_billed === '0' || 
+                  selectedClaimPkg.is_billed === null || 
+                  (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+                  selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
+                );
+                return (
+                  <div className="space-y-1.5 pt-2 border-t border-[#e5ded4]">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowClaimModal(false)}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-[#514440] font-bold rounded-xl text-xs"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submittingClaim || isPkgUnpaid}
+                        title={isPkgUnpaid ? "Paket belum lunas! Bayar pelunasan di Kasir POS terlebih dahulu." : "Konfirmasi Klaim Paket"}
+                        className={`px-4 py-2 font-bold rounded-xl shadow-md text-xs flex items-center gap-1.5 transition-all ${isPkgUnpaid
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-300 opacity-70'
+                          : 'bg-[#7d5141] hover:bg-[#653d2e] text-white cursor-pointer disabled:bg-gray-300'
+                          }`}
+                      >
+                        {isPkgUnpaid ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5 text-gray-500" />
+                            <span>Klaim Terkunci (Belum Lunas)</span>
+                          </>
+                        ) : submittingClaim ? (
+                          'Memproses...'
+                        ) : (
+                          'Konfirmasi Klaim Paket'
+                        )}
+                      </button>
+                    </div>
+                    {isPkgUnpaid && (
+                      <p className="text-[10.5px] text-rose-600 font-semibold text-right">
+                        ⚠️ Silakan lakukan pelunasan di Kasir POS.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </form>
           </div>
         </div>
@@ -3621,34 +3628,54 @@ export default function PatientManagement({
 
             <form onSubmit={handleProcessClaimBoth} className="space-y-3.5 text-xs">
               {/* Alert jika paket ini belum lunas */}
-              {((selectedClaimPkg.sisa_tagihan > 0) || selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS') && (
-                <div className="p-3 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-1.5 text-rose-900 animate-in fade-in">
-                  <div className="flex items-center justify-between">
-                    <div className="font-bold text-xs flex items-center gap-1.5 text-rose-800">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>PERINGATAN: Paket Ini Belum Lunas!</span>
+              {(() => {
+                const isPkgUnpaid = (
+                  selectedClaimPkg.is_billed === 0 || 
+                  selectedClaimPkg.is_billed === '0' || 
+                  selectedClaimPkg.is_billed === null || 
+                  (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+                  selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
+                );
+                if (!isPkgUnpaid) return null;
+                const sisaNominal = (Number(selectedClaimPkg.sisa_tagihan) > 0) ? Number(selectedClaimPkg.sisa_tagihan) : Number(selectedClaimPkg.harga_paket || 0);
+                const isAntrianPos = (selectedClaimPkg.is_billed === 0 || selectedClaimPkg.is_billed === '0' || selectedClaimPkg.is_billed === null);
+                return (
+                  <div className="p-3.5 bg-rose-50 border-2 border-rose-300 rounded-xl space-y-2 text-rose-900 animate-in fade-in shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-xs flex items-center gap-1.5 text-rose-800">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>{isAntrianPos ? 'PERINGATAN: Paket Belum Dibayar di Kasir POS!' : 'PERINGATAN: Paket Ini Belum Lunas!'}</span>
+                      </div>
+                      <span className="px-2 py-0.5 bg-rose-200 text-rose-900 font-bold rounded text-[10px]">
+                        Tagihan: Rp {sisaNominal.toLocaleString('id-ID')}
+                      </span>
                     </div>
-                    <span className="px-2 py-0.5 bg-rose-200 text-rose-900 font-bold rounded text-[10px]">
-                      Sisa: Rp {(selectedClaimPkg.sisa_tagihan || 0).toLocaleString('id-ID')}
-                    </span>
+                    <p className="text-[11px] text-rose-800 leading-snug">
+                      {isAntrianPos ? (
+                        <>
+                          Pasien baru memilih paket ini dan <strong>masih di antrean Kasir POS (belum dibayar)</strong> dengan tagihan sebesar <strong>Rp {sisaNominal.toLocaleString('id-ID')}</strong>. Pasien <strong>wajib menyelesaikan pembayaran terlebih dahulu</strong> di Kasir POS sebelum dapat melakukan klaim tindakan paket.
+                        </>
+                      ) : (
+                        <>
+                          Pasien memiliki sisa tagihan sebesar <strong>Rp {sisaNominal.toLocaleString('id-ID')}</strong> {Number(selectedClaimPkg.nominal_dp) > 0 ? `(DP awal: Rp ${Number(selectedClaimPkg.nominal_dp).toLocaleString('id-ID')})` : ''}. Pasien <strong>wajib melunasi tagihan terlebih dahulu</strong> di Kasir POS sebelum dapat melakukan klaim tindakan paket.
+                        </>
+                      )}
+                    </p>
+                    <div className="pt-1.5 flex items-center justify-between border-t border-rose-200">
+                      <span className="text-[10px] text-rose-600 italic">Harus bayar di kasir:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDirectToPosForPelunasan(selectedClaimPkg)}
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10.5px] shadow-xs cursor-pointer flex items-center gap-1.5 transition-all"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                        <span>Bayar Pelunasan di Kasir POS</span>
+                        <ArrowRight className="w-3 h-3 ml-0.5" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-rose-800 leading-snug">
-                    Pasien memiliki sisa tagihan sebesar <strong>Rp {(selectedClaimPkg.sisa_tagihan || 0).toLocaleString('id-ID')}</strong> (DP awal: Rp {(selectedClaimPkg.nominal_dp || 0).toLocaleString('id-ID')}).
-                    Mohon koordinasikan pelunasan tagihan dengan kasir.
-                  </p>
-                  <div className="pt-1 flex items-center justify-between border-t border-rose-200">
-                    <span className="text-[10px] text-rose-600 italic">Bisa langsung catat pelunasan:</span>
-                    <button
-                      type="button"
-                      onClick={() => openPelunasanModal(selectedClaimPkg)}
-                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[10.5px] shadow-xs cursor-pointer flex items-center gap-1"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Catat Pelunasan Sekarang</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Info Urutan Tindakan Sesuai SOP */}
               <div className="p-3 bg-amber-50/80 border border-amber-300 rounded-xl space-y-1 text-amber-950">
@@ -3710,22 +3737,53 @@ export default function PatientManagement({
                 </p>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2 border-t border-[#e5ded4]">
-                <button
-                  type="button"
-                  onClick={() => setShowClaimBothModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-[#514440] font-bold rounded-xl"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingClaim}
-                  className="px-5 py-2.5 bg-gradient-to-r from-[#7d5141] to-[#553123] hover:from-[#653d2e] hover:to-[#442317] disabled:bg-gray-300 text-white font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
-                >
-                  {submittingClaim ? 'Memproses...' : 'Konfirmasi Klaim Keduanya'}
-                </button>
-              </div>
+              {(() => {
+                const isPkgUnpaid = (
+                  selectedClaimPkg.is_billed === 0 || 
+                  selectedClaimPkg.is_billed === '0' || 
+                  selectedClaimPkg.is_billed === null || 
+                  (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+                  selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
+                );
+                return (
+                  <div className="space-y-1.5 pt-2 border-t border-[#e5ded4]">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowClaimBothModal(false)}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-[#514440] font-bold rounded-xl text-xs"
+                      >
+                        Batal
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submittingClaim || isPkgUnpaid}
+                        title={isPkgUnpaid ? "Paket belum lunas! Bayar pelunasan di Kasir POS terlebih dahulu." : "Konfirmasi Klaim Keduanya"}
+                        className={`px-5 py-2.5 font-bold rounded-xl shadow-md text-xs flex items-center gap-1.5 transition-all ${isPkgUnpaid
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed border border-gray-300 opacity-70'
+                          : 'bg-gradient-to-r from-[#7d5141] to-[#553123] hover:from-[#653d2e] hover:to-[#442317] text-white cursor-pointer disabled:bg-gray-300'
+                          }`}
+                      >
+                        {isPkgUnpaid ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5 text-gray-500" />
+                            <span>Klaim Terkunci (Belum Lunas)</span>
+                          </>
+                        ) : submittingClaim ? (
+                          'Memproses...'
+                        ) : (
+                          'Konfirmasi Klaim Keduanya'
+                        )}
+                      </button>
+                    </div>
+                    {isPkgUnpaid && (
+                      <p className="text-[10.5px] text-rose-600 font-semibold text-right">
+                        ⚠️ Silakan lakukan pelunasan di Kasir POS.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </form>
           </div>
         </div>

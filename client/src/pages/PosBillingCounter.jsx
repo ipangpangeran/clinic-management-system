@@ -174,10 +174,24 @@ export default function PosBillingCounter() {
       setUnbilledList(unbilled);
 
       if (pRes.data && pRes.data.length > 0) {
-        const activeUnbilled = unbilled.length > 0 ? pRes.data.find(p => p.id === unbilled[0].pasien_id) : null;
-        const defaultId = activeUnbilled ? activeUnbilled.id : pRes.data[0].id;
+        const storedPatientId = sessionStorage.getItem('deflow_pos_patient_id');
+        let targetPatient = null;
+        if (storedPatientId) {
+          targetPatient = pRes.data.find(p => p.id === storedPatientId);
+          sessionStorage.removeItem('deflow_pos_patient_id');
+        }
+        if (!targetPatient) {
+          targetPatient = unbilled.length > 0 ? pRes.data.find(p => p.id === unbilled[0].pasien_id) : pRes.data[0];
+        }
+        const defaultId = targetPatient ? targetPatient.id : pRes.data[0].id;
         setSelectedPatientId(defaultId);
-        if (unbilled.length > 0) handleProcessUnbilledDoingan(unbilled[0], tRes.data);
+
+        const patientUnbilled = unbilled.filter(d => d.pasien_id === defaultId);
+        if (patientUnbilled.length > 0) {
+          handleProcessUnbilledDoingan(patientUnbilled[0], tRes.data);
+        } else if (unbilled.length > 0) {
+          handleProcessUnbilledDoingan(unbilled[0], tRes.data);
+        }
       }
     } catch (err) {
       console.error('Error fetching POS data', err);
@@ -236,18 +250,25 @@ export default function PosBillingCounter() {
     if (patientUnbilled.length > 0) {
       const newItems = patientUnbilled.map(d => {
         if (d.item_type === 'PAKET') {
-          const isDp = (d.status_pembayaran === 'BELUM_LUNAS');
+          const isPelunasan = (d.is_billed === 1 && d.status_pembayaran === 'BELUM_LUNAS');
+          const isDp = (d.is_billed === 0 && d.catatan_pembayaran?.toLowerCase().includes('dp'));
           const fullPrice = Number(d.harga_paket) || 0;
-          const defaultDp = isDp ? (Number(d.nominal_dp) > 0 ? Number(d.nominal_dp) : Math.round(fullPrice * 0.5)) : fullPrice;
+          const sisaTagihan = Number(d.sisa_tagihan) || 0;
+          const defaultPrice = isPelunasan 
+            ? sisaTagihan 
+            : (isDp ? (Number(d.nominal_dp) > 0 ? Number(d.nominal_dp) : Math.round(fullPrice * 0.5)) : fullPrice);
           return {
             item_id: d.id,
             paket_id: d.id,
             jenis_item: 'PAKET',
-            nama_item: isDp ? `Paket: ${d.nama_tindakan} (DP)` : `Paket: ${d.nama_tindakan}`,
+            nama_item: isPelunasan 
+              ? `Pelunasan Paket: ${d.nama_tindakan} (Sisa Tagihan)` 
+              : (isDp ? `Paket: ${d.nama_tindakan} (DP)` : `Paket: ${d.nama_tindakan}`),
             nama_paket_asli: d.nama_tindakan,
             full_harga_paket: fullPrice,
             is_dp: isDp,
-            harga_satuan: isDp ? defaultDp : fullPrice,
+            is_pelunasan: isPelunasan,
+            harga_satuan: defaultPrice,
             jumlah: 1,
             therapist_id: null
           };
@@ -288,18 +309,25 @@ export default function PosBillingCounter() {
     if (patientUnbilled.length > 0) {
       const newItems = patientUnbilled.map(doi => {
         if (doi.item_type === 'PAKET') {
-          const isDp = (doi.status_pembayaran === 'BELUM_LUNAS');
+          const isPelunasan = (doi.is_billed === 1 && doi.status_pembayaran === 'BELUM_LUNAS');
+          const isDp = (doi.is_billed === 0 && doi.catatan_pembayaran?.toLowerCase().includes('dp'));
           const fullPrice = Number(doi.harga_paket) || 0;
-          const defaultDp = isDp ? (Number(doi.nominal_dp) > 0 ? Number(doi.nominal_dp) : Math.round(fullPrice * 0.5)) : fullPrice;
+          const sisaTagihan = Number(doi.sisa_tagihan) || 0;
+          const defaultPrice = isPelunasan 
+            ? sisaTagihan 
+            : (isDp ? (Number(doi.nominal_dp) > 0 ? Number(doi.nominal_dp) : Math.round(fullPrice * 0.5)) : fullPrice);
           return {
             item_id: doi.id,
             paket_id: doi.id,
             jenis_item: 'PAKET',
-            nama_item: isDp ? `Paket: ${doi.nama_tindakan} (DP)` : `Paket: ${doi.nama_tindakan}`,
+            nama_item: isPelunasan 
+              ? `Pelunasan Paket: ${doi.nama_tindakan} (Sisa Tagihan)` 
+              : (isDp ? `Paket: ${doi.nama_tindakan} (DP)` : `Paket: ${doi.nama_tindakan}`),
             nama_paket_asli: doi.nama_tindakan,
             full_harga_paket: fullPrice,
             is_dp: isDp,
-            harga_satuan: isDp ? defaultDp : fullPrice,
+            is_pelunasan: isPelunasan,
+            harga_satuan: defaultPrice,
             jumlah: 1,
             therapist_id: null
           };
@@ -690,10 +718,14 @@ export default function PosBillingCounter() {
                     <div className="flex justify-between items-start">
                       <div className="font-bold text-[#1e1b15]">{doi.pasien_nama}</div>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${doi.item_type === 'PAKET'
-                        ? (doi.status_pembayaran === 'BELUM_LUNAS' ? 'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold' : 'bg-purple-100 text-purple-900 border border-purple-300 font-extrabold')
+                        ? (doi.is_billed === 1 ? 'bg-rose-100 text-rose-900 border border-rose-300 font-extrabold' : 'bg-purple-100 text-purple-900 border border-purple-300 font-extrabold')
                         : 'bg-amber-100 text-amber-900'
                         }`}>
-                        {doi.item_type === 'PAKET' ? (doi.status_pembayaran === 'BELUM_LUNAS' ? '⚡ PAKET (SKEMA DP)' : '📦 PAKET (LUNAS)') : (doi.tipe_pasien === 'NON-TRIAL' || doi.tipe_pasien === 'Reguler' ? 'MEMBER' : doi.tipe_pasien)}
+                        {doi.item_type === 'PAKET' 
+                          ? (doi.is_billed === 1 
+                              ? '💸 PELUNASAN SISA' 
+                              : (doi.catatan_pembayaran?.toLowerCase().includes('dp') ? '⚡ PAKET (SKEMA DP)' : '📦 PAKET (MENUNGGU BAYAR)'))
+                          : (doi.tipe_pasien === 'NON-TRIAL' || doi.tipe_pasien === 'Reguler' ? 'MEMBER' : doi.tipe_pasien)}
                       </span>
                     </div>
                     <div className="text-[11px] text-[#514440]">
@@ -701,11 +733,20 @@ export default function PosBillingCounter() {
                     </div>
                     {doi.item_type === 'PAKET' ? (
                       <div className="text-[11px] font-bold">
-                        <span className="text-[#514440]">Harga Paket: </span>
-                        <span className="text-purple-800 font-extrabold font-mono">Rp {Number(doi.harga_paket || 0).toLocaleString('id-ID')}</span>
-                        {doi.status_pembayaran === 'BELUM_LUNAS' && (
+                        <span className="text-[#514440]">
+                          {doi.is_billed === 1 ? 'Sisa Tagihan: ' : 'Harga Paket: '}
+                        </span>
+                        <span className="text-purple-800 font-extrabold font-mono">
+                          Rp {Number(doi.is_billed === 1 ? (doi.sisa_tagihan || 0) : (doi.harga_paket || 0)).toLocaleString('id-ID')}
+                        </span>
+                        {doi.is_billed === 0 && doi.catatan_pembayaran?.toLowerCase().includes('dp') && (
                           <span className="text-[10px] text-amber-800 font-bold ml-1.5 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                             (Input DP di Kasir)
+                          </span>
+                        )}
+                        {doi.is_billed === 1 && (
+                          <span className="text-[10px] text-rose-800 font-bold ml-1.5 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                            (Pelunasan Sisa)
                           </span>
                         )}
                       </div>

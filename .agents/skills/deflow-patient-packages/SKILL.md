@@ -20,6 +20,9 @@ description: "Aturan pengelolaan data pasien (Trial vs Reguler), kuota paket tre
    - Sisa sesi treatment tidak boleh minus (`quantity >= 1`).
 3. **Export & Laporan:**
    - Detail riwayat klaim tindakan yang di-export ke Excel harus menampilkan nama exact paket/tindakan (gunakan utility `excelExport.js`).
+4. **Pencatatan di Database:**
+   - Selalu gunakan transaksi database untuk memastikan konsistensi data.
+   - Selalu gunakan timezone `Asia/Jakarta` (GMT+7) untuk pencatatan timestamp.
 
 ## Instruksi untuk Antigravity Agent
 - Jika memodifikasi flow pendaftaran di `PatientManagement.jsx`, pastikan field mandatory form tidak memblokir intake pasien tipe Trial.

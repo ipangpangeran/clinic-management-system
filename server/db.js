@@ -81,7 +81,7 @@ async function initDb() {
         lini_profesi TEXT DEFAULT 'Beautician',
         phone TEXT,
         gaji_pokok REAL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
       )
     `);
 
@@ -126,7 +126,7 @@ async function initDb() {
         jenis_kulit TEXT,
         rekomendasi_dokter TEXT,
         total_poin INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
       )
     `);
 
@@ -149,7 +149,7 @@ async function initDb() {
             jenis_kulit TEXT,
             rekomendasi_dokter TEXT,
             total_poin INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
           )
         `);
         await runQuery(`
@@ -216,7 +216,7 @@ async function initDb() {
         item_b_name TEXT,
         item_b_kuota INTEGER DEFAULT 0,
         harga_paket REAL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
       )
     `);
 
@@ -268,7 +268,7 @@ async function initDb() {
         sisa_kuota INTEGER NOT NULL,
         total_kuota INTEGER NOT NULL,
         harga_paket REAL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         FOREIGN KEY(pasien_id) REFERENCES pasien(id) ON DELETE CASCADE
       )
     `);
@@ -302,7 +302,7 @@ async function initDb() {
         doingan_id TEXT,
         petugas_id TEXT,
         petugas_nama TEXT,
-        used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        used_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         used_by_user_id TEXT,
         notes TEXT,
         FOREIGN KEY(pasien_paket_id) REFERENCES pasien_paket(id) ON DELETE CASCADE
@@ -320,7 +320,7 @@ async function initDb() {
       CREATE TABLE IF NOT EXISTS system_settings (
         setting_key TEXT PRIMARY KEY,
         setting_value TEXT NOT NULL,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT (datetime('now', '+7 hours'))
       )
     `);
     await runQuery(`INSERT OR IGNORE INTO system_settings (setting_key, setting_value) VALUES ('wa_reminder_enabled', '0')`);
@@ -331,7 +331,7 @@ async function initDb() {
         role_name TEXT NOT NULL,
         nominal_komisi REAL NOT NULL DEFAULT 0,
         keterangan TEXT,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT (datetime('now', '+7 hours'))
       )
     `);
 
@@ -342,7 +342,7 @@ async function initDb() {
         pasien_id TEXT NOT NULL,
         tgl_kembali DATE NOT NULL,
         status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'SENT', 'CANCELLED')),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         sent_at DATETIME,
         message_text TEXT,
         FOREIGN KEY(pasien_id) REFERENCES pasien(id) ON DELETE CASCADE
@@ -375,7 +375,7 @@ async function initDb() {
         approver_user_id TEXT,
         status TEXT DEFAULT 'APPROVED' CHECK(status IN ('PENDING', 'APPROVED', 'REJECTED')),
         notes TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         FOREIGN KEY(produk_id) REFERENCES stok_produk(id) ON DELETE CASCADE
       )
     `);
@@ -395,8 +395,8 @@ async function initDb() {
         approver_user_id TEXT,
         status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'APPROVED', 'REJECTED')),
         notes TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
+        updated_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         FOREIGN KEY(produk_id) REFERENCES stok_produk(id) ON DELETE CASCADE
       )
     `);
@@ -446,7 +446,7 @@ async function initDb() {
         doctor_id TEXT,
         nurse_id TEXT,
         marketing_id TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         FOREIGN KEY(pasien_id) REFERENCES pasien(id)
       )
     `);
@@ -468,9 +468,14 @@ async function initDb() {
         harga_satuan REAL NOT NULL,
         subtotal_item REAL NOT NULL,
         therapist_id TEXT,
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         FOREIGN KEY(transaksi_id) REFERENCES transaksi(id) ON DELETE CASCADE
       )
     `);
+
+    try {
+      await runQuery(`ALTER TABLE transaksi_detail ADD COLUMN created_at DATETIME`);
+    } catch (e) { }
 
     // 13. Payroll History
     await runQuery(`
@@ -499,7 +504,7 @@ async function initDb() {
         message TEXT NOT NULL,
         status TEXT NOT NULL,
         response_data TEXT,
-        sent_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        sent_at DATETIME DEFAULT (datetime('now', '+7 hours'))
       )
     `);
 
@@ -515,13 +520,13 @@ async function initDb() {
         nama_tindakan TEXT NOT NULL,
         status_pengerjaan TEXT DEFAULT 'IN_PROGRESS',
         status_doingan TEXT,
-        started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        started_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         completed_at DATETIME,
         nominal_dp REAL DEFAULT 0,
         nominal_membership REAL DEFAULT 0,
         komisi REAL DEFAULT 0,
         notes TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         FOREIGN KEY(pasien_id) REFERENCES pasien(id),
         FOREIGN KEY(petugas_id) REFERENCES users(id)
       )
@@ -594,6 +599,13 @@ async function initDb() {
 
     await seedDefaultData();
     console.log('[DB] Database schema and column migration completed.');
+
+    try {
+      const { runMigrations } = require('./migrations');
+      await runMigrations();
+    } catch (migErr) {
+      console.error('[DB] Migration runner error:', migErr);
+    }
 
   } catch (err) {
     console.error('[DB Error]', err);

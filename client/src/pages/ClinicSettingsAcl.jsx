@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { ShieldCheck, Building2, Save, Link2, Users, UserPlus, Trash2, Edit2, KeyRound, Phone, CheckCircle2, ShieldAlert, MessageSquare, ToggleLeft, ToggleRight } from 'lucide-react';
+import { ShieldCheck, Building2, Save, Link2, Users, UserPlus, Trash2, Edit2, KeyRound, Phone, CheckCircle2, ShieldAlert, MessageSquare, ToggleLeft, ToggleRight, Database, Download, RefreshCw, HardDrive, AlertTriangle } from 'lucide-react';
 import { formatPersonName } from '../utils/formatters';
 
 export default function ClinicSettingsAcl() {
@@ -71,6 +71,70 @@ export default function ClinicSettingsAcl() {
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Gagal mengubah status fitur WA Reminder');
     }
+  };
+
+  // Database Backup & Restore State
+  const [backupsList, setBackupsList] = useState([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [backupActionLoading, setBackupActionLoading] = useState(false);
+  const [backupLabel, setBackupLabel] = useState('');
+
+  const fetchBackups = async () => {
+    setLoadingBackups(true);
+    try {
+      const res = await axios.get('/api/database/backups');
+      setBackupsList(res.data || []);
+    } catch (err) {
+      console.error('Error fetching backups', err);
+    } finally {
+      setLoadingBackups(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'DATABASE') {
+      fetchBackups();
+    }
+  }, [activeTab]);
+
+  const handleCreateBackup = async () => {
+    setBackupActionLoading(true);
+    setMsg('');
+    setErrorMsg('');
+    try {
+      const res = await axios.post('/api/database/backup', { label: backupLabel || 'manual' });
+      setMsg(res.data.message || 'Backup database berhasil dibuat!');
+      setBackupLabel('');
+      await fetchBackups();
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Gagal membuat backup database.');
+    } finally {
+      setBackupActionLoading(false);
+    }
+  };
+
+  const handleRestoreBackup = async (filename) => {
+    const confirmRestore = window.confirm(
+      `PERINGATAN PEMULIHAN:\n\nApakah Anda yakin ingin me-restore database dari file backup "${filename}"?\n\nSistem akan secara otomatis membuat backup cadangan keamanan (safety backup) sebelum menimpa data aktif saat ini.`
+    );
+    if (!confirmRestore) return;
+
+    setBackupActionLoading(true);
+    setMsg('');
+    setErrorMsg('');
+    try {
+      const res = await axios.post('/api/database/restore', { filename });
+      setMsg(res.data.message || 'Database berhasil dipulihkan (restore sukses)!');
+      await fetchBackups();
+    } catch (err) {
+      setErrorMsg(err.response?.data?.message || 'Gagal memulihkan database.');
+    } finally {
+      setBackupActionLoading(false);
+    }
+  };
+
+  const handleDownloadBackup = (filename) => {
+    window.open(`/api/database/download/${filename}`, '_blank');
   };
 
   const rolesList = ['Super Admin', 'Admin Klinik', 'Manager', 'Admin FO', 'Beautician', 'Nurse', 'Marketing'];
@@ -295,6 +359,16 @@ export default function ClinicSettingsAcl() {
             <ShieldCheck className="w-3.5 h-3.5 inline mr-1" />
             Matriks Dynamic ACL (Hak Akses Roles)
           </button>
+
+          {isSuperAdmin && (
+            <button
+              onClick={() => setActiveTab('DATABASE')}
+              className={`px-3.5 sm:px-4 py-2 rounded-xl font-bold transition-all cursor-pointer ${activeTab === 'DATABASE' ? 'bg-[#7d5141] text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] hover:bg-[#eee7dd]'}`}
+            >
+              <Database className="w-3.5 h-3.5 inline mr-1" />
+              Database & Backup Maintenance
+            </button>
+          )}
         </div>
 
         {/* TAB 1: PROFIL KLINIK FORM */}
@@ -679,6 +753,164 @@ export default function ClinicSettingsAcl() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: DATABASE & BACKUP MAINTENANCE */}
+        {activeTab === 'DATABASE' && isSuperAdmin && (
+          <div className="space-y-5">
+            {/* Database Architecture & Timezone Info Banner */}
+            <div className="p-4 bg-linear-to-r from-amber-50 to-orange-50/70 border border-amber-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-2xs">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Database className="w-5 h-5 text-amber-800" />
+                  <h4 className="font-serif font-bold text-sm text-[#1e1b15]">
+                    Arsitektur Database SQLite DEFLOW
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    🟢 GMT+7 (Asia/Jakarta)
+                  </span>
+                </div>
+                <p className="text-xs text-[#514440] leading-relaxed max-w-2xl">
+                  Database beroperasi dengan disiplin timezone WIB (GMT+7) melalui SQLite Triggers, 23 performance indexes untuk pencarian kilat, serta tracking migrasi aman (<code className="bg-amber-100/80 px-1 py-0.5 rounded text-[11px]">_migrations</code>).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={fetchBackups}
+                  disabled={loadingBackups}
+                  className="px-3.5 py-2 rounded-xl bg-white border border-[#e5ded4] text-[#514440] hover:bg-[#faf3e8] font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingBackups ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Action: Create New Backup */}
+            <div className="bg-[#faf3e8]/60 p-4 rounded-2xl border border-[#e5ded4] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#7d5141] text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <HardDrive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h5 className="font-bold text-xs text-[#1e1b15]">Buat Hot Backup Database Sekarang</h5>
+                  <p className="text-[11px] text-gray-500">
+                    Snapshot transaksional instan menggunakan fitur native <code className="text-amber-800 font-mono">VACUUM INTO</code> SQLite tanpa memutus operasional kasir.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Label/catatan (opsional)..."
+                  value={backupLabel}
+                  onChange={(e) => setBackupLabel(e.target.value)}
+                  className="px-3 py-2 bg-white border border-[#e5ded4] rounded-xl text-xs text-[#1e1b15] focus:outline-hidden focus:border-[#7d5141]"
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateBackup}
+                  disabled={backupActionLoading}
+                  className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {backupActionLoading ? 'Memproses...' : 'Backup Sekarang'}
+                </button>
+              </div>
+            </div>
+
+            {/* Backup Files List Table */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <h5 className="font-bold text-xs text-[#1e1b15] flex items-center gap-1.5">
+                  <span>Daftar Cadangan Database ({backupsList.length} Berkas)</span>
+                </h5>
+                <span className="text-[11px] text-gray-500">Tersimpan di: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-[10px]">server/backups/</code></span>
+              </div>
+
+              <div className="overflow-x-auto border border-[#e5ded4] rounded-2xl bg-white shadow-2xs">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#faf3e8] text-[#514440] font-semibold uppercase border-b border-[#e5ded4]">
+                    <tr>
+                      <th className="py-3 px-3 text-center w-12">No</th>
+                      <th className="py-3 px-4">Nama Berkas Backup (.db)</th>
+                      <th className="py-3 px-4 text-center">Ukuran</th>
+                      <th className="py-3 px-4">Waktu Dibuat (WIB)</th>
+                      <th className="py-3 px-4 text-center">Tindakan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e5ded4]">
+                    {loadingBackups ? (
+                      <tr>
+                        <td colSpan="5" className="py-8 text-center text-gray-400">
+                          <RefreshCw className="w-5 h-5 mx-auto animate-spin mb-1 text-gray-400" />
+                          Memuat daftar cadangan database...
+                        </td>
+                      </tr>
+                    ) : backupsList.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="py-8 text-center text-gray-400 italic">
+                          Belum ada berkas cadangan database. Klik tombol "Backup Sekarang" di atas untuk membuat cadangan pertama Anda.
+                        </td>
+                      </tr>
+                    ) : (
+                      backupsList.map((b, idx) => (
+                        <tr key={b.filename} className="hover:bg-[#fff8f0] transition-colors">
+                          <td className="py-3 px-3 text-center font-bold text-gray-400">{idx + 1}</td>
+                          <td className="py-3 px-4">
+                            <div className="font-mono font-bold text-[#1e1b15] text-[11px] flex items-center gap-1.5">
+                              <Database className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                              <span>{b.filename}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                              {b.sizeFormatted}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-600 text-[11px]">
+                            {b.createdAt ? new Date(b.createdAt).toLocaleString('id-ID', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit'
+                            }) : '-'}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadBackup(b.filename)}
+                                className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                                title="Unduh file .db ke komputer"
+                              >
+                                <Download className="w-3 h-3" /> Unduh .db
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRestoreBackup(b.filename)}
+                                disabled={backupActionLoading}
+                                className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-2xs disabled:opacity-50"
+                                title="Pulihkan database dari cadangan ini"
+                              >
+                                <RefreshCw className="w-3 h-3" /> Pulihkan (Restore)
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
