@@ -123,6 +123,19 @@ export default function StaffMobilePortal() {
     (currentActiveSession?.notes && currentActiveSession.notes.includes('Klaim'))
   );
 
+  const isWic = Boolean(
+    currentActiveSession?.tipe_pasien === 'WIC' ||
+    currentActiveSession?.status_doingan === 'WIC'
+  );
+
+  // Auto-select tindakan assigned from FO jika bukan WIC dan bukan Trial
+  useEffect(() => {
+    if (!isWic && currentActiveSession?.tindakan_id) {
+      setSelectedTreatments([currentActiveSession.tindakan_id]);
+      setTreatmentQuantities({ [currentActiveSession.tindakan_id]: 1 });
+    }
+  }, [currentActiveSession?.id, currentActiveSession?.tindakan_id, isWic]);
+
   const PAKET_A_KEYWORDS = [
     'dna salmon',
     'platelet-rich plasma',
@@ -195,8 +208,9 @@ export default function StaffMobilePortal() {
     const target = currentActiveSession;
     if (!target) return;
     const isTrial = target.tipe_pasien === 'TRIAL' || target.status_doingan === 'Trial';
+    const isTargetWic = target.tipe_pasien === 'WIC' || target.status_doingan === 'WIC';
 
-    if (!isTrial && selectedTreatments.length === 0) {
+    if (!isTrial && !isTargetWic && selectedTreatments.length === 0) {
       setErrorMsg('Pilih minimal 1 detail tindakan yang telah Anda kerjakan pada pasien.');
       return;
     }
@@ -207,7 +221,7 @@ export default function StaffMobilePortal() {
 
     try {
       const res = await axios.post(`/api/doingan/${target.id}/complete`, {
-        tindakan_ids: selectedTreatments,
+        tindakan_ids: isTargetWic ? (target.tindakan_id ? [target.tindakan_id] : []) : selectedTreatments,
         item_quantities: treatmentQuantities,
         notes
       });
@@ -406,7 +420,10 @@ export default function StaffMobilePortal() {
                           {idx + 1}
                         </span>
                         <h4 className="font-bold text-xs text-[#1e1b15] truncate">{pasienItem.pasien_nama}</h4>
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-200 shrink-0">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0 ${pasienItem.tipe_pasien === 'WIC'
+                          ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                          : 'bg-amber-100 text-amber-900 border border-amber-200'
+                          }`}>
                           {pasienItem.tipe_pasien}
                         </span>
                       </div>
@@ -517,6 +534,29 @@ export default function StaffMobilePortal() {
                 <p className="text-[11px] leading-relaxed text-amber-900/90">
                   Untuk pasien Trial, Anda tidak perlu memilih rincian tindakan.
                 </p>
+              </div>
+            ) : isWic ? (
+              <div className="p-4 bg-indigo-50/80 border border-indigo-200 rounded-2xl space-y-2.5 text-xs text-indigo-950 shadow-2xs">
+                <div className="font-bold text-sm flex items-center gap-1.5 text-indigo-900">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  <span>Pasien Walk In Customer (WIC)</span>
+                </div>
+                <div className="p-3.5 bg-white border border-indigo-200 rounded-xl space-y-1.5 shadow-2xs">
+                  <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block">Tindakan Satuan Terdaftar</span>
+                  <div className="font-bold text-sm text-[#1e1b15]">
+                    {currentActiveSession.nama_tindakan || 'Tindakan Medis'}
+                  </div>
+                  {currentActiveSession.total_tarif > 0 && (
+                    <div className="text-xs text-[#7d5141] font-semibold">
+                      Tarif Pasien: <span className="font-bold text-indigo-900">Rp {Number(currentActiveSession.total_tarif).toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                  {currentActiveSession.notes && (
+                    <div className="text-[11px] text-gray-500 italic mt-1 pt-1 border-t border-gray-100">
+                      Catatan FO: {currentActiveSession.notes}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div>

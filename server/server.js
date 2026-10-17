@@ -282,7 +282,7 @@ app.get('/api/staff-availability', authenticateToken, async (req, res) => {
 // POST /api/doingan/assign -> Admin FO assigns patient to staff member
 app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
   try {
-    const { pasien_id, petugas_id, kategori_layanan, notes, marketing_id } = req.body;
+    const { pasien_id, petugas_id, kategori_layanan, notes, marketing_id, tindakan_id, nama_tindakan, total_tarif } = req.body;
     if (!pasien_id || !petugas_id) {
       return res.status(400).json({ message: 'Pasien dan Petugas wajib dipilih' });
     }
@@ -302,7 +302,9 @@ app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
     }
 
     const id = 'doi-' + Date.now();
-    const statusDoingan = (pasien.tipe_pasien === 'MEMBER' || pasien.tipe_pasien === 'NON-TRIAL' || pasien.tipe_pasien === 'Reguler') ? 'Mbr' : 'Trial';
+    const statusDoingan = (pasien.tipe_pasien === 'MEMBER' || pasien.tipe_pasien === 'NON-TRIAL' || pasien.tipe_pasien === 'Reguler' || pasien.tipe_pasien === 'WIC')
+      ? (pasien.tipe_pasien === 'WIC' ? 'WIC' : 'Mbr')
+      : 'Trial';
     const finalMarketingId = marketing_id || pasien.marketing_id || null;
 
     // Check if this patient currently has an active Beautician session
@@ -318,15 +320,43 @@ app.post('/api/doingan/assign', authenticateToken, async (req, res) => {
       }
     }
 
+    let finalNamaTindakan = nama_tindakan || 'Menunggu Konfirmasi Tindakan';
+    let finalTindakanId = tindakan_id || null;
+    let finalTarif = (total_tarif !== undefined && total_tarif !== null) ? Number(total_tarif) : 0;
+    let initialKomisi = 0;
+
+    const commRows = await allQuery('SELECT role_key, nominal_komisi FROM role_commissions');
+    const commMap = {};
+    commRows.forEach(r => commMap[r.role_key] = r.nominal_komisi);
+
+    if (finalTindakanId) {
+      const tRow = await getQuery('SELECT * FROM tindakan_medis WHERE id = ?', [finalTindakanId]);
+      if (tRow) {
+        if (!nama_tindakan) finalNamaTindakan = tRow.nama_tindakan;
+        if (total_tarif === undefined || total_tarif === null) {
+          finalTarif = tRow.tarif_tindakan_medis || 0;
+        }
+        if (isNurse) {
+          initialKomisi = (tRow.nominal_nurse_tindakan != null && tRow.nominal_nurse_tindakan > 0)
+            ? tRow.nominal_nurse_tindakan
+            : (commMap['NURSE_TINDAKAN'] ?? 10000);
+        }
+      }
+    } else if (isNurse && pasien.tipe_pasien === 'WIC') {
+      initialKomisi = commMap['NURSE_TINDAKAN'] ?? 10000;
+    }
+
     await runQuery(`
       INSERT INTO doingan (
         id, pasien_id, petugas_id, role_petugas, kategori_layanan, tindakan_id, nama_tindakan,
-        status_pengerjaan, status_doingan, started_at, created_at, notes, marketing_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'), ?, ?)
+        status_pengerjaan, status_doingan, started_at, created_at, notes, marketing_id,
+        total_tarif, komisi
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'), datetime('now', '+7 hours'), ?, ?, ?, ?)
     `, [
       id, pasien_id, petugas_id, petugas.role || 'Staff',
       kategori_layanan || (isNurse ? 'Tindakan Medis (Nurse)' : 'Facial (Beautician)'),
-      null, 'Menunggu Konfirmasi Tindakan', initialStatus, statusDoingan, notes || '', finalMarketingId
+      finalTindakanId, finalNamaTindakan, initialStatus, statusDoingan, notes || '', finalMarketingId,
+      finalTarif, initialKomisi
     ]);
 
     // If an active Nurse session was already present and a Beautician is now assigned, queue the Nurse session behind BTC
@@ -435,7 +465,7 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
 
     const isNurse = (petugas?.lini_profesi === 'Nurse' || petugas?.role === 'Nurse' || doi.role_petugas === 'Nurse');
     const isTrial = (doi.status_doingan === 'Trial' || doi.tipe_pasien === 'TRIAL');
-    const isMember = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member' || doi.tipe_pasien === 'MEMBER');
+    const isMember = (doi.status_doingan === 'Mbr' || doi.status_doingan === 'Member' || doi.tipe_pasien === 'MEMBER' || doi.status_doingan === 'WIC' || doi.tipe_pasien === 'WIC');
 
     if (isTrial) {
       finalNamaTindakan = 'Tindakan Treatment Trial';
@@ -468,8 +498,6 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
         });
 
         // Untuk Beautician (BTC): Komisi dihitung FLAT per sesi treatment facial
-        // Trial = Rp 13.000, Member (termasuk klaim paketan) = Rp 17.000, Training = Rp 10.000
-        // TIDAK diakumulasi per checklist sub-tindakan alat facial yang dicentang
         if (!isNurse) {
           totalKomisi = isTraining ? commBtcTraining : (isMember ? commBtcMember : commBtcTrial);
         }
@@ -477,12 +505,20 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
         finalNamaTindakan = treatmentLabelParts.join(', ');
       } else {
         if (isNurse) {
-          totalKomisi = commMap['NURSE_TINDAKAN'] ?? 10000;
+          totalKomisi = doi.komisi > 0 ? doi.komisi : (commMap['NURSE_TINDAKAN'] ?? 10000);
         } else {
           totalKomisi = isTraining ? commBtcTraining : (isMember ? commBtcMember : commBtcTrial);
         }
       }
     }
+
+    if (!mainTindakanId && doi.tindakan_id) mainTindakanId = doi.tindakan_id;
+    if ((finalNamaTindakan === 'Perawatan Selesai' || !finalNamaTindakan) && doi.nama_tindakan && doi.nama_tindakan !== 'Menunggu Konfirmasi Tindakan') {
+      finalNamaTindakan = doi.nama_tindakan;
+    }
+    const finalTotalTarif = (doi.total_tarif && doi.total_tarif > 0 && (doi.status_doingan === 'WIC' || doi.tipe_pasien === 'WIC'))
+      ? doi.total_tarif
+      : totalTarifAll;
 
     await runQuery(`
       UPDATE doingan
@@ -495,7 +531,7 @@ app.post('/api/doingan/:id/complete', authenticateToken, async (req, res) => {
           notes = ?,
           completed_at = datetime('now', '+7 hours')
       WHERE id = ?
-    `, [mainTindakanId, finalNamaTindakan, totalKomisi, mainQty, totalTarifAll, notes || doi.notes || '', id]);
+    `, [mainTindakanId, finalNamaTindakan, totalKomisi, mainQty, finalTotalTarif, notes || doi.notes || '', id]);
 
     await runQuery(`
       UPDATE pasien_paket_usage
@@ -1180,7 +1216,7 @@ app.post('/api/pasien', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Tim Marketing wajib dipilih saat pendaftaran pasien baru' });
     }
 
-    const normalizedTipe = (tipe_pasien === 'NON-TRIAL' || tipe_pasien === 'Reguler' || tipe_pasien === 'Member' || tipe_pasien === 'MEMBER') ? 'MEMBER' : tipe_pasien;
+    const normalizedTipe = (tipe_pasien === 'WIC') ? 'WIC' : ((tipe_pasien === 'NON-TRIAL' || tipe_pasien === 'Reguler' || tipe_pasien === 'Member' || tipe_pasien === 'MEMBER') ? 'MEMBER' : tipe_pasien);
 
     if (no_ktp) {
       const existingKtp = await getQuery('SELECT id FROM pasien WHERE no_ktp = ?', [no_ktp]);
@@ -1240,7 +1276,7 @@ app.put('/api/pasien/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    const normalizedTipe = (tipe_pasien === 'NON-TRIAL' || tipe_pasien === 'Reguler' || tipe_pasien === 'Member' || tipe_pasien === 'MEMBER') ? 'MEMBER' : tipe_pasien;
+    const normalizedTipe = (tipe_pasien === 'WIC') ? 'WIC' : ((tipe_pasien === 'NON-TRIAL' || tipe_pasien === 'Reguler' || tipe_pasien === 'Member' || tipe_pasien === 'MEMBER') ? 'MEMBER' : tipe_pasien);
 
     if (no_ktp) {
       const existingKtp = await getQuery('SELECT id FROM pasien WHERE no_ktp = ? AND id != ?', [no_ktp, id]);
@@ -2559,11 +2595,16 @@ app.delete('/api/tindakan/:id', authenticateToken, async (req, res) => {
 // --- POS & BILLING TRANSACTIONS ---
 app.post('/api/transaksi', authenticateToken, async (req, res) => {
   try {
-    const { pasien_id, items, discount_amount, payment_amount, therapist_id, doctor_id, nurse_id, marketing_id, poin_used } = req.body;
+    const { pasien_id, items, discount_amount, payment_amount, therapist_id, doctor_id, nurse_id, marketing_id, poin_used, metode_pembayaran } = req.body;
 
     if (!pasien_id || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Pasien dan item belanja wajib diisi' });
     }
+
+    const validMethods = ['Cash', 'QRIS', 'Debit'];
+    const finalMetodeBayar = (metode_pembayaran && validMethods.includes(metode_pembayaran))
+      ? metode_pembayaran
+      : (metode_pembayaran ? String(metode_pembayaran).trim() : 'Cash');
 
     const pasien = await getQuery('SELECT * FROM pasien WHERE id = ?', [pasien_id]);
     if (!pasien) return res.status(404).json({ message: 'Pasien tidak ditemukan' });
@@ -2612,10 +2653,10 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
         INSERT INTO transaksi (
           id, no_nota, pasien_id, kasir_id, subtotal, discount, tax_amount, grand_total, 
           payment_amount, change_amount, earned_points, therapist_id, doctor_id, nurse_id, 
-          marketing_id, poin_used, created_at
+          marketing_id, poin_used, metode_pembayaran, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
-      `, [trxId, noNota, pasien_id, req.user.id, subtotal, discount, taxAmount, grandTotal, payment, changeAmount, earnedPoints, therapist_id || null, doctor_id || null, nurse_id || null, marketing_id || null, usedPoints]);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
+      `, [trxId, noNota, pasien_id, req.user.id, subtotal, discount, taxAmount, grandTotal, payment, changeAmount, earnedPoints, therapist_id || null, doctor_id || null, nurse_id || null, marketing_id || null, usedPoints, finalMetodeBayar]);
 
     for (const item of items) {
       const detailId = 'dtl-' + Math.random().toString(36).substring(2, 9);
@@ -2725,7 +2766,8 @@ app.post('/api/transaksi', authenticateToken, async (req, res) => {
       no_nota: noNota,
       grand_total: grandTotal,
       poin_used: usedPoints,
-      earned_points: earnedPoints
+      earned_points: earnedPoints,
+      metode_pembayaran: finalMetodeBayar
     });
   } catch (err) {
     res.status(500).json({ message: 'Error processing transaction', error: err.message });
@@ -2755,8 +2797,8 @@ app.get('/api/transaksi', authenticateToken, async (req, res) => {
       params.push(`${end_date} 23:59:59`);
     }
     if (search) {
-      query += ` AND (t.no_nota LIKE ? OR p.nama_lengkap LIKE ? OR p.no_hp LIKE ?)`;
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      query += ` AND (t.no_nota LIKE ? OR p.nama_lengkap LIKE ? OR p.no_hp LIKE ? OR t.metode_pembayaran LIKE ?)`;
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     query += ` ORDER BY t.created_at DESC`;

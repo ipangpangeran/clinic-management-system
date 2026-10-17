@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import { exportStyledExcel, formatMonthYearLabel } from '../utils/excelExport';
@@ -116,6 +116,11 @@ export default function PatientManagement({
   const [selectedRegPackages, setSelectedRegPackages] = useState([]);
   const [isBuyingPackage, setIsBuyingPackage] = useState(false);
 
+  // WIC (Walk In Customer) Treatment Selection State
+  const [treatmentList, setTreatmentList] = useState([]);
+  const [selectedWicTreatmentId, setSelectedWicTreatmentId] = useState('');
+  const [customWicPrice, setCustomWicPrice] = useState('');
+
   // Migration from Trial to Member Package Modal State
   const [migratedPatient, setMigratedPatient] = useState(null);
   const [showMigrationPackageModal, setShowMigrationPackageModal] = useState(false);
@@ -143,6 +148,7 @@ export default function PatientManagement({
   const [claimStartDate, setClaimStartDate] = useState('');
   const [claimEndDate, setClaimEndDate] = useState('');
   const [claimCategory, setClaimCategory] = useState('ALL');
+  const [claimPage, setClaimPage] = useState(1);
 
   // Marketing Recap State
   const [marketingRecap, setMarketingRecap] = useState([]);
@@ -188,6 +194,7 @@ export default function PatientManagement({
     fetchPackageUsageLogs();
     fetchMarketingRecap();
     fetchSettings();
+    fetchTreatments();
 
     // Auto-polling antrean petugas & status pengerjaan secara silent setiap 3 detik
     const interval = setInterval(() => {
@@ -199,6 +206,15 @@ export default function PatientManagement({
 
     return () => clearInterval(interval);
   }, [kebutuhanLayanan, showModal]);
+
+  const fetchTreatments = async () => {
+    try {
+      const res = await axios.get('/api/tindakan');
+      setTreatmentList(res.data || []);
+    } catch (err) {
+      console.error('Error fetching treatments', err);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -336,12 +352,24 @@ export default function PatientManagement({
     setShowMgmDropdown(false);
     setSelectedRegPackages([]);
     setIsBuyingPackage(false);
+    setSelectedWicTreatmentId('');
+    setCustomWicPrice('');
     setKebutuhanLayanan('Beautician');
     setSelectedStaffId('');
     setErrorMessage('');
     setSuccessMessage('');
     setShowModal(true);
     fetchStaffAvailability('Beautician');
+  };
+
+  const handleWicTreatmentChange = (tindakanId) => {
+    setSelectedWicTreatmentId(tindakanId);
+    const found = treatmentList.find(t => String(t.id) === String(tindakanId));
+    if (found) {
+      setCustomWicPrice(found.tarif_tindakan_medis || 0);
+    } else {
+      setCustomWicPrice('');
+    }
   };
 
   useEffect(() => {
@@ -695,17 +723,27 @@ export default function PatientManagement({
           setErrorMessage('Tim Marketing wajib dipilih untuk pendaftaran pasien baru.');
           return;
         }
+        if (formType === 'WIC') {
+          if (!selectedWicTreatmentId) {
+            setErrorMessage('Pilih jenis tindakan / treatment untuk pasien WIC.');
+            return;
+          }
+          if (!selectedStaffId) {
+            setErrorMessage('Pilih Petugas Nurse untuk menangani pasien WIC.');
+            return;
+          }
+        }
         const formattedNama = formatPersonName(namaLengkap);
         const payload = {
           no_ktp: noKtp || null,
           no_hp: noHp,
           nama_lengkap: formattedNama,
           tipe_pasien: formType,
-          alamat: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? alamat : null,
-          tgl_lahir: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? tglLahir : null,
-          riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? riwayatAlergi : null,
-          jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? jenisKulit : null,
-          rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL') ? rekomendasiDokter : null,
+          alamat: (formType === 'MEMBER' || formType === 'NON-TRIAL' || formType === 'WIC') ? alamat : null,
+          tgl_lahir: (formType === 'MEMBER' || formType === 'NON-TRIAL' || formType === 'WIC') ? tglLahir : null,
+          riwayat_alergi: (formType === 'MEMBER' || formType === 'NON-TRIAL' || formType === 'WIC') ? riwayatAlergi : null,
+          jenis_kulit: (formType === 'MEMBER' || formType === 'NON-TRIAL' || formType === 'WIC') ? jenisKulit : null,
+          rekomendasi_dokter: (formType === 'MEMBER' || formType === 'NON-TRIAL' || formType === 'WIC') ? rekomendasiDokter : null,
           marketing_id: marketingId || null,
           referrer_pasien_id: referrerPasienId || null,
         };
@@ -745,12 +783,21 @@ export default function PatientManagement({
         const selectedStaffObj = staffList.find(s => s.id === selectedStaffId);
         const katName = kebutuhanLayanan === 'Nurse' ? 'Tindakan Medis (Nurse)' : 'Facial (Beautician)';
 
-        await axios.post('/api/doingan/assign', {
+        let assignPayload = {
           pasien_id: patientIdToAssign,
           petugas_id: selectedStaffId,
           kategori_layanan: katName,
           marketing_id: marketingId || null
-        });
+        };
+
+        if (formType === 'WIC') {
+          const selectedTnd = treatmentList.find(t => String(t.id) === String(selectedWicTreatmentId));
+          assignPayload.tindakan_id = selectedWicTreatmentId;
+          assignPayload.nama_tindakan = selectedTnd ? selectedTnd.nama_tindakan : '';
+          assignPayload.total_tarif = customWicPrice !== '' ? Number(customWicPrice) : (selectedTnd?.tarif_tindakan_medis || 0);
+        }
+
+        await axios.post('/api/doingan/assign', assignPayload);
 
         setSuccessMessage(`Berhasil! Pasien ${targetPatientName} di-assign ke ${selectedStaffObj?.full_name || 'Petugas'}. Sesi otomatis IN_PROGRESS!`);
       } else if (isBuyingPackage) {
@@ -1137,10 +1184,10 @@ export default function PatientManagement({
 
     // Proteksi: Paket belum lunas / belum dibayar di kasir tidak boleh diklaim
     const isUnpaid = (
-      selectedClaimPkg.is_billed === 0 || 
-      selectedClaimPkg.is_billed === '0' || 
-      selectedClaimPkg.is_billed === null || 
-      (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+      selectedClaimPkg.is_billed === 0 ||
+      selectedClaimPkg.is_billed === '0' ||
+      selectedClaimPkg.is_billed === null ||
+      (Number(selectedClaimPkg.sisa_tagihan) > 0) ||
       selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
     );
     if (isUnpaid) {
@@ -1180,10 +1227,10 @@ export default function PatientManagement({
 
     // Proteksi: Paket belum lunas / belum dibayar di kasir tidak boleh diklaim
     const isUnpaid = (
-      selectedClaimPkg.is_billed === 0 || 
-      selectedClaimPkg.is_billed === '0' || 
-      selectedClaimPkg.is_billed === null || 
-      (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+      selectedClaimPkg.is_billed === 0 ||
+      selectedClaimPkg.is_billed === '0' ||
+      selectedClaimPkg.is_billed === null ||
+      (Number(selectedClaimPkg.sisa_tagihan) > 0) ||
       selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
     );
     if (isUnpaid) {
@@ -1217,36 +1264,75 @@ export default function PatientManagement({
     }
   };
 
-  const filteredPackageLogs = packageLogs.filter(log => {
-    if (claimSearch.trim()) {
-      const term = claimSearch.toLowerCase();
-      const match =
-        (log.pasien_nama || '').toLowerCase().includes(term) ||
-        (log.pasien_hp || '').includes(term) ||
-        (log.nama_paket || '').toLowerCase().includes(term) ||
-        (log.item_claimed || '').toLowerCase().includes(term) ||
-        (log.petugas_nama || '').toLowerCase().includes(term) ||
-        (log.doingan_nama_tindakan || '').toLowerCase().includes(term) ||
-        (log.notes || '').toLowerCase().includes(term);
-      if (!match) return false;
-    }
-    if (claimStartDate) {
-      const logDate = log.used_at ? log.used_at.slice(0, 10) : '';
-      if (logDate < claimStartDate) return false;
-    }
-    if (claimEndDate) {
-      const logDate = log.used_at ? log.used_at.slice(0, 10) : '';
-      if (logDate > claimEndDate) return false;
-    }
-    if (claimCategory === 'DOKTER') {
-      const itm = (log.item_claimed || '').toLowerCase();
-      if (!itm.includes('dokter') && !itm.includes('medis')) return false;
-    } else if (claimCategory === 'FACIAL') {
-      const itm = (log.item_claimed || '').toLowerCase();
-      if (!itm.includes('facial') && !itm.includes('care')) return false;
-    }
-    return true;
-  });
+  const filteredPackageLogs = useMemo(() => {
+    return packageLogs.filter(log => {
+      if (claimSearch.trim()) {
+        const term = claimSearch.toLowerCase();
+        const match =
+          (log.pasien_nama || '').toLowerCase().includes(term) ||
+          (log.pasien_hp || '').includes(term) ||
+          (log.nama_paket || '').toLowerCase().includes(term) ||
+          (log.item_claimed || '').toLowerCase().includes(term) ||
+          (log.petugas_nama || '').toLowerCase().includes(term) ||
+          (log.doingan_nama_tindakan || '').toLowerCase().includes(term) ||
+          (log.notes || '').toLowerCase().includes(term);
+        if (!match) return false;
+      }
+      if (claimStartDate) {
+        const logDate = log.used_at ? log.used_at.slice(0, 10) : '';
+        if (logDate < claimStartDate) return false;
+      }
+      if (claimEndDate) {
+        const logDate = log.used_at ? log.used_at.slice(0, 10) : '';
+        if (logDate > claimEndDate) return false;
+      }
+      if (claimCategory === 'DOKTER') {
+        const itm = (log.item_claimed || '').toLowerCase();
+        if (!itm.includes('dokter') && !itm.includes('medis')) return false;
+      } else if (claimCategory === 'FACIAL') {
+        const itm = (log.item_claimed || '').toLowerCase();
+        if (!itm.includes('facial') && !itm.includes('care')) return false;
+      }
+      return true;
+    });
+  }, [packageLogs, claimSearch, claimStartDate, claimEndDate, claimCategory]);
+
+  const claimPageSize = 10;
+  const totalClaimPages = Math.ceil(filteredPackageLogs.length / claimPageSize) || 1;
+  const currentClaimPage = Math.min(Math.max(1, claimPage), totalClaimPages);
+  const paginatedPackageLogs = useMemo(() => {
+    const startIdx = (currentClaimPage - 1) * claimPageSize;
+    return filteredPackageLogs.slice(startIdx, startIdx + claimPageSize);
+  }, [filteredPackageLogs, currentClaimPage]);
+
+  const getCurrentMonthLabel = () => {
+    const d = new Date();
+    return d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+  };
+
+  const handleFilterThisMonth = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const firstDayStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDayObj = new Date(year, month + 1, 0);
+    const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayObj.getDate()).padStart(2, '0')}`;
+
+    setStartDate(firstDayStr);
+    setEndDate(lastDayStr);
+    fetchDataForTab(activeMainTab, firstDayStr, lastDayStr);
+  };
+
+  const handleClaimFilterToday = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
+    setClaimStartDate(today);
+    setClaimEndDate(today);
+    setClaimPage(1);
+  };
 
   const handleExportPackageLogs = async () => {
     const dataToExport = filteredPackageLogs.length > 0 ? filteredPackageLogs : packageLogs;
@@ -1410,6 +1496,7 @@ export default function PatientManagement({
     const matchFilter = filterType === 'ALL' ||
       (filterType === 'TRIAL' && (p.tipe_pasien === 'TRIAL' || p.has_trial_history === 1)) ||
       (filterType === 'MEMBER' && (p.tipe_pasien === 'MEMBER' || p.tipe_pasien === 'NON-TRIAL' || p.tipe_pasien === 'Reguler')) ||
+      (filterType === 'WIC' && p.tipe_pasien === 'WIC') ||
       (filterType === 'HAS_PACKAGE' && p.total_paket > 0) ||
       (filterType === 'NO_PACKAGE' && (!p.total_paket || p.total_paket === 0)) ||
       (filterType === 'UNPAID_PACKAGE' && (p.paket_belum_lunas_count > 0 || p.total_sisa_tagihan > 0));
@@ -1933,6 +2020,15 @@ export default function PatientManagement({
                 </button>
                 <button
                   onClick={() => {
+                    setFilterType('WIC');
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${filterType === 'WIC' ? 'bg-indigo-700 text-white shadow-xs' : 'bg-indigo-50 text-indigo-900 border border-indigo-200 hover:bg-indigo-100'}`}
+                >
+                  WIC ({patients.filter(p => p.tipe_pasien === 'WIC').length})
+                </button>
+                <button
+                  onClick={() => {
                     setFilterType('HAS_PACKAGE');
                     setCurrentPage(1);
                   }}
@@ -2021,6 +2117,10 @@ export default function PatientManagement({
                             ) : isMember ? (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                                 MEMBER
+                              </span>
+                            ) : p.tipe_pasien === 'WIC' ? (
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-300">
+                                WIC (WALK IN)
                               </span>
                             ) : (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
@@ -2230,7 +2330,7 @@ export default function PatientManagement({
           {/* Top Control Header Card */}
           <div className="bg-white p-5 rounded-2xl border border-[#e5ded4] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <button
+              {/* <button
                 type="button"
                 onClick={() => {
                   if (setActiveTab) setActiveTab('customer_database');
@@ -2241,18 +2341,13 @@ export default function PatientManagement({
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span>Kembali ke Pelanggan</span>
-              </button>
+              </button> */}
 
-              <div className="border-l border-[#e5ded4] pl-3">
-                <div className="flex items-center gap-2">
-                  <History className="w-5 h-5 text-blue-700" />
-                  <h2 className="font-serif font-bold text-lg text-[#1e1b15]">
-                    Historical Klaim Paket Treatment Pasien
-                  </h2>
-                </div>
-                <p className="text-xs text-[#83746f]">
-                  Rekap riwayat kapan dan porsi kuota apa yang telah diambil/diklaim oleh member.
-                </p>
+              <div className="flex items-center gap-2">
+                <History className="w-5 h-5 text-blue-700" />
+                <h2 className="font-serif font-semibold text-xs text-[#1e1b15]">
+                  Rekap riwayat kapan dan porsi kuota apa yang telah diambil/diklaim oleh pasien member.
+                </h2>
               </div>
             </div>
 
@@ -2310,98 +2405,132 @@ export default function PatientManagement({
             </div>
           </div>
 
-          {/* Filters & Search Bar Card */}
-          <div className="bg-white p-3.5 rounded-xl border border-[#e5ded4] shadow-xs">
-            <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
+          {/* Filters Bar: Gaya Pengecekan Data Komisi & Doingan */}
+          <div className="bg-[#faf3e8] p-4 rounded-2xl border border-[#d6c2bd] flex flex-col md:flex-row md:items-end justify-between gap-4 text-xs">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-[#514440] mb-1">Dari Tanggal *</label>
+                <input
+                  type="date"
+                  value={claimStartDate}
+                  onChange={(e) => {
+                    setClaimStartDate(e.target.value);
+                    setClaimPage(1);
+                  }}
+                  className="px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
+              </div>
 
-              {/* Search Bar - Ukuran dibatasi agar tidak terlalu panjang */}
-              <div className="relative w-full md:w-64 flex-none">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-[#83746f]">
-                  <Search className="w-3.5 h-3.5" />
-                </span>
+              <div>
+                <label className="block text-[11px] font-bold text-[#514440] mb-1">Sampai Tanggal *</label>
+                <input
+                  type="date"
+                  value={claimEndDate}
+                  onChange={(e) => {
+                    setClaimEndDate(e.target.value);
+                    setClaimPage(1);
+                  }}
+                  className="px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleFilterThisMonth}
+                className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
+                title="Filter otomatis full 1 bulan berjalan ini"
+              >
+                <Calendar className="w-3.5 h-3.5 text-amber-800" />
+                <span>Bulan Ini ({getCurrentMonthLabel()})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClaimFilterToday}
+                className="px-3 py-2 bg-white hover:bg-gray-100 border border-[#d6c2bd] text-[#514440] font-semibold text-xs rounded-xl shadow-2xs transition-all cursor-pointer flex items-center gap-1"
+                title="Filter hari ini"
+              >
+                <Clock className="w-3.5 h-3.5 text-[#7d5141]" />
+                <span>Hari Ini</span>
+              </button>
+
+              {/* Reset Filter Button */}
+              {(claimSearch || claimStartDate || claimEndDate || claimCategory !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClaimSearch('');
+                    setClaimStartDate('');
+                    setClaimEndDate('');
+                    setClaimCategory('ALL');
+                    setClaimPage(1);
+                  }}
+                  className="px-3 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-semibold text-xs rounded-xl shadow-2xs transition-all cursor-pointer flex items-center gap-1"
+                  title="Reset Semua Filter"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Reset Filter</span>
+                </button>
+              )}
+            </div>
+
+            {/* Sisi Kanan: Search & Kategori Porsi Klaim */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-60">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Cari pasien, HP, paket..."
                   value={claimSearch}
-                  onChange={(e) => setClaimSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs border border-[#d6c2bd] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7d5141] bg-[#fff8f0]"
+                  onChange={(e) => {
+                    setClaimSearch(e.target.value);
+                    setClaimPage(1);
+                  }}
+                  className="w-full pl-8 pr-3 py-2 text-xs border border-[#d6c2bd] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7d5141] bg-white font-medium text-[#1e1b15]"
                 />
               </div>
 
-              {/* Range Tanggal - Menggabungkan label & input dalam 1 baris vertikal rapi */}
-              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-medium text-[#83746f] whitespace-nowrap">Dari:</span>
-                  <input
-                    type="date"
-                    value={claimStartDate}
-                    onChange={(e) => setClaimStartDate(e.target.value)}
-                    className="px-2.5 py-1 text-xs border border-[#d6c2bd] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7d5141] bg-[#fff8f0]"
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-medium text-[#83746f] whitespace-nowrap">s/d</span>
-                  <input
-                    type="date"
-                    value={claimEndDate}
-                    onChange={(e) => setClaimEndDate(e.target.value)}
-                    className="px-2.5 py-1 text-xs border border-[#d6c2bd] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#7d5141] bg-[#fff8f0]"
-                  />
-                </div>
-              </div>
-
-              {/* Filter Category Pills */}
-              <div className="flex items-center gap-1.5 ml-auto">
+              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#d6c2bd]">
                 <button
                   type="button"
-                  onClick={() => setClaimCategory('ALL')}
-                  className={`py-1.5 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer ${claimCategory === 'ALL'
+                  onClick={() => {
+                    setClaimCategory('ALL');
+                    setClaimPage(1);
+                  }}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${claimCategory === 'ALL'
                     ? 'bg-[#7d5141] text-white shadow-xs'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    : 'text-[#514440] hover:bg-gray-100'
                     }`}
                 >
                   Semua
                 </button>
                 <button
                   type="button"
-                  onClick={() => setClaimCategory('DOKTER')}
-                  className={`py-1.5 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer ${claimCategory === 'DOKTER'
+                  onClick={() => {
+                    setClaimCategory('DOKTER');
+                    setClaimPage(1);
+                  }}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${claimCategory === 'DOKTER'
                     ? 'bg-blue-700 text-white shadow-xs'
-                    : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+                    : 'text-blue-800 hover:bg-blue-50'
                     }`}
                 >
                   Dokter
                 </button>
                 <button
                   type="button"
-                  onClick={() => setClaimCategory('FACIAL')}
-                  className={`py-1.5 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer ${claimCategory === 'FACIAL'
+                  onClick={() => {
+                    setClaimCategory('FACIAL');
+                    setClaimPage(1);
+                  }}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${claimCategory === 'FACIAL'
                     ? 'bg-amber-700 text-white shadow-xs'
-                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
+                    : 'text-amber-800 hover:bg-amber-50'
                     }`}
                 >
                   Facial
                 </button>
-
-                {/* Reset Filter Button */}
-                {(claimSearch || claimStartDate || claimEndDate || claimCategory !== 'ALL') && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setClaimSearch('');
-                      setClaimStartDate('');
-                      setClaimEndDate('');
-                      setClaimCategory('ALL');
-                    }}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer ml-1"
-                    title="Reset Semua Filter"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
               </div>
-
             </div>
           </div>
 
@@ -2434,7 +2563,7 @@ export default function PatientManagement({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e5ded4]">
-                  {filteredPackageLogs.length === 0 ? (
+                  {paginatedPackageLogs.length === 0 ? (
                     <tr>
                       <td colSpan="8" className="text-center py-12 text-gray-400 italic">
                         <div className="flex flex-col items-center justify-center gap-2">
@@ -2444,61 +2573,98 @@ export default function PatientManagement({
                       </td>
                     </tr>
                   ) : (
-                    filteredPackageLogs.map((log, idx) => (
-                      <tr key={log.id || idx} className="hover:bg-[#fff9f2] transition-colors">
-                        <td className="py-3.5 px-4 text-center font-medium text-gray-500">
-                          {idx + 1}
-                        </td>
-                        <td className="py-3.5 px-4 font-semibold text-[#1e1b15] whitespace-nowrap">
-                          {log.used_at ? new Date(log.used_at).toLocaleString('id-ID') : '-'}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-[#7d5141]">{log.pasien_nama || '-'}</div>
-                          {log.pasien_hp && (
-                            <div className="text-[11px] text-gray-500 font-mono">{log.pasien_hp}</div>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 font-medium text-[#1e1b15]">
-                          {log.nama_paket || '-'}
-                        </td>
-                        <td className="py-3.5 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-900 border border-blue-200 rounded-lg font-semibold text-xs whitespace-nowrap shadow-2xs">
-                            {log.item_claimed}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 font-semibold text-[#514440]">
-                          <div className="flex items-center gap-1.5">
-                            {/* <span className="w-2 h-2 rounded-full bg-emerald-500"></span> */}
-                            <span>{log.petugas_nama || '-'}</span>
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4 text-[#514440] font-medium leading-relaxed">
-                          {(log.doingan_status === 'COMPLETED' && log.doingan_nama_tindakan)
-                            ? log.doingan_nama_tindakan
-                            : (log.notes && !log.notes.startsWith('Klaim paket') && !log.notes.startsWith('Klaim Kuota'))
-                              ? log.notes
-                              : (log.doingan_nama_tindakan && !log.doingan_nama_tindakan.startsWith('['))
-                                ? log.doingan_nama_tindakan
-                                : (log.item_claimed || '-')}
-                        </td>
-                        <td className="py-3.5 px-4 whitespace-nowrap text-center">
-                          {log.doingan_status === 'COMPLETED' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              <CheckCircle className="w-3 h-3" />
-                              <span>Selesai</span>
+                    paginatedPackageLogs.map((log, idx) => {
+                      const rowNum = ((currentClaimPage - 1) * claimPageSize) + idx + 1;
+                      return (
+                        <tr key={log.id || idx} className="hover:bg-[#fff9f2] transition-colors">
+                          <td className="py-3.5 px-4 text-center font-medium text-gray-500">
+                            {rowNum}
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-[#1e1b15] whitespace-nowrap">
+                            {log.used_at ? new Date(log.used_at).toLocaleString('id-ID') : '-'}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-[#7d5141]">{log.pasien_nama || '-'}</div>
+                            {log.pasien_hp && (
+                              <div className="text-[11px] text-gray-500 font-mono">{log.pasien_hp}</div>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 font-medium text-[#1e1b15]">
+                            {log.nama_paket || '-'}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-900 border border-blue-200 rounded-lg font-semibold text-xs whitespace-nowrap shadow-2xs">
+                              {log.item_claimed}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                              <Clock className="w-3 h-3" />
-                              <span>In Progress</span>
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-[#514440]">
+                            <div className="flex items-center gap-1.5">
+                              <span>{log.petugas_nama || '-'}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-[#514440] font-medium leading-relaxed">
+                            {(log.doingan_status === 'COMPLETED' && log.doingan_nama_tindakan)
+                              ? log.doingan_nama_tindakan
+                              : (log.notes && !log.notes.startsWith('Klaim paket') && !log.notes.startsWith('Klaim Kuota'))
+                                ? log.notes
+                                : (log.doingan_nama_tindakan && !log.doingan_nama_tindakan.startsWith('['))
+                                  ? log.doingan_nama_tindakan
+                                  : (log.item_claimed || '-')}
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap text-center">
+                            {log.doingan_status === 'COMPLETED' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                <CheckCircle className="w-3 h-3" />
+                                <span>Selesai</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                <Clock className="w-3 h-3" />
+                                <span>In Progress</span>
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Paginasi 10 Row */}
+            <div className="p-4 bg-white border-t border-[#e5ded4] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="text-[#83746f]">
+                Menampilkan <strong className="text-[#1e1b15]">{filteredPackageLogs.length === 0 ? 0 : (currentClaimPage - 1) * claimPageSize + 1}</strong> - <strong className="text-[#1e1b15]">{Math.min(currentClaimPage * claimPageSize, filteredPackageLogs.length)}</strong> dari <strong className="text-[#1e1b15]">{filteredPackageLogs.length}</strong> riwayat klaim
+              </div>
+
+              {totalClaimPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setClaimPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentClaimPage === 1}
+                    className="p-1.5 px-3 bg-[#faf3e8] hover:bg-[#eee7dd] disabled:opacity-40 disabled:hover:bg-[#faf3e8] border border-[#d6c2bd] text-[#514440] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Sebelumnya</span>
+                  </button>
+
+                  <div className="px-3 py-1.5 bg-[#7d5141] text-white font-bold rounded-xl shadow-2xs">
+                    {currentClaimPage} / {totalClaimPages}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setClaimPage(prev => Math.min(prev + 1, totalClaimPages))}
+                    disabled={currentClaimPage === totalClaimPages}
+                    className="p-1.5 px-3 bg-[#faf3e8] hover:bg-[#eee7dd] disabled:opacity-40 disabled:hover:bg-[#faf3e8] border border-[#d6c2bd] text-[#514440] font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <span>Selanjutnya</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2681,7 +2847,7 @@ export default function PatientManagement({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="sm:col-span-2">
                     <label className="block text-[#514440] font-semibold mb-1">Tipe Pasien / Pelanggan *</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => {
@@ -2690,16 +2856,28 @@ export default function PatientManagement({
                             handleLayananChange('Beautician');
                           }
                         }}
-                        className={`py-2 text-center rounded-xl font-bold transition-all ${formType === 'TRIAL' ? 'bg-amber-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
+                        className={`py-2 text-center rounded-xl font-bold transition-all cursor-pointer ${formType === 'TRIAL' ? 'bg-amber-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
                       >
                         PASIEN TRIAL
                       </button>
                       <button
                         type="button"
                         onClick={() => setFormType('MEMBER')}
-                        className={`py-2 text-center rounded-xl font-bold transition-all ${formType === 'MEMBER' || formType === 'NON-TRIAL' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
+                        className={`py-2 text-center rounded-xl font-bold transition-all cursor-pointer ${formType === 'MEMBER' || formType === 'NON-TRIAL' ? 'bg-emerald-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
                       >
                         PASIEN MEMBER
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormType('WIC');
+                          setIsBuyingPackage(false);
+                          setSelectedRegPackages([]);
+                          handleLayananChange('Nurse');
+                        }}
+                        className={`py-2 text-center rounded-xl font-bold transition-all cursor-pointer ${formType === 'WIC' ? 'bg-indigo-700 text-white shadow-xs' : 'bg-[#faf3e8] text-[#514440] border border-[#d6c2bd]'}`}
+                      >
+                        PASIEN WIC
                       </button>
                     </div>
                   </div>
@@ -2816,6 +2994,59 @@ export default function PatientManagement({
                         }
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* KHUSUS PASIEN WIC: Dropdown Tindakan Satuan & Penyesuaian Harga */}
+              {formType === 'WIC' && !editMode && (
+                <div className="p-4 bg-indigo-50/70 rounded-xl border border-indigo-200 space-y-3 animate-in fade-in duration-150">
+                  <div className="font-bold text-indigo-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                    <span>Pilihan Tindakan Treatment Satuan (Walk In Customer)</span>
+                  </div>
+                  <p className="text-[11px] text-indigo-800">
+                    Pasien WIC langsung membeli treatment satuan tanpa paket dan diarahkan ke Nurse. Pilihan tindakan dan harga dapat disesuaikan di bawah ini:
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[#514440] font-semibold mb-1">Pilih Tindakan / Treatment *</label>
+                      <select
+                        value={selectedWicTreatmentId}
+                        onChange={(e) => handleWicTreatmentChange(e.target.value)}
+                        required
+                        className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15] focus:outline-none focus:border-indigo-600"
+                      >
+                        <option value="">-- Pilih Jenis Tindakan --</option>
+                        {treatmentList
+                          .filter(t => (t.kategori_petugas || '').toUpperCase() === 'NURSE' || true)
+                          .map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.nama_tindakan} (Tarif: Rp {(t.tarif_tindakan_medis || 0).toLocaleString('id-ID')})
+                            </option>
+                          ))
+                        }
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[#514440] font-semibold mb-1">Sesuaikan Harga Treatment (Rp) *</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-[#83746f] font-bold">Rp</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={customWicPrice}
+                          onChange={(e) => setCustomWicPrice(e.target.value)}
+                          placeholder="Nominal harga..."
+                          className="w-full pl-9 pr-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-indigo-900 focus:outline-none focus:border-indigo-600"
+                        />
+                      </div>
+                      <p className="text-[10px] text-indigo-700 mt-1">
+                        * Default tarif terisi otomatis, Admin FO dapat mengubah/memberikan penyesuaian harga.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2963,12 +3194,12 @@ export default function PatientManagement({
                 </div>
               )}
 
-              {/* Live Staff Assignment Box (HANYA MUNCUL JIKA TIDAK BELI PAKET ATAU PASIEN TRIAL) */}
-              {!editMode && (!isBuyingPackage || formType === 'TRIAL') && (
+              {/* Live Staff Assignment Box (HANYA MUNCUL JIKA TIDAK BELI PAKET ATAU PASIEN TRIAL ATAU WIC) */}
+              {!editMode && (!isBuyingPackage || formType === 'TRIAL' || formType === 'WIC') && (
                 <div className="p-4 bg-[#faf3e8] rounded-xl border border-[#d6c2bd] space-y-3 animate-in fade-in duration-150">
                   <div className="font-bold text-[#7d5141] uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-[#7d5141]" />
-                    <span>Assign Petugas</span>
+                    <span>Assign Petugas {formType === 'WIC' ? '(Petugas Nurse)' : ''}</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2977,9 +3208,10 @@ export default function PatientManagement({
                       <select
                         value={kebutuhanLayanan}
                         onChange={(e) => handleLayananChange(e.target.value)}
+                        disabled={formType === 'WIC'}
                         className="w-full px-3 py-2 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15]"
                       >
-                        <option value="Beautician">Facial & Care (Beautician)</option>
+                        {formType !== 'WIC' && <option value="Beautician">Facial & Care (Beautician)</option>}
                         {formType !== 'TRIAL' && (
                           <option value="Nurse">Tindakan Medis (Nurse)</option>
                         )}
@@ -2987,6 +3219,11 @@ export default function PatientManagement({
                       {formType === 'TRIAL' && (
                         <p className="text-[10px] text-amber-800 font-medium mt-1">
                           * Pasien Trial khusus ditangani oleh Beautician
+                        </p>
+                      )}
+                      {formType === 'WIC' && (
+                        <p className="text-[10px] text-indigo-800 font-medium mt-1">
+                          * Pasien WIC langsung diarahkan dan ditangani oleh Nurse
                         </p>
                       )}
                     </div>
@@ -3478,10 +3715,10 @@ export default function PatientManagement({
               {/* Alert jika paket ini belum lunas */}
               {(() => {
                 const isPkgUnpaid = (
-                  selectedClaimPkg.is_billed === 0 || 
-                  selectedClaimPkg.is_billed === '0' || 
-                  selectedClaimPkg.is_billed === null || 
-                  (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+                  selectedClaimPkg.is_billed === 0 ||
+                  selectedClaimPkg.is_billed === '0' ||
+                  selectedClaimPkg.is_billed === null ||
+                  (Number(selectedClaimPkg.sisa_tagihan) > 0) ||
                   selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
                 );
                 if (!isPkgUnpaid) return null;
@@ -3564,10 +3801,10 @@ export default function PatientManagement({
 
               {(() => {
                 const isPkgUnpaid = (
-                  selectedClaimPkg.is_billed === 0 || 
-                  selectedClaimPkg.is_billed === '0' || 
-                  selectedClaimPkg.is_billed === null || 
-                  (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+                  selectedClaimPkg.is_billed === 0 ||
+                  selectedClaimPkg.is_billed === '0' ||
+                  selectedClaimPkg.is_billed === null ||
+                  (Number(selectedClaimPkg.sisa_tagihan) > 0) ||
                   selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
                 );
                 return (
@@ -3630,10 +3867,10 @@ export default function PatientManagement({
               {/* Alert jika paket ini belum lunas */}
               {(() => {
                 const isPkgUnpaid = (
-                  selectedClaimPkg.is_billed === 0 || 
-                  selectedClaimPkg.is_billed === '0' || 
-                  selectedClaimPkg.is_billed === null || 
-                  (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+                  selectedClaimPkg.is_billed === 0 ||
+                  selectedClaimPkg.is_billed === '0' ||
+                  selectedClaimPkg.is_billed === null ||
+                  (Number(selectedClaimPkg.sisa_tagihan) > 0) ||
                   selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
                 );
                 if (!isPkgUnpaid) return null;
@@ -3739,10 +3976,10 @@ export default function PatientManagement({
 
               {(() => {
                 const isPkgUnpaid = (
-                  selectedClaimPkg.is_billed === 0 || 
-                  selectedClaimPkg.is_billed === '0' || 
-                  selectedClaimPkg.is_billed === null || 
-                  (Number(selectedClaimPkg.sisa_tagihan) > 0) || 
+                  selectedClaimPkg.is_billed === 0 ||
+                  selectedClaimPkg.is_billed === '0' ||
+                  selectedClaimPkg.is_billed === null ||
+                  (Number(selectedClaimPkg.sisa_tagihan) > 0) ||
                   selectedClaimPkg.status_pembayaran === 'BELUM_LUNAS'
                 );
                 return (

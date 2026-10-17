@@ -41,6 +41,11 @@ export default function DoinganActivity() {
   const [marketingPage, setMarketingPage] = useState(1);
   const marketingPageSize = 10;
 
+  // Export Per Pegawai Modal State
+  const [showExportStaffModal, setShowExportStaffModal] = useState(false);
+  const [exportStaffCategory, setExportStaffCategory] = useState('BTC'); // 'BTC', 'NURSE', 'MARKETING'
+  const [selectedStaffToExport, setSelectedStaffToExport] = useState('');
+
   // Quick Treatment Modal State
   const [showTreatmentModal, setShowTreatmentModal] = useState(false);
   const [namaTindakan, setNamaTindakan] = useState('');
@@ -117,12 +122,8 @@ export default function DoinganActivity() {
   const handleFilterThisMonth = () => {
     const now = new Date();
     const year = now.getFullYear();
-    const month = now.getMonth(); // 0-indexed (e.g. 9 for October)
-
-    // First day of current month: YYYY-MM-01
+    const month = now.getMonth();
     const firstDayStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-
-    // Last day of current month: YYYY-MM-DD
     const lastDayObj = new Date(year, month + 1, 0);
     const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayObj.getDate()).padStart(2, '0')}`;
 
@@ -179,7 +180,150 @@ export default function DoinganActivity() {
     }
   };
 
-  // EXPORT EXCEL BEAUTICIAN (BTC)
+  const nonStaffRoles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Admin FO', 'Manager', 'Marketing'];
+  const beauticianList = useMemo(() => {
+    return staffList.filter(s => s.role === 'Beautician' || (s.lini_profesi === 'Beautician' && !nonStaffRoles.includes(s.role)));
+  }, [staffList]);
+
+  const nurseList = useMemo(() => {
+    return staffList.filter(s => (s.role === 'Nurse' || s.role === 'Dokter') || (s.lini_profesi === 'Nurse' && !nonStaffRoles.includes(s.role)));
+  }, [staffList]);
+
+  const btcUserOptions = useMemo(() => {
+    const map = new Map();
+    // 1. Prioritaskan nama petugas dari data doingan yang ada pada periode aktif
+    btcData.forEach(d => {
+      const pId = d.petugas_id != null ? String(d.petugas_id) : (d.petugas_nama || null);
+      const pNama = d.petugas_nama || d.full_name || (d.petugas_id ? `Beautician #${d.petugas_id}` : null);
+      if (pId && pNama) {
+        map.set(String(pId), pNama);
+      }
+    });
+    // 2. Tambahkan seluruh pegawai divisi Beautician dari master staff availability
+    beauticianList.forEach(s => {
+      const pId = s.id != null ? String(s.id) : null;
+      const pNama = s.full_name || s.nama || s.username || null;
+      if (pId && pNama && !map.has(String(pId))) {
+        map.set(String(pId), pNama);
+      }
+    });
+    return Array.from(map.entries())
+      .filter(([id, nama]) => Boolean(id && nama))
+      .map(([id, nama]) => ({ id, nama }));
+  }, [beauticianList, btcData]);
+
+  const nurseUserOptions = useMemo(() => {
+    const map = new Map();
+    // 1. Prioritaskan nama petugas dari data doingan yang ada pada periode aktif
+    nurseData.forEach(d => {
+      const pId = d.petugas_id != null ? String(d.petugas_id) : (d.petugas_nama || null);
+      const pNama = d.petugas_nama || d.full_name || (d.petugas_id ? `Nurse #${d.petugas_id}` : null);
+      if (pId && pNama) {
+        map.set(String(pId), pNama);
+      }
+    });
+    // 2. Tambahkan seluruh pegawai divisi Nurse & Medis dari master staff availability
+    nurseList.forEach(s => {
+      const pId = s.id != null ? String(s.id) : null;
+      const pNama = s.full_name || s.nama || s.username || null;
+      if (pId && pNama && !map.has(String(pId))) {
+        map.set(String(pId), pNama);
+      }
+    });
+    return Array.from(map.entries())
+      .filter(([id, nama]) => Boolean(id && nama))
+      .map(([id, nama]) => ({ id, nama }));
+  }, [nurseList, nurseData]);
+
+  // Extract unique marketing user list for dropdown filter and exports
+  const marketingUserOptions = useMemo(() => {
+    const map = new Map();
+    marketingSummary.forEach(m => {
+      if (m.marketing_id) {
+        map.set(String(m.marketing_id), m.marketing_nama || m.full_name || `Marketing #${m.marketing_id}`);
+      }
+    });
+    marketingData.forEach(d => {
+      if (d.marketing_id && !map.has(String(d.marketing_id))) {
+        map.set(String(d.marketing_id), d.marketing_nama || d.full_name || `Marketing #${d.marketing_id}`);
+      }
+    });
+    return Array.from(map.entries())
+      .filter(([id, nama]) => Boolean(id && nama))
+      .map(([id, nama]) => ({ id, nama }));
+  }, [marketingSummary, marketingData]);
+
+  const marketingExportOptions = marketingUserOptions;
+
+  const activeExportStaffOptions = useMemo(() => {
+    if (exportStaffCategory === 'BTC') return btcUserOptions;
+    if (exportStaffCategory === 'NURSE') return nurseUserOptions;
+    if (exportStaffCategory === 'MARKETING') return marketingExportOptions;
+    return [];
+  }, [exportStaffCategory, btcUserOptions, nurseUserOptions, marketingExportOptions]);
+
+  const selectedStaffPreview = useMemo(() => {
+    if (!selectedStaffToExport) return null;
+    if (exportStaffCategory === 'BTC') {
+      const staffObj = btcUserOptions.find(o => String(o.id) === String(selectedStaffToExport));
+      const staffNama = staffObj?.nama || '';
+      const filtered = btcData.filter(d =>
+        (d.petugas_id != null && String(d.petugas_id) === String(selectedStaffToExport)) ||
+        (d.petugas_nama && (
+          String(d.petugas_nama) === String(selectedStaffToExport) ||
+          (staffNama && d.petugas_nama.toLowerCase() === staffNama.toLowerCase())
+        ))
+      );
+      const totalKomisi = filtered.reduce((sum, item) => sum + (Number(item.komisi) || 0), 0);
+      return {
+        nama: staffNama || (filtered[0]?.petugas_nama) || 'Petugas Beautician',
+        count: filtered.length,
+        labelCount: 'Tindakan Treatment',
+        totalKomisi
+      };
+    }
+    if (exportStaffCategory === 'NURSE') {
+      const staffObj = nurseUserOptions.find(o => String(o.id) === String(selectedStaffToExport));
+      const staffNama = staffObj?.nama || '';
+      const filtered = nurseData.filter(d =>
+        (d.petugas_id != null && String(d.petugas_id) === String(selectedStaffToExport)) ||
+        (d.petugas_nama && (
+          String(d.petugas_nama) === String(selectedStaffToExport) ||
+          (staffNama && d.petugas_nama.toLowerCase() === staffNama.toLowerCase())
+        ))
+      );
+      const totalKomisi = filtered.reduce((sum, item) => sum + (Number(item.komisi) || 0), 0);
+      return {
+        nama: staffNama || (filtered[0]?.petugas_nama) || 'Petugas Nurse',
+        count: filtered.length,
+        labelCount: 'Tindakan Medis',
+        totalKomisi
+      };
+    }
+    if (exportStaffCategory === 'MARKETING') {
+      const staffObj = marketingExportOptions.find(o => String(o.id) === String(selectedStaffToExport));
+      const staffNama = staffObj?.nama || '';
+      const sumItem = marketingSummary.find(m =>
+        String(m.marketing_id) === String(selectedStaffToExport) ||
+        (staffNama && m.marketing_nama && m.marketing_nama.toLowerCase() === staffNama.toLowerCase())
+      );
+      const filteredDetails = marketingData.filter(d =>
+        String(d.marketing_id) === String(selectedStaffToExport) ||
+        (staffNama && d.marketing_nama && d.marketing_nama.toLowerCase() === staffNama.toLowerCase())
+      );
+      const totalKomisi = Number(sumItem?.total_komisi_marketing || 0);
+      const totalPasien = Number(sumItem?.total_pasien_count || filteredDetails.length) || 0;
+      return {
+        nama: staffNama || (sumItem?.marketing_nama) || 'Petugas Marketing',
+        count: totalPasien,
+        labelCount: 'Pasien Terdaftar',
+        totalKomisi
+      };
+    }
+    return null;
+  }, [selectedStaffToExport, exportStaffCategory, btcUserOptions, nurseUserOptions, marketingExportOptions, btcData, nurseData, marketingData, marketingSummary]);
+
+  // EXPORT EXCEL BEAUTICIAN (BTC) - SEMUA PEGAWAI
   const handleExportExcelBTC = async () => {
     if (btcData.length === 0) {
       alert('Belum ada data komisi Beautician (BTC) pada periode tanggal ini untuk di-export.');
@@ -187,46 +331,218 @@ export default function DoinganActivity() {
     }
 
     const monthLabel = formatMonthYearLabel(startDate, endDate);
-    const data = btcData.map((item, index) => ({
+
+    // Sheet 1: Rekapitulasi per Petugas BTC
+    const btcSummaryMap = new Map();
+    btcData.forEach(item => {
+      const pId = String(item.petugas_id || item.petugas_nama);
+      if (!btcSummaryMap.has(pId)) {
+        btcSummaryMap.set(pId, {
+          nama: item.petugas_nama || 'Beautician',
+          is_training: item.is_training === 1 || item.is_training === '1',
+          total_pasien: 0,
+          trial_count: 0,
+          member_count: 0,
+          total_komisi: 0
+        });
+      }
+      const cur = btcSummaryMap.get(pId);
+      cur.total_pasien += 1;
+      const isTrial = (item.tipe_pasien || '').toUpperCase().includes('TRIAL');
+      if (isTrial) {
+        cur.trial_count += 1;
+      } else {
+        cur.member_count += 1;
+      }
+      cur.total_komisi += (Number(item.komisi) || 0);
+    });
+
+    let grandTotalPasien = 0;
+    let grandTotalTrial = 0;
+    let grandTotalMember = 0;
+    let grandTotalKomisi = 0;
+
+    const summaryData = Array.from(btcSummaryMap.values()).map((item, index) => {
+      grandTotalPasien += item.total_pasien;
+      grandTotalTrial += item.trial_count;
+      grandTotalMember += item.member_count;
+      grandTotalKomisi += item.total_komisi;
+
+      return {
+        no: index + 1,
+        nama: item.nama,
+        status_staf: item.is_training ? 'Trainee' : 'Reguler',
+        total_pasien: item.total_pasien,
+        trial: item.trial_count,
+        member: item.member_count,
+        total_komisi: item.total_komisi
+      };
+    });
+
+    // Sheet 2: Rincian Pengerjaan Treatment
+    const detailData = btcData.map((item, index) => ({
       no: index + 1,
       waktu_mulai: item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
       waktu_selesai: item.completed_at ? new Date(item.completed_at).toLocaleString('id-ID') : '-',
+      petugas_nama: item.petugas_nama || '-',
       pasien_nama: item.pasien_nama || '-',
       tipe_pasien: item.tipe_pasien || '-',
-      petugas_nama: item.petugas_nama || '-',
       nama_tindakan: item.nama_tindakan || '-',
       status: item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : item.status_pengerjaan === 'CANCELLED' ? 'DIBATALKAN' : 'IN PROGRESS',
       komisi: Number(item.komisi) || 0
     }));
 
-    const totalKomisi = btcData.reduce((sum, item) => sum + (Number(item.komisi) || 0), 0);
-
     await exportStyledExcel({
-      fileName: `Laporan_Komisi_BTC_Deflow_${startDate}_sd_${endDate}`,
+      fileName: `Laporan_Komisi_BTC_Semua_Deflow_${startDate}_sd_${endDate}`,
       sheets: [
         {
-          name: 'Komisi Beautician',
+          name: 'Rekap Komisi',
           title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
-          subtitle: `LAPORAN DATA KOMISI BEAUTICIAN (BTC) | Periode: ${startDate} s/d ${endDate}`,
+          subtitle: `LAPORAN REKAPITULASI KOMISI TIM BEAUTICIAN (BTC) | Periode: ${startDate} s/d ${endDate}`,
+          columns: [
+            { header: 'No', key: 'no', width: 6, alignment: 'center' },
+            { header: 'Nama Petugas Beautician', key: 'nama', width: 24 },
+            { header: 'Status Staf', key: 'status_staf', width: 14, alignment: 'center' },
+            { header: 'Total Pasien', key: 'total_pasien', width: 16, isNumber: true },
+            { header: 'Pasien Trial', key: 'trial', width: 14, isNumber: true },
+            { header: 'Pasien Member / WIC', key: 'member', width: 18, isNumber: true },
+            { header: 'Total Komisi BTC (Rp)', key: 'total_komisi', width: 22, isCurrency: true }
+          ],
+          data: summaryData,
+          summaryRow: {
+            no: '',
+            nama: 'TOTAL KESELURUHAN',
+            status_staf: '',
+            total_pasien: grandTotalPasien,
+            trial: grandTotalTrial,
+            member: grandTotalMember,
+            total_komisi: grandTotalKomisi
+          }
+        },
+        {
+          name: 'Rincian Treatment',
+          title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
+          subtitle: `RINCIAN DATA PENGERJAAN TREATMENT BEAUTICIAN (BTC) | Periode: ${startDate} s/d ${endDate}`,
+          columns: [
+            { header: 'No', key: 'no', width: 6, alignment: 'center' },
+            { header: 'Waktu Mulai', key: 'waktu_mulai', width: 20, alignment: 'center' },
+            { header: 'Waktu Selesai', key: 'waktu_selesai', width: 20, alignment: 'center' },
+            { header: 'Petugas BTC', key: 'petugas_nama', width: 22 },
+            { header: 'Nama Pasien', key: 'pasien_nama', width: 24 },
+            { header: 'Tipe Pasien', key: 'tipe_pasien', width: 14, alignment: 'center' },
+            { header: 'Detail Treatment / Facial', key: 'nama_tindakan', width: 28 },
+            { header: 'Status Layanan', key: 'status', width: 16, alignment: 'center' },
+            { header: 'Komisi BTC (Rp)', key: 'komisi', width: 18, isCurrency: true }
+          ],
+          data: detailData,
+          summaryRow: {
+            no: '',
+            waktu_mulai: '',
+            waktu_selesai: '',
+            petugas_nama: '',
+            pasien_nama: '',
+            tipe_pasien: '',
+            nama_tindakan: '',
+            status: 'TOTAL KOMISI',
+            komisi: grandTotalKomisi
+          }
+        }
+      ]
+    });
+  };
+
+  // EXPORT EXCEL BEAUTICIAN (BTC) - PER PEGAWAI
+  const handleExportStaffBTC = async (staffId) => {
+    const staffObj = btcUserOptions.find(o => String(o.id) === String(staffId));
+    const filtered = btcData.filter(d =>
+      (d.petugas_id != null && String(d.petugas_id) === String(staffId)) ||
+      (d.petugas_nama && (
+        String(d.petugas_nama) === String(staffId) ||
+        (staffObj?.nama && d.petugas_nama.toLowerCase() === staffObj.nama.toLowerCase())
+      ))
+    );
+    const staffNama = staffObj?.nama || filtered[0]?.petugas_nama || 'Beautician';
+    const cleanStaffNama = staffNama.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    if (filtered.length === 0) {
+      alert(`Belum ada data pengerjaan komisi untuk Beautician ${staffNama} pada periode tanggal ini.`);
+      return;
+    }
+
+    const monthLabel = formatMonthYearLabel(startDate, endDate);
+    const totalKomisi = filtered.reduce((sum, item) => sum + (Number(item.komisi) || 0), 0);
+    const trialCount = filtered.filter(i => (i.tipe_pasien || '').toUpperCase().includes('TRIAL')).length;
+    const memberCount = filtered.length - trialCount;
+
+    const summaryData = [{
+      no: 1,
+      nama: staffNama,
+      status_staf: (filtered[0]?.is_training === 1 || filtered[0]?.is_training === '1') ? 'Trainee' : 'Reguler',
+      total_pasien: filtered.length,
+      trial: trialCount,
+      member: memberCount,
+      total_komisi: totalKomisi
+    }];
+
+    const detailData = filtered.map((item, index) => ({
+      no: index + 1,
+      waktu_mulai: item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
+      waktu_selesai: item.completed_at ? new Date(item.completed_at).toLocaleString('id-ID') : '-',
+      pasien_nama: item.pasien_nama || '-',
+      tipe_pasien: item.tipe_pasien || '-',
+      nama_tindakan: item.nama_tindakan || '-',
+      status: item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : item.status_pengerjaan === 'CANCELLED' ? 'DIBATALKAN' : 'IN PROGRESS',
+      komisi: Number(item.komisi) || 0
+    }));
+
+    await exportStyledExcel({
+      fileName: `Laporan_Komisi_BTC_${cleanStaffNama}_${startDate}_sd_${endDate}`,
+      sheets: [
+        {
+          name: 'Rekap Komisi',
+          title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
+          subtitle: `REKAPITULASI KOMISI BEAUTICIAN (BTC): ${staffNama.toUpperCase()} | Periode: ${startDate} s/d ${endDate}`,
+          columns: [
+            { header: 'No', key: 'no', width: 6, alignment: 'center' },
+            { header: 'Nama Petugas Beautician', key: 'nama', width: 26 },
+            { header: 'Status Staf', key: 'status_staf', width: 14, alignment: 'center' },
+            { header: 'Total Pasien Ditangani', key: 'total_pasien', width: 22, isNumber: true },
+            { header: 'Pasien Trial', key: 'trial', width: 16, isNumber: true },
+            { header: 'Pasien Member / WIC', key: 'member', width: 20, isNumber: true },
+            { header: 'Total Komisi BTC (Rp)', key: 'total_komisi', width: 24, isCurrency: true }
+          ],
+          data: summaryData,
+          summaryRow: {
+            no: '',
+            nama: 'TOTAL KOMISI',
+            status_staf: '',
+            total_pasien: filtered.length,
+            trial: trialCount,
+            member: memberCount,
+            total_komisi: totalKomisi
+          }
+        },
+        {
+          name: 'Rincian Treatment',
+          title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
+          subtitle: `RINCIAN PENGERJAAN TREATMENT BEAUTICIAN: ${staffNama.toUpperCase()} | Periode: ${startDate} s/d ${endDate}`,
           columns: [
             { header: 'No', key: 'no', width: 6, alignment: 'center' },
             { header: 'Waktu Mulai', key: 'waktu_mulai', width: 20, alignment: 'center' },
             { header: 'Waktu Selesai', key: 'waktu_selesai', width: 20, alignment: 'center' },
             { header: 'Nama Pasien', key: 'pasien_nama', width: 24 },
-            { header: 'Tipe Pasien', key: 'tipe_pasien', width: 14, alignment: 'center' },
-            { header: 'Petugas BTC', key: 'petugas_nama', width: 22 },
-            { header: 'Detail Treatment / Facial', key: 'nama_tindakan', width: 28 },
+            { header: 'Tipe Pasien', key: 'tipe_pasien', width: 16, alignment: 'center' },
+            { header: 'Detail Treatment / Facial', key: 'nama_tindakan', width: 30 },
             { header: 'Status Layanan', key: 'status', width: 16, alignment: 'center' },
             { header: 'Komisi BTC (Rp)', key: 'komisi', width: 18, isCurrency: true }
           ],
-          data,
+          data: detailData,
           summaryRow: {
             no: '',
             waktu_mulai: '',
             waktu_selesai: '',
             pasien_nama: '',
             tipe_pasien: '',
-            petugas_nama: '',
             nama_tindakan: '',
             status: 'TOTAL KOMISI',
             komisi: totalKomisi
@@ -236,7 +552,7 @@ export default function DoinganActivity() {
     });
   };
 
-  // EXPORT EXCEL NURSE
+  // EXPORT EXCEL NURSE - SEMUA PEGAWAI
   const handleExportExcelNurse = async () => {
     if (nurseData.length === 0) {
       alert('Belum ada data komisi Nurse pada periode tanggal ini untuk di-export.');
@@ -244,46 +560,186 @@ export default function DoinganActivity() {
     }
 
     const monthLabel = formatMonthYearLabel(startDate, endDate);
-    const data = nurseData.map((item, index) => ({
+
+    // Sheet 1: Rekapitulasi per Petugas Nurse
+    const nurseSummaryMap = new Map();
+    nurseData.forEach(item => {
+      const pId = String(item.petugas_id || item.petugas_nama);
+      if (!nurseSummaryMap.has(pId)) {
+        nurseSummaryMap.set(pId, {
+          nama: item.petugas_nama || 'Nurse',
+          total_tindakan: 0,
+          total_komisi: 0
+        });
+      }
+      const cur = nurseSummaryMap.get(pId);
+      cur.total_tindakan += 1;
+      cur.total_komisi += (Number(item.komisi) || 0);
+    });
+
+    let grandTotalTindakan = 0;
+    let grandTotalKomisi = 0;
+
+    const summaryData = Array.from(nurseSummaryMap.values()).map((item, index) => {
+      grandTotalTindakan += item.total_tindakan;
+      grandTotalKomisi += item.total_komisi;
+
+      return {
+        no: index + 1,
+        nama: item.nama,
+        total_tindakan: item.total_tindakan,
+        total_komisi: item.total_komisi
+      };
+    });
+
+    // Sheet 2: Rincian Tindakan Medis
+    const detailData = nurseData.map((item, index) => ({
       no: index + 1,
       waktu_mulai: item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
       waktu_selesai: item.completed_at ? new Date(item.completed_at).toLocaleString('id-ID') : '-',
+      petugas_nama: item.petugas_nama || '-',
       pasien_nama: item.pasien_nama || '-',
       tipe_pasien: item.tipe_pasien || '-',
-      petugas_nama: item.petugas_nama || '-',
       nama_tindakan: item.nama_tindakan || '-',
       status: item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : item.status_pengerjaan === 'CANCELLED' ? 'DIBATALKAN' : 'IN PROGRESS',
       komisi: Number(item.komisi) || 0
     }));
 
-    const totalKomisi = nurseData.reduce((sum, item) => sum + (Number(item.komisi) || 0), 0);
-
     await exportStyledExcel({
-      fileName: `Laporan_Komisi_Nurse_Deflow_${startDate}_sd_${endDate}`,
+      fileName: `Laporan_Komisi_Nurse_Semua_Deflow_${startDate}_sd_${endDate}`,
       sheets: [
         {
-          name: 'Komisi Nurse',
+          name: 'Rekap Komisi',
           title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
-          subtitle: `LAPORAN DATA KOMISI NURSE & MEDIS | Periode: ${startDate} s/d ${endDate}`,
+          subtitle: `LAPORAN REKAPITULASI KOMISI TIM NURSE & MEDIS | Periode: ${startDate} s/d ${endDate}`,
+          columns: [
+            { header: 'No', key: 'no', width: 6, alignment: 'center' },
+            { header: 'Nama Petugas Nurse', key: 'nama', width: 26 },
+            { header: 'Total Tindakan Medis', key: 'total_tindakan', width: 22, isNumber: true },
+            { header: 'Total Komisi Nurse (Rp)', key: 'total_komisi', width: 24, isCurrency: true }
+          ],
+          data: summaryData,
+          summaryRow: {
+            no: '',
+            nama: 'TOTAL KESELURUHAN',
+            total_tindakan: grandTotalTindakan,
+            total_komisi: grandTotalKomisi
+          }
+        },
+        {
+          name: 'Rincian Tindakan',
+          title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
+          subtitle: `RINCIAN DATA TINDAKAN MEDIS NURSE | Periode: ${startDate} s/d ${endDate}`,
+          columns: [
+            { header: 'No', key: 'no', width: 6, alignment: 'center' },
+            { header: 'Waktu Mulai', key: 'waktu_mulai', width: 20, alignment: 'center' },
+            { header: 'Waktu Selesai', key: 'waktu_selesai', width: 20, alignment: 'center' },
+            { header: 'Petugas Nurse', key: 'petugas_nama', width: 22 },
+            { header: 'Nama Pasien', key: 'pasien_nama', width: 24 },
+            { header: 'Tipe Pasien', key: 'tipe_pasien', width: 14, alignment: 'center' },
+            { header: 'Detail Tindakan Medis', key: 'nama_tindakan', width: 28 },
+            { header: 'Status Layanan', key: 'status', width: 16, alignment: 'center' },
+            { header: 'Komisi Nurse (Rp)', key: 'komisi', width: 18, isCurrency: true }
+          ],
+          data: detailData,
+          summaryRow: {
+            no: '',
+            waktu_mulai: '',
+            waktu_selesai: '',
+            petugas_nama: '',
+            pasien_nama: '',
+            tipe_pasien: '',
+            nama_tindakan: '',
+            status: 'TOTAL KOMISI',
+            komisi: grandTotalKomisi
+          }
+        }
+      ]
+    });
+  };
+
+  // EXPORT EXCEL NURSE - PER PEGAWAI
+  const handleExportStaffNurse = async (staffId) => {
+    const staffObj = nurseUserOptions.find(o => String(o.id) === String(staffId));
+    const filtered = nurseData.filter(d =>
+      (d.petugas_id != null && String(d.petugas_id) === String(staffId)) ||
+      (d.petugas_nama && (
+        String(d.petugas_nama) === String(staffId) ||
+        (staffObj?.nama && d.petugas_nama.toLowerCase() === staffObj.nama.toLowerCase())
+      ))
+    );
+    const staffNama = staffObj?.nama || filtered[0]?.petugas_nama || 'Nurse';
+    const cleanStaffNama = staffNama.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    if (filtered.length === 0) {
+      alert(`Belum ada data tindakan medis untuk Nurse ${staffNama} pada periode tanggal ini.`);
+      return;
+    }
+
+    const monthLabel = formatMonthYearLabel(startDate, endDate);
+    const totalKomisi = filtered.reduce((sum, item) => sum + (Number(item.komisi) || 0), 0);
+    const totalTindakan = filtered.length;
+
+    const summaryData = [{
+      no: 1,
+      nama: staffNama,
+      total_tindakan: totalTindakan,
+      total_komisi: totalKomisi
+    }];
+
+    const detailData = filtered.map((item, index) => ({
+      no: index + 1,
+      waktu_mulai: item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
+      waktu_selesai: item.completed_at ? new Date(item.completed_at).toLocaleString('id-ID') : '-',
+      pasien_nama: item.pasien_nama || '-',
+      tipe_pasien: item.tipe_pasien || '-',
+      nama_tindakan: item.nama_tindakan || '-',
+      status: item.status_pengerjaan === 'COMPLETED' ? 'SELESAI' : item.status_pengerjaan === 'CANCELLED' ? 'DIBATALKAN' : 'IN PROGRESS',
+      komisi: Number(item.komisi) || 0
+    }));
+
+    await exportStyledExcel({
+      fileName: `Laporan_Komisi_Nurse_${cleanStaffNama}_${startDate}_sd_${endDate}`,
+      sheets: [
+        {
+          name: 'Rekap Komisi',
+          title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
+          subtitle: `REKAPITULASI KOMISI NURSE: ${staffNama.toUpperCase()} | Periode: ${startDate} s/d ${endDate}`,
+          columns: [
+            { header: 'No', key: 'no', width: 6, alignment: 'center' },
+            { header: 'Nama Petugas Nurse', key: 'nama', width: 26 },
+            { header: 'Total Tindakan Medis', key: 'total_tindakan', width: 22, isNumber: true },
+            { header: 'Total Komisi Nurse (Rp)', key: 'total_komisi', width: 24, isCurrency: true }
+          ],
+          data: summaryData,
+          summaryRow: {
+            no: '',
+            nama: 'TOTAL KOMISI',
+            total_tindakan: totalTindakan,
+            total_komisi: totalKomisi
+          }
+        },
+        {
+          name: 'Rincian Tindakan',
+          title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
+          subtitle: `RINCIAN TINDAKAN MEDIS NURSE: ${staffNama.toUpperCase()} | Periode: ${startDate} s/d ${endDate}`,
           columns: [
             { header: 'No', key: 'no', width: 6, alignment: 'center' },
             { header: 'Waktu Mulai', key: 'waktu_mulai', width: 20, alignment: 'center' },
             { header: 'Waktu Selesai', key: 'waktu_selesai', width: 20, alignment: 'center' },
             { header: 'Nama Pasien', key: 'pasien_nama', width: 24 },
-            { header: 'Tipe Pasien', key: 'tipe_pasien', width: 14, alignment: 'center' },
-            { header: 'Petugas Nurse', key: 'petugas_nama', width: 22 },
-            { header: 'Detail Tindakan Medis', key: 'nama_tindakan', width: 28 },
+            { header: 'Tipe Pasien', key: 'tipe_pasien', width: 16, alignment: 'center' },
+            { header: 'Detail Tindakan Medis', key: 'nama_tindakan', width: 30 },
             { header: 'Status Layanan', key: 'status', width: 16, alignment: 'center' },
             { header: 'Komisi Nurse (Rp)', key: 'komisi', width: 18, isCurrency: true }
           ],
-          data,
+          data: detailData,
           summaryRow: {
             no: '',
             waktu_mulai: '',
             waktu_selesai: '',
             pasien_nama: '',
             tipe_pasien: '',
-            petugas_nama: '',
             nama_tindakan: '',
             status: 'TOTAL KOMISI',
             komisi: totalKomisi
@@ -293,7 +749,7 @@ export default function DoinganActivity() {
     });
   };
 
-  // EXPORT EXCEL MARKETING
+  // EXPORT EXCEL MARKETING - SEMUA PEGAWAI
   const handleExportExcelMarketing = async () => {
     if (marketingData.length === 0 && marketingSummary.length === 0) {
       alert('Belum ada data pencatatan atau komisi Marketing pada periode tanggal ini untuk di-export.');
@@ -373,7 +829,7 @@ export default function DoinganActivity() {
     });
 
     await exportStyledExcel({
-      fileName: `Laporan_Komisi_Marketing_Deflow_${startDate}_sd_${endDate}`,
+      fileName: `Laporan_Komisi_Marketing_Semua_Deflow_${startDate}_sd_${endDate}`,
       sheets: [
         {
           name: 'Rekap Komisi',
@@ -439,25 +895,163 @@ export default function DoinganActivity() {
     });
   };
 
-  const nonStaffRoles = ['Super Admin', 'Admin System', 'Admin Klinik', 'Admin FO', 'Manager', 'Marketing'];
-  const beauticianList = staffList.filter(s => s.role === 'Beautician' || (s.lini_profesi === 'Beautician' && !nonStaffRoles.includes(s.role)));
-  const nurseList = staffList.filter(s => (s.role === 'Nurse' || s.role === 'Dokter') || (s.lini_profesi === 'Nurse' && !nonStaffRoles.includes(s.role)));
+  // EXPORT EXCEL MARKETING - PER PEGAWAI
+  const handleExportStaffMarketing = async (staffId) => {
+    const staffObj = marketingExportOptions.find(o => String(o.id) === String(staffId));
+    const staffNama = staffObj?.nama || 'Marketing';
+    const cleanStaffNama = staffNama.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-  // Extract unique marketing user list for the dropdown filter
-  const marketingUserOptions = useMemo(() => {
-    const map = new Map();
-    marketingSummary.forEach(m => {
-      if (m.marketing_id) {
-        map.set(String(m.marketing_id), m.marketing_nama || `Marketing #${m.marketing_id}`);
-      }
+    const sumItem = marketingSummary.find(m =>
+      String(m.marketing_id) === String(staffId) ||
+      (m.marketing_nama && m.marketing_nama.toLowerCase() === staffNama.toLowerCase())
+    );
+
+    const filteredDetails = marketingData.filter(d =>
+      String(d.marketing_id) === String(staffId) ||
+      (d.marketing_nama && d.marketing_nama.toLowerCase() === staffNama.toLowerCase())
+    );
+
+    if (!sumItem && filteredDetails.length === 0) {
+      alert(`Belum ada data pencatatan atau komisi untuk Petugas Marketing ${staffNama} pada periode tanggal ini.`);
+      return;
+    }
+
+    const monthLabel = formatMonthYearLabel(startDate, endDate);
+
+    const summaryData = [{
+      no: 1,
+      nama: staffNama,
+      role: sumItem?.marketing_role || 'Marketing',
+      total_pasien: Number(sumItem?.total_pasien_count || filteredDetails.length) || 0,
+      trial: Number(sumItem?.total_trial_count || 0),
+      member: Number(sumItem?.total_member_count || 0),
+      tarif: sumItem?.rate_per_pasien ? `Rp ${sumItem.rate_per_pasien.toLocaleString('id-ID')}` : '-',
+      komisi_pasien: Number(sumItem?.komisi_pasien || 0),
+      total_paket: Number(sumItem?.total_paket_count || 0),
+      komisi_paket: Number(sumItem?.total_komisi_paket || 0),
+      total_komisi: Number(sumItem?.total_komisi_marketing || 0)
+    }];
+
+    let totalHargaPaket = 0;
+    let totalKomisiPaketDetail = 0;
+
+    const detailData = filteredDetails.map((item, index) => {
+      const hrg = Number(item.harga_paket || item.nominal_pembayaran || 0);
+      const kom = Number(item.komisi_paket || 0);
+      totalHargaPaket += hrg;
+      totalKomisiPaketDetail += kom;
+
+      return {
+        no: index + 1,
+        created_at: item.created_at ? new Date(item.created_at).toLocaleString('id-ID') : '-',
+        marketing_nama: item.marketing_nama || staffNama,
+        pasien_nama: item.pasien_nama || '-',
+        pasien_hp: item.pasien_hp || '-',
+        tipe_pasien: item.tipe_pasien || '-',
+        layanan: item.detail_transaksi || item.detail_layanan || 'Registrasi Pasien Baru',
+        harga_paket: hrg,
+        komisi_paket: kom
+      };
     });
-    marketingData.forEach(d => {
-      if (d.marketing_id && !map.has(String(d.marketing_id))) {
-        map.set(String(d.marketing_id), d.marketing_nama || `Marketing #${d.marketing_id}`);
-      }
+
+    await exportStyledExcel({
+      fileName: `Laporan_Komisi_Marketing_${cleanStaffNama}_${startDate}_sd_${endDate}`,
+      sheets: [
+        {
+          name: 'Rekap Komisi',
+          title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
+          subtitle: `REKAPITULASI KOMISI MARKETING: ${staffNama.toUpperCase()} | Periode: ${startDate} s/d ${endDate}`,
+          columns: [
+            { header: 'No', key: 'no', width: 6, alignment: 'center' },
+            { header: 'Nama Petugas Marketing', key: 'nama', width: 24 },
+            { header: 'Role / Divisi', key: 'role', width: 16 },
+            { header: 'Total Pasien', key: 'total_pasien', width: 14, isNumber: true },
+            { header: 'Pasien Trial', key: 'trial', width: 14, isNumber: true },
+            { header: 'Pasien Member', key: 'member', width: 14, isNumber: true },
+            { header: 'Tarif Pasien', key: 'tarif', width: 16, alignment: 'center' },
+            { header: 'Komisi Pasien (Rp)', key: 'komisi_pasien', width: 18, isCurrency: true },
+            { header: 'Paket Terjual', key: 'total_paket', width: 14, isNumber: true },
+            { header: 'Komisi Paket (Rp)', key: 'komisi_paket', width: 18, isCurrency: true },
+            { header: 'Total Komisi yang Didapatkan (Rp)', key: 'total_komisi', width: 24, isCurrency: true }
+          ],
+          data: summaryData,
+          summaryRow: {
+            no: '',
+            nama: 'TOTAL KOMISI',
+            role: '',
+            total_pasien: summaryData[0].total_pasien,
+            trial: summaryData[0].trial,
+            member: summaryData[0].member,
+            tarif: '',
+            komisi_pasien: summaryData[0].komisi_pasien,
+            total_paket: summaryData[0].total_paket,
+            komisi_paket: summaryData[0].komisi_paket,
+            total_komisi: summaryData[0].total_komisi
+          }
+        },
+        {
+          name: 'Rincian Pasien',
+          title: `DATA DEFLOW AESTHETIC CLINIC ${monthLabel}`,
+          subtitle: `RINCIAN PENCATATAN PASIEN OLEH: ${staffNama.toUpperCase()} | Periode: ${startDate} s/d ${endDate}`,
+          columns: [
+            { header: 'No', key: 'no', width: 6, alignment: 'center' },
+            { header: 'Waktu Pendaftaran', key: 'created_at', width: 20, alignment: 'center' },
+            { header: 'Petugas Marketing', key: 'marketing_nama', width: 22 },
+            { header: 'Nama Pasien', key: 'pasien_nama', width: 24 },
+            { header: 'No HP Pasien', key: 'pasien_hp', width: 18, alignment: 'center' },
+            { header: 'Tipe Pasien', key: 'tipe_pasien', width: 14, alignment: 'center' },
+            { header: 'Layanan / Paket', key: 'layanan', width: 28 },
+            { header: 'Harga Paket (Rp)', key: 'harga_paket', width: 18, isCurrency: true },
+            { header: 'Komisi Paket (Rp)', key: 'komisi_paket', width: 18, isCurrency: true }
+          ],
+          data: detailData,
+          summaryRow: {
+            no: '',
+            created_at: '',
+            marketing_nama: '',
+            pasien_nama: '',
+            pasien_hp: '',
+            tipe_pasien: '',
+            layanan: 'TOTAL RINCIAN',
+            harga_paket: totalHargaPaket,
+            komisi_paket: totalKomisiPaketDetail
+          }
+        }
+      ]
     });
-    return Array.from(map.entries()).map(([id, nama]) => ({ id, nama }));
-  }, [marketingSummary, marketingData]);
+  };
+
+  // Helper to open Export Per Pegawai Modal
+  const openExportPerStaffModal = (category) => {
+    setExportStaffCategory(category);
+    let defaultId = '';
+    if (category === 'BTC') {
+      defaultId = btcUserOptions[0]?.id || '';
+    } else if (category === 'NURSE') {
+      defaultId = nurseUserOptions[0]?.id || '';
+    } else if (category === 'MARKETING') {
+      defaultId = marketingExportOptions[0]?.id || '';
+    }
+    setSelectedStaffToExport(defaultId);
+    setShowExportStaffModal(true);
+  };
+
+  // Helper to execute export per pegawai from modal
+  const handleExecuteExportStaff = async () => {
+    if (!selectedStaffToExport) {
+      alert('Silakan pilih salah satu pegawai terlebih dahulu.');
+      return;
+    }
+    if (exportStaffCategory === 'BTC') {
+      await handleExportStaffBTC(selectedStaffToExport);
+    } else if (exportStaffCategory === 'NURSE') {
+      await handleExportStaffNurse(selectedStaffToExport);
+    } else if (exportStaffCategory === 'MARKETING') {
+      await handleExportStaffMarketing(selectedStaffToExport);
+    }
+    setShowExportStaffModal(false);
+  };
+
 
   // Filtered & Paginated Marketing Data for Tab Marketing
   const filteredMarketingData = useMemo(() => {
@@ -578,7 +1172,7 @@ export default function DoinganActivity() {
                 className="px-4 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-400 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
               >
                 <Search className="w-3.5 h-3.5" />
-                {loadingRecap ? 'Memuat Data...' : 'Check / Filter'}
+                {loadingRecap ? 'Memuat Data...' : 'Cek by tanggal'}
               </button>
 
               <button
@@ -604,31 +1198,67 @@ export default function DoinganActivity() {
               </button>
             </div>
 
-            {/* Excel Export Buttons Per View */}
-            <div>
+            {/* Excel Export Buttons Per View (All Staff & Per Staff) */}
+            <div className="flex items-center gap-2 flex-wrap">
               {activeMainTab === 'BTC' && (
-                <button
-                  onClick={handleExportExcelBTC}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <FileSpreadsheet className="w-4 h-4" /> Export Excel Komisi BTC
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleExportExcelBTC}
+                    className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Export seluruh data pengerjaan Beautician dalam satu file Excel"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" /> Export Semua Pegawai
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openExportPerStaffModal('BTC')}
+                    className="px-3.5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Export file Excel khusus per masing-masing pegawai Beautician"
+                  >
+                    <UserCheck className="w-4 h-4" /> Export Per Pegawai
+                  </button>
+                </>
               )}
               {activeMainTab === 'NURSE' && (
-                <button
-                  onClick={handleExportExcelNurse}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <FileSpreadsheet className="w-4 h-4" /> Export Excel Komisi Nurse
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleExportExcelNurse}
+                    className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Export seluruh data tindakan Nurse dalam satu file Excel"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" /> Export Semua Pegawai
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openExportPerStaffModal('NURSE')}
+                    className="px-3.5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Export file Excel khusus per masing-masing petugas Nurse"
+                  >
+                    <UserCheck className="w-4 h-4" /> Export Per Pegawai
+                  </button>
+                </>
               )}
               {activeMainTab === 'MARKETING' && (
-                <button
-                  onClick={handleExportExcelMarketing}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <FileSpreadsheet className="w-4 h-4" /> Export Excel Komisi Marketing
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleExportExcelMarketing}
+                    className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Export seluruh data pencatatan tim Marketing dalam satu file Excel"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" /> Export Semua Pegawai
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openExportPerStaffModal('MARKETING')}
+                    className="px-3.5 py-2 bg-[#7d5141] hover:bg-[#653d2e] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Export file Excel khusus per masing-masing petugas Marketing"
+                  >
+                    <UserCheck className="w-4 h-4" /> Export Per Pegawai
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -736,7 +1366,7 @@ export default function DoinganActivity() {
             <div className="flex items-center justify-between border-b border-[#e5ded4] pb-2">
               <h3 className="font-serif font-bold text-base text-[#1e1b15] flex items-center gap-2">
                 <FileCheck className="w-4 h-4 text-[#7d5141]" />
-                <span>Rincian Pendapatan Komisi Nurse & Medis</span>
+                <span>Rincian Pendapatan Komisi Nurse</span>
               </h3>
               <span className="text-xs text-[#83746f]">Menampilkan data tindakan medis per pasien & waktu pengerjaan</span>
             </div>
@@ -1332,6 +1962,104 @@ export default function DoinganActivity() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EXPORT EXCEL PER PEGAWAI */}
+      {showExportStaffModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-[#e5ded4] shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[#e5ded4] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-[#faf3e8] rounded-xl text-[#7d5141]">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-base text-[#1e1b15]">
+                    Export Excel Per Pegawai
+                  </h3>
+                  <p className="text-xs text-[#514440]">
+                    {exportStaffCategory === 'BTC' ? 'Divisi Beautician (BTC)' :
+                      exportStaffCategory === 'NURSE' ? 'Divisi Nurse & Medis' : 'Divisi Tim Marketing'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExportStaffModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-[#514440] font-bold mb-1.5">
+                  Pilih Nama Pegawai *
+                </label>
+                <select
+                  value={selectedStaffToExport}
+                  onChange={(e) => setSelectedStaffToExport(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-white border border-[#d6c2bd] rounded-xl font-bold text-[#1e1b15] focus:outline-hidden focus:ring-2 focus:ring-[#7d5141]"
+                >
+                  {activeExportStaffOptions.length === 0 ? (
+                    <option value="">(Tidak ada data pegawai)</option>
+                  ) : (
+                    activeExportStaffOptions.map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.nama}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* Summary Card Preview */}
+              <div className="bg-[#faf3e8] border border-[#d6c2bd] rounded-xl p-3.5 space-y-2">
+                <div className="flex justify-between items-center text-[#514440]">
+                  <span className="font-medium">Periode Laporan:</span>
+                  <span className="font-bold text-[#1e1b15]">{startDate} s/d {endDate}</span>
+                </div>
+                {selectedStaffPreview ? (
+                  <>
+                    <div className="flex justify-between items-center text-[#514440]">
+                      <span className="font-medium">Nama Pegawai:</span>
+                      <span className="font-bold text-[#1e1b15]">{selectedStaffPreview.nama}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[#514440]">
+                      <span className="font-medium">Total {selectedStaffPreview.labelCount}:</span>
+                      <span className="font-bold text-[#1e1b15]">{selectedStaffPreview.count} data</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t border-[#d6c2bd]/60 pt-2 text-[#7d5141]">
+                      <span className="font-bold">Estimasi Komisi:</span>
+                      <span className="font-bold text-sm">Rp {Number(selectedStaffPreview.totalKomisi).toLocaleString('id-ID')}</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-gray-500 italic text-center py-1">Pilih pegawai untuk melihat ringkasan</p>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2 border-t border-[#e5ded4]">
+              <button
+                type="button"
+                onClick={() => setShowExportStaffModal(false)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl cursor-pointer text-xs transition-all"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteExportStaff}
+                disabled={!selectedStaffToExport || activeExportStaffOptions.length === 0}
+                className="px-5 py-2 bg-[#7d5141] hover:bg-[#653d2e] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-xs cursor-pointer text-xs transition-all flex items-center gap-1.5"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> Download Excel
+              </button>
+            </div>
           </div>
         </div>
       )}

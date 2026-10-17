@@ -59,7 +59,7 @@ export default function DashboardOverview({ setActiveTab, onOpenNewPatient, onOp
       <div className="bg-gradient-to-r from-[#7d5141] to-[#996958] rounded-2xl p-6 text-white shadow-md flex items-center justify-between">
         <div className="space-y-2">
           <h1 className="font-serif text-2xl font-bold tracking-tight">Selamat Datang di DEFLOW Aesthetic Clinic</h1>
-          <p className="text-amber-100 text-sm max-w-xl">
+          <p className="text-amber-100 text-sm max-w-none">
             Sistem manajemen internal terintegrasi untuk pendaftaran pasien, kasir POS, insentif komisi, dan logistik stok.
           </p>
         </div>
