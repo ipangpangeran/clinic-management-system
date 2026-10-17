@@ -38,4 +38,29 @@ test('POS Transaction Test Suite', async (t) => {
     await runQuery('DELETE FROM transaksi_detail WHERE id = ?', [detailId]);
     await runQuery('DELETE FROM transaksi WHERE id = ?', [trxId]);
   });
+
+  await t.test('Should record and verify payment methods (Cash, QRIS, Debit) in transaksi table', async () => {
+    const pasien = await getQuery('SELECT id FROM pasien LIMIT 1');
+    assert.ok(pasien, 'Must have at least 1 patient');
+
+    const methods = ['Cash', 'QRIS', 'Debit'];
+    for (const method of methods) {
+      const trxId = 'test-trx-mth-' + method + '-' + Date.now();
+      const noNota = `INV/TEST/${method}/` + Date.now();
+
+      await runQuery(`
+        INSERT INTO transaksi (
+          id, no_nota, pasien_id, kasir_id, subtotal, discount, tax_amount, grand_total, 
+          payment_amount, change_amount, earned_points, metode_pembayaran, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
+      `, [trxId, noNota, pasien.id, 'usr-1', 150000, 0, 0, 150000, 150000, 0, 0, method]);
+
+      const saved = await getQuery('SELECT * FROM transaksi WHERE id = ?', [trxId]);
+      assert.strictEqual(saved.metode_pembayaran, method, `Payment method should be ${method}`);
+
+      // Cleanup
+      await runQuery('DELETE FROM transaksi WHERE id = ?', [trxId]);
+    }
+  });
 });

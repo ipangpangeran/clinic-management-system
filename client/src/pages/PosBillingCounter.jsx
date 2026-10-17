@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp, Tag, AlertTriangle, Gift, Coins } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, Printer, Plus, Minus, UserCheck, Stethoscope, Sparkles, CheckCircle, Receipt, Clock, FileSpreadsheet, Package, X, ChevronDown, ChevronUp, Tag, AlertTriangle, Gift, Coins, Banknote, QrCode, CreditCard } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function PosBillingCounter() {
@@ -25,6 +25,7 @@ export default function PosBillingCounter() {
   const [cart, setCart] = useState([]);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash'); // 'Cash', 'QRIS', 'Debit'
   const [clinicProfile, setClinicProfile] = useState(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
@@ -103,6 +104,7 @@ export default function PosBillingCounter() {
       'Tipe Pasien': trx.tipe_pasien || '-',
       'Kasir': trx.kasir_nama || '-',
       'Petugas / Terapis': trx.therapist_nama || '-',
+      'Metode Pembayaran': trx.metode_pembayaran || 'Cash',
       'Subtotal (Rp)': trx.subtotal || 0,
       'Diskon (Rp)': trx.discount || 0,
       'Pajak PPN (Rp)': trx.tax_amount || 0,
@@ -123,6 +125,7 @@ export default function PosBillingCounter() {
       { wch: 14 },  // Tipe Pasien
       { wch: 20 },  // Kasir
       { wch: 20 },  // Petugas / Terapis
+      { wch: 18 },  // Metode Pembayaran
       { wch: 15 },  // Subtotal
       { wch: 15 },  // Diskon
       { wch: 18 },  // Pajak PPN
@@ -458,8 +461,10 @@ export default function PosBillingCounter() {
   const actualPoinUsed = Math.min(desiredPoinUsed, patientPoints, initialGrandTotal);
   const grandTotal = Math.max(0, initialGrandTotal - actualPoinUsed);
 
-  const payment = Number(paymentAmount) || grandTotal;
-  const changeAmount = Math.max(0, payment - grandTotal);
+  const payment = paymentMethod === 'Cash'
+    ? (Number(paymentAmount) || grandTotal)
+    : grandTotal;
+  const changeAmount = paymentMethod === 'Cash' ? Math.max(0, payment - grandTotal) : 0;
   const earnedPoints = 0;
 
   const handleCheckout = async () => {
@@ -479,6 +484,7 @@ export default function PosBillingCounter() {
         items: cart,
         discount_amount: discount,
         payment_amount: payment,
+        metode_pembayaran: paymentMethod,
         therapist_id: selectedTherapistId || null,
         doingan_id: activeDoinganId || null,
         poin_used: actualPoinUsed
@@ -496,6 +502,7 @@ export default function PosBillingCounter() {
       setCart([]);
       setDiscountAmount(0);
       setPaymentAmount('');
+      setPaymentMethod('Cash');
       setUsePoinMGM(false);
       setPoinUsedInput('');
       setActiveDoinganId(null);
@@ -642,6 +649,7 @@ export default function PosBillingCounter() {
                     <th className="py-3 px-4">Waktu & No. Nota</th>
                     <th className="py-3 px-4">Nama Pasien</th>
                     <th className="py-3 px-4">Kasir & Petugas</th>
+                    <th className="py-3 px-4">Metode Bayar</th>
                     <th className="py-3 px-4">Rincian Bayar</th>
                     <th className="py-3 px-4">Total Akhir</th>
                     <th className="py-3 px-4 text-center">Struk / Thermal</th>
@@ -650,7 +658,7 @@ export default function PosBillingCounter() {
                 <tbody className="divide-y divide-[#e5ded4]">
                   {historyTrxList.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="text-center py-8 text-gray-400 italic">
+                      <td colSpan="7" className="text-center py-8 text-gray-400 italic">
                         Belum ada riwayat transaksi yang cocok.
                       </td>
                     </tr>
@@ -670,6 +678,17 @@ export default function PosBillingCounter() {
                         <td className="py-3.5 px-4">
                           <div className="font-semibold text-[#1e1b15]">Kasir: {trx.kasir_nama}</div>
                           {trx.therapist_nama && <div className="text-[10px] text-[#7d5141]">Petugas: {trx.therapist_nama}</div>}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                            trx.metode_pembayaran === 'QRIS'
+                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                              : trx.metode_pembayaran === 'Debit'
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          }`}>
+                            {trx.metode_pembayaran || 'Cash'}
+                          </span>
                         </td>
                         <td className="py-3.5 px-4 text-[11px] text-[#514440]">
                           <div>Subtotal: Rp {trx.subtotal?.toLocaleString('id-ID')}</div>
@@ -1178,21 +1197,81 @@ export default function PosBillingCounter() {
                     <span>Rp {grandTotal.toLocaleString('id-ID')}</span>
                   </div>
 
-                  <div className="flex justify-between items-center text-xs pt-1">
-                    <span className="font-semibold text-[#514440]">Bayar Tunai / Cash (Rp)</span>
-                    <input
-                      type="number"
-                      value={paymentAmount}
-                      placeholder={grandTotal}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
-                      className="w-28 px-2 py-1 text-right bg-[#faf3e8] border border-[#d6c2bd] rounded-lg text-xs font-bold text-[#1e1b15]"
-                    />
+                  {/* METODE PEMBAYARAN SELECTOR */}
+                  <div className="pt-2">
+                    <label className="block text-xs font-bold text-[#514440] mb-1.5">Metode Pembayaran</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('Cash')}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                          paymentMethod === 'Cash'
+                            ? 'bg-[#7d5141] text-white border-[#7d5141] shadow-xs'
+                            : 'bg-[#faf3e8] text-[#514440] border-[#d6c2bd] hover:bg-[#eee7dd]'
+                        }`}
+                      >
+                        <Banknote className="w-3.5 h-3.5" />
+                        <span>Cash</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentMethod('QRIS');
+                          setPaymentAmount('');
+                        }}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                          paymentMethod === 'QRIS'
+                            ? 'bg-purple-700 text-white border-purple-700 shadow-xs'
+                            : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
+                        }`}
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        <span>QRIS</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentMethod('Debit');
+                          setPaymentAmount('');
+                        }}
+                        className={`py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                          paymentMethod === 'Debit'
+                            ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
+                            : 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+                        }`}
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>Debit</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex justify-between text-xs text-emerald-700 font-bold pt-0.5">
-                    <span>Kembalian</span>
-                    <span>Rp {changeAmount.toLocaleString('id-ID')}</span>
-                  </div>
+                  {paymentMethod === 'Cash' ? (
+                    <>
+                      <div className="flex justify-between items-center text-xs pt-1">
+                        <span className="font-semibold text-[#514440]">Bayar Tunai / Cash (Rp)</span>
+                        <input
+                          type="number"
+                          value={paymentAmount}
+                          placeholder={grandTotal}
+                          onChange={(e) => setPaymentAmount(e.target.value)}
+                          className="w-28 px-2 py-1 text-right bg-[#faf3e8] border border-[#d6c2bd] rounded-lg text-xs font-bold text-[#1e1b15]"
+                        />
+                      </div>
+
+                      <div className="flex justify-between text-xs text-emerald-700 font-bold pt-0.5">
+                        <span>Kembalian</span>
+                        <span>Rp {changeAmount.toLocaleString('id-ID')}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center text-xs pt-1.5 bg-purple-50/70 p-2 rounded-lg border border-purple-200 text-[#514440]">
+                      <span className="font-semibold">Bayar ({paymentMethod}):</span>
+                      <span className="font-bold text-emerald-800 font-mono">Rp {grandTotal.toLocaleString('id-ID')} (Pas)</span>
+                    </div>
+                  )}
 
                   <div className="text-[10px] text-[#83746f] italic text-right pt-1 border-t border-[#e5ded4]">
                     * Poin khusus didapatkan 5% oleh Member Referrer via MGM saat transaksi paket
@@ -1248,6 +1327,10 @@ export default function PosBillingCounter() {
                 <span>:</span>
                 <span>{receiptData.transaction.kasir_nama}</span>
 
+                <span>Metode Bayar</span>
+                <span>:</span>
+                <span className="font-bold uppercase">{receiptData.transaction.metode_pembayaran || 'Cash'}</span>
+
                 <span>Pelanggan</span>
                 <span>:</span>
                 <span>{receiptData.transaction.pasien_nama} ({receiptData.transaction.tipe_pasien === 'NON-TRIAL' || receiptData.transaction.tipe_pasien === 'Reguler' ? 'MEMBER' : receiptData.transaction.tipe_pasien})</span>
@@ -1295,7 +1378,7 @@ export default function PosBillingCounter() {
                   <span>Rp {receiptData.transaction.grand_total.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>BAYAR (Cash):</span>
+                  <span>BAYAR ({receiptData.transaction.metode_pembayaran || 'Cash'}):</span>
                   <span>Rp {receiptData.transaction.payment_amount.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between">
