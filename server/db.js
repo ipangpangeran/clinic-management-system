@@ -119,7 +119,7 @@ async function initDb() {
         no_ktp TEXT UNIQUE,
         no_hp TEXT UNIQUE NOT NULL,
         nama_lengkap TEXT NOT NULL,
-        tipe_pasien TEXT NOT NULL CHECK(tipe_pasien IN ('TRIAL', 'NON-TRIAL', 'MEMBER')),
+        tipe_pasien TEXT NOT NULL CHECK(tipe_pasien IN ('TRIAL', 'NON-TRIAL', 'MEMBER', 'WIC')),
         alamat TEXT,
         tgl_lahir DATE,
         riwayat_alergi TEXT,
@@ -446,6 +446,7 @@ async function initDb() {
         doctor_id TEXT,
         nurse_id TEXT,
         marketing_id TEXT,
+        metode_pembayaran TEXT DEFAULT 'Cash',
         created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
         FOREIGN KEY(pasien_id) REFERENCES pasien(id)
       )
@@ -453,6 +454,10 @@ async function initDb() {
 
     try {
       await runQuery(`ALTER TABLE transaksi ADD COLUMN poin_used REAL DEFAULT 0`);
+    } catch (e) { }
+
+    try {
+      await runQuery(`ALTER TABLE transaksi ADD COLUMN metode_pembayaran TEXT DEFAULT 'Cash'`);
     } catch (e) { }
 
     // 12. Transaction Details

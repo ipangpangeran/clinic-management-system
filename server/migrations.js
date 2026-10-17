@@ -105,6 +105,70 @@ const MIGRATIONS = [
         END
       `);
     }
+  },
+  {
+    name: '003_support_wic_patient_type',
+    disableForeignKeys: true,
+    up: async () => {
+      const pasienTableSql = await getQuery("SELECT sql FROM sqlite_master WHERE type='table' AND name='pasien'");
+      if (pasienTableSql && pasienTableSql.sql && !pasienTableSql.sql.includes("'WIC'")) {
+        console.log('[DB Migration 003] Upgrading pasien table CHECK constraint to include WIC...');
+        await runQuery(`
+          CREATE TABLE pasien_wic_upgrade (
+            id TEXT PRIMARY KEY,
+            no_ktp TEXT UNIQUE,
+            no_hp TEXT UNIQUE NOT NULL,
+            nama_lengkap TEXT NOT NULL,
+            tipe_pasien TEXT NOT NULL CHECK(tipe_pasien IN ('TRIAL', 'NON-TRIAL', 'MEMBER', 'WIC')),
+            alamat TEXT,
+            tgl_lahir DATE,
+            riwayat_alergi TEXT,
+            jenis_kulit TEXT,
+            rekomendasi_dokter TEXT,
+            total_poin INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT (datetime('now', '+7 hours')),
+            referrer_pasien_id TEXT,
+            marketing_id TEXT,
+            has_trial_history INTEGER DEFAULT 0,
+            initial_tipe_pasien TEXT,
+            mgm_reward_given INTEGER DEFAULT 0
+          )
+        `);
+        await runQuery(`
+          INSERT INTO pasien_wic_upgrade (
+            id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir,
+            riwayat_alergi, jenis_kulit, rekomendasi_dokter, total_poin, created_at,
+            referrer_pasien_id, marketing_id, has_trial_history, initial_tipe_pasien, mgm_reward_given
+          )
+          SELECT 
+            id, no_ktp, no_hp, nama_lengkap, tipe_pasien, alamat, tgl_lahir,
+            riwayat_alergi, jenis_kulit, rekomendasi_dokter, total_poin, created_at,
+            referrer_pasien_id, marketing_id, has_trial_history, initial_tipe_pasien, mgm_reward_given
+          FROM pasien
+        `);
+        await runQuery('DROP TABLE pasien');
+        await runQuery('ALTER TABLE pasien_wic_upgrade RENAME TO pasien');
+
+        // Recreate indexes
+        await runQuery(`CREATE INDEX IF NOT EXISTS idx_pasien_no_hp ON pasien(no_hp)`);
+        await runQuery(`CREATE INDEX IF NOT EXISTS idx_pasien_nama ON pasien(nama_lengkap)`);
+        await runQuery(`CREATE INDEX IF NOT EXISTS idx_pasien_tipe ON pasien(tipe_pasien)`);
+        await runQuery(`CREATE INDEX IF NOT EXISTS idx_pasien_marketing ON pasien(marketing_id)`);
+        await runQuery(`CREATE INDEX IF NOT EXISTS idx_pasien_created ON pasien(created_at)`);
+
+        // Recreate trigger
+        await runQuery(`
+          CREATE TRIGGER IF NOT EXISTS trg_pasien_created_at_gmt7
+          AFTER INSERT ON pasien
+          FOR EACH ROW
+          WHEN NEW.created_at IS NULL OR NEW.created_at = CURRENT_TIMESTAMP
+          BEGIN
+            UPDATE pasien SET created_at = datetime('now', '+7 hours') WHERE id = NEW.id;
+          END
+        `);
+        console.log('[DB Migration 003] Pasien table upgraded with WIC support successfully!');
+      }
+    }
   }
 ];
 
@@ -125,6 +189,9 @@ async function runMigrations() {
     for (const migration of MIGRATIONS) {
       if (!appliedSet.has(migration.name)) {
         console.log(`[Migrations] Applying: ${migration.name}...`);
+        if (migration.disableForeignKeys) {
+          await runQuery('PRAGMA foreign_keys = OFF');
+        }
         await runQuery('BEGIN TRANSACTION');
         try {
           await migration.up();
@@ -133,10 +200,16 @@ async function runMigrations() {
             [migration.name]
           );
           await runQuery('COMMIT');
+          if (migration.disableForeignKeys) {
+            await runQuery('PRAGMA foreign_keys = ON');
+          }
           newlyExecuted.push(migration.name);
           console.log(`[Migrations] Successfully applied: ${migration.name}`);
         } catch (migErr) {
           await runQuery('ROLLBACK');
+          if (migration.disableForeignKeys) {
+            await runQuery('PRAGMA foreign_keys = ON');
+          }
           console.error(`[Migrations] Error applying ${migration.name}, transaction rolled back:`, migErr);
           throw migErr;
         }

@@ -6,7 +6,7 @@
     "dev:be": "node --watch-path=server/server.js --watch-path=server/db.js server/server.js",
     "dev:fe": "npm run dev --prefix client",
     "dev": "npx concurrently \"npm run dev:be\" \"npm run dev:fe\"",
-    "test": "node --test tests/*.test.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
     "db:migrate": "node -e \"require('./server/migrations').runMigrations().then(r => { console.log(r); process.exit(r.success ? 0 : 1); });\"",
     "db:backup": "node -e \"require('./server/backupService').createBackup('cli').then(r => { console.log(r); process.exit(0); });\""
   },

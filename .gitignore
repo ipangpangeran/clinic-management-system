@@ -2,9 +2,13 @@
 node_modules/
 client/node_modules/
 
-# SQLite Database local files
-server/*.db
-server/*.db-journal
+# SQLite Database local files & backups
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+server/backups/
 
 # Environment & Temp logs
 .env
